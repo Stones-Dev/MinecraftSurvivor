@@ -12,6 +12,12 @@ Sheet totals (sections / frames): steve 1352 / 6200, alex 1352 / 6203, rana 1224
 
 Caveat: ids, names and frame counts are auto-derived from the decoded labels and were spot-checked, not reviewed sprite by sprite. Use the contact sheets to confirm anything you care about.
 
+## Verification done
+
+- Contact sheets generated for all 7 sheets (steve 8 pages, alex 8, rana 6, enemies 32, allies 18, animals 36, villagers 17) under `assets-work/<sheet>/contact_*.png`.
+- Visual spot check of 20 catalogue ids (first idle frame next to its id): 18 matched their sprite (zombie, skeleton, spider, creeper, witch, phantom, enderman, ghast, warden, shulker, hoglin, guardian, cow, fox, iron golem, snow golem, white wolf, strider). Cat and panda only exist as colour variants (e.g. `pet.baby_black_cat`), there is no plain `pet.cat`; pick the variants at roster time.
+- The rest of the catalogue is auto-derived and not reviewed sprite by sprite.
+
 ## Proposed v1.0 roster (from what exists in the sheets)
 
 Frame counts are per animation as catalogued (`idle/walk/attack/hurt/death` unless noted).
