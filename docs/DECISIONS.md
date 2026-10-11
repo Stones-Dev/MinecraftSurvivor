@@ -16,3 +16,8 @@ Dated entries; newest last. Anything that deviates from `docs/BRIEF.md` is marke
 - **Fixed: base mobs missing from the catalogue.** Plain mobs (zombie, skeleton, creeper...) have a narrow name box that is not wide enough (>10% of the block width) to count as a header row, so it was ignored. `tools/build_catalog.py` now reads the strip above the first header row (or the stand-alone box just above the block) as the name, and treats rare animation labels (`ALWAYS_ANIM`) as animations. Result: base mobs, bosses and most of the brief's roster now have ids. Names and frame counts are auto-derived, not checked sprite by sprite; the contact sheets are there for that.
 - **Manifest validator:** `tools/validate_manifest.py` checks fields, unique ids and that every listed frame exists.
 - **Atlas v0 contents:** the three heroes plus the core mobs (zombie, skeleton, spider, creeper, slime big/medium/small) to prove the pipeline (~640 KiB). The rest is packed once the roster is confirmed.
+
+## 2026-10-11 — Checkpoint 0 answer
+
+- **Owner approved Checkpoint 0 ("apruebo todo").** Accepted: the proposed v1.0 roster and its substitutions (5:00 boss = Pillager Captain instead of Ravager; Elder Guardian mini-boss replaced by an enlarged tinted Guardian or another mini-boss; Allay and Sniffer out of v1.0 or replaced; Polar Bear to 1.1 unless the adult sprite is found), and the defaults taken for PLAN section 9.
+- **Still open:** no author names were provided, so `CREDITS.md` keeps its placeholder; it must be filled before the v1.0 release (Phase 5, task P5-04).
