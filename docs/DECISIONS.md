@@ -21,3 +21,7 @@ Dated entries; newest last. Anything that deviates from `docs/BRIEF.md` is marke
 
 - **Owner approved Checkpoint 0 ("apruebo todo").** Accepted: the proposed v1.0 roster and its substitutions (5:00 boss = Pillager Captain instead of Ravager; Elder Guardian mini-boss replaced by an enlarged tinted Guardian or another mini-boss; Allay and Sniffer out of v1.0 or replaced; Polar Bear to 1.1 unless the adult sprite is found), and the defaults taken for PLAN section 9.
 - **Still open:** no author names were provided, so `CREDITS.md` keeps its placeholder; it must be filled before the v1.0 release (Phase 5, task P5-04).
+
+## 2026-10-11 — New working agreement
+
+- **Checkpoints are no longer blocking (owner instruction).** At each checkpoint: write the summary (with Playwright screenshots when possible) to `docs/CHECKPOINTS.md`, log decisions taken alone here, commit, push and continue with the next phase. Open questions are resolved with the most reasonable option; owner feedback arrives as queued messages and is applied when it arrives. Work continues until the Definition of Done (BRIEF section 17) is met and `v1.0.0` is tagged. `CLAUDE.md` still says "stop at every CHECKPOINT"; the owner's newer instruction supersedes it, and the file is left unchanged for the owner to edit.
