@@ -8,4 +8,4 @@ The character sheets (Steve, Alex, Rana, enemies, allies, animals, villagers) ar
 
 ## Font
 
-No font is bundled yet. Planned: Pixelify Sans (SIL Open Font License 1.1), to be added with its licence file.
+Pixelify Sans, Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans), licensed under the SIL Open Font License 1.1. Bundled as WOFF2 in `public/fonts/` (via the `@fontsource/pixelify-sans` npm package) together with its licence, `public/fonts/OFL.txt`.

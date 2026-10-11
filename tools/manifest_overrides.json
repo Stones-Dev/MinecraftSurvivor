@@ -1,4 +1,4 @@
 {
-  "ship": ["mob.zombie.", "mob.skeleton.", "mob.spider.", "mob.creeper.", "mob.slime."],
+  "ship": ["mob.zombie.", "mob.skeleton.", "mob.spider.", "mob.creeper.", "mob.slime_big.", "mob.slime_medium.", "mob.slime_small."],
   "unship": []
 }

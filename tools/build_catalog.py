@@ -30,6 +30,8 @@ OVR_PATH = Path(__file__).resolve().parent / "manifest_overrides.json"
 OVR = json.loads(OVR_PATH.read_text()) if OVR_PATH.exists() else {"ship": [], "unship": []}
 
 HEROES = ["steve", "alex", "rana"]
+# Rare animation labels (fewer than 20 blocks) that must not be mistaken for mob names.
+ALWAYS_ANIM = {"EXPLODE", "EXPLODE/DEATH", "TELEPORT", "SUMMON", "RAM", "OPEN", "CLOSE", "MAGIC", "SLEEP", "SLEEPING", "EAT", "CROAK"}
 MOB_SHEETS = {"enemies": "mob", "allies": "ally", "animals": "pet", "villagers": "npc"}
 ARMOR = {"NO ARMOR": "none", "LEATHER ARMOR": "leather", "CHAINMAIL ARMOR": "chainmail", "GOLD ARMOR": "gold",
          "IRON ARMOR": "iron", "DIAMOND ARMOR": "diamond", "NETHERITE ARMOR": "netherite", "ENCHANTED ARMOR": "enchanted"}
@@ -101,15 +103,20 @@ def mob_entries(sheet: str, prefix: str, catalog: list[dict]) -> list[dict]:
         clusters = [c for row in per_row for c in row]
         name_row: list[tuple[int, str]] = []
         if len(per_row) < 2:
-            # Base mobs have no name row in the block: their name box is a stand-alone box just above it.
-            above = [t for t in meta.get("titles", []) if abs(t[0] - x0) <= 3 and 0 <= y0 - t[3] <= 10]
-            if above:
-                t = max(above, key=lambda b: b[3])
-                name_row = text_clusters(img.crop((t[0], t[1], t[2], t[3])), KNOWN)[:1]
+            # Base mobs: the name box is narrow, so it is not a header row. Read the strip above the
+            # first header row inside the block, else the stand-alone box just above the block.
+            first = sec["header_rows"][0][0] if sec.get("header_rows") else 0
+            if first > 3:
+                name_row = text_clusters(img.crop((x0, y0, x1, y0 + first)), KNOWN)[:1]
+            if not name_row:
+                above = [t for t in meta.get("titles", []) if abs(t[0] - x0) <= 3 and 0 <= y0 - t[3] <= 10]
+                if above:
+                    t = max(above, key=lambda b: b[3])
+                    name_row = text_clusters(img.crop((t[0], t[1], t[2], t[3])), KNOWN)[:1]
         blocks.append((sec, name_row, clusters))
     vocab = Counter(t for _s, _n, cl in blocks for t in {t for _x, t in cl})
     # Animation labels repeat across dozens of blocks; mob names do not (threshold measured on the sheets).
-    anim_words = {t for t, n in vocab.items() if n >= 20 and len(t) <= 20}
+    anim_words = {t for t, n in vocab.items() if (n >= 20 and len(t) <= 20) or t in ALWAYS_ANIM}
     out = []
     for sec, name_row, clusters in blocks:
         frames_all = real_frames(sec)

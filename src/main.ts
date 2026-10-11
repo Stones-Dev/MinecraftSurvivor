@@ -13,6 +13,7 @@ async function boot(): Promise<void> {
     view = fitCanvas(canvas);
   });
 
+  await document.fonts.load('8px "Pixelify Sans"').catch(() => undefined);
   const atlas = await Atlas.load(import.meta.env.BASE_URL);
   const input = new KeyboardInput();
   const router = new Router();

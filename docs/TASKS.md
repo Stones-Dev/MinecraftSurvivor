@@ -23,7 +23,7 @@ Sprite pipeline
 - [x] P0-07 — `tools/slice_sheets.py`: section segmentation by cell-bg colour, label-bar crop, cell split on separators, trim + feet origin, `sections.json` (deps: PRE-04)
 - [x] P0-08 — Slicer: contact sheets `contact_<page>.png` (×2, numbered, label beside each row) (deps: P0-07)
 - [x] P0-09 — Run slicer on all 7 sheets; sanity-check section/frame counts and spot-check odd sections (deps: P0-08)
-- [x] P0-10 — (generated from decoded labels; base-mob names partly missing, see DECISIONS)  Catalogue: review contact sheets per sheet, write `docs/ASSET_CATALOG.md` (one table per sheet, frame counts, v1.0 usage) — split per sheet across agents [haiku for first pass, lead reviews] (deps: P0-09)
+- [x] P0-10 — (generated from decoded labels)  Catalogue: review contact sheets per sheet, write `docs/ASSET_CATALOG.md` (one table per sheet, frame counts, v1.0 usage) — split per sheet across agents [haiku for first pass, lead reviews] (deps: P0-09)
 - [x] P0-11 — (validator: tools/validate_manifest.py, 0 errors)  `assets-src/manifest.json` with semantic ids per naming scheme + schema validator (deps: P0-10)
 - [x] P0-12 — `tools/build_atlas.py`: pack manifest frames into ≤ 4096² POT pages, 1 px padding, flash/hurt variants, `atlas.json`; size report (warn > 5 MB) (deps: P0-11)
 - [x] P0-13 — `CREDITS.md` draft with authors readable on the sheets + font license (deps: P0-09)
@@ -34,10 +34,10 @@ Runtime skeleton
 - [x] P0-16 — Canvas setup: internal art-res canvas, integer scale, letterbox, ×3/×2 zoom rule, `imageSmoothingEnabled=false` (deps: P0-01)
 - [x] P0-17 — `core/atlas`: load atlas JSON/PNG, frame lookup, `Animator` with fallbacks (no walk → idle bob), flip (deps: P0-12, P0-16)
 - [x] P0-18 — `core/input` `InputSource` (keyboard+mouse impl) (deps: P0-01)
-- [x] P0-19 — (font file missing, monospace fallback)  `core/i18n` keyed English table, `core/settings` stub, bundled pixel font (deps: P0-01, PRE-04 font choice)
+- [x] P0-19 — (Pixelify Sans bundled)  `core/i18n` keyed English table, `core/settings` stub, bundled pixel font (deps: P0-01, PRE-04 font choice)
 - [x] P0-20 — Screen router (push/pop/replace) + empty screens: title, hub, run-setup, run, pause, levelup, results, collection, gacha, upgrades, settings, about [haiku for empty screens] (deps: P0-19)
 - [x] P0-21 — Hub shows Steve idle at ×3, pixel-perfect (deps: P0-17, P0-20)
-- [ ] P0-22 — ⛔ CHECKPOINT 0: contact sheets, catalogue, proposed v1.0 roster (enemies, bosses, mini-bosses, pets, allies) + missing → 1.1 (deps: P0-04, P0-05, P0-06, P0-10, P0-13, P0-21)
+- [x] P0-22 — ⛔ CHECKPOINT 0: contact sheets, catalogue, proposed v1.0 roster (enemies, bosses, mini-bosses, pets, allies) + missing → 1.1 (deps: P0-04, P0-05, P0-06, P0-10, P0-13, P0-21)
 
 ## Phase 1 — World & movement
 
