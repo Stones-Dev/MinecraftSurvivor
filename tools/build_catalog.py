@@ -99,7 +99,14 @@ def mob_entries(sheet: str, prefix: str, catalog: list[dict]) -> list[dict]:
         x0, y0, x1, y1 = sec["bbox"]
         per_row = [text_clusters(img.crop((x0, y0 + hy0, x1, y0 + hy1)), KNOWN) for hy0, hy1 in sec.get("header_rows", [])]
         clusters = [c for row in per_row for c in row]
-        blocks.append((sec, [], clusters))
+        name_row: list[tuple[int, str]] = []
+        if len(per_row) < 2:
+            # Base mobs have no name row in the block: their name box is a stand-alone box just above it.
+            above = [t for t in meta.get("titles", []) if abs(t[0] - x0) <= 3 and 0 <= y0 - t[3] <= 10]
+            if above:
+                t = max(above, key=lambda b: b[3])
+                name_row = text_clusters(img.crop((t[0], t[1], t[2], t[3])), KNOWN)[:1]
+        blocks.append((sec, name_row, clusters))
     vocab = Counter(t for _s, _n, cl in blocks for t in {t for _x, t in cl})
     # Animation labels repeat across dozens of blocks; mob names do not (threshold measured on the sheets).
     anim_words = {t for t, n in vocab.items() if n >= 20 and len(t) <= 20}

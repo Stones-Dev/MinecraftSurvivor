@@ -24,7 +24,7 @@ Sprite pipeline
 - [x] P0-08 — Slicer: contact sheets `contact_<page>.png` (×2, numbered, label beside each row) (deps: P0-07)
 - [x] P0-09 — Run slicer on all 7 sheets; sanity-check section/frame counts and spot-check odd sections (deps: P0-08)
 - [x] P0-10 — (generated from decoded labels; base-mob names partly missing, see DECISIONS)  Catalogue: review contact sheets per sheet, write `docs/ASSET_CATALOG.md` (one table per sheet, frame counts, v1.0 usage) — split per sheet across agents [haiku for first pass, lead reviews] (deps: P0-09)
-- [x] P0-11 — (schema validator still to do)  `assets-src/manifest.json` with semantic ids per naming scheme + schema validator (deps: P0-10)
+- [x] P0-11 — (validator: tools/validate_manifest.py, 0 errors)  `assets-src/manifest.json` with semantic ids per naming scheme + schema validator (deps: P0-10)
 - [x] P0-12 — `tools/build_atlas.py`: pack manifest frames into ≤ 4096² POT pages, 1 px padding, flash/hurt variants, `atlas.json`; size report (warn > 5 MB) (deps: P0-11)
 - [x] P0-13 — `CREDITS.md` draft with authors readable on the sheets + font license (deps: P0-09)
 
