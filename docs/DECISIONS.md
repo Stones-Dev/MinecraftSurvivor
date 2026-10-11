@@ -1,0 +1,15 @@
+# Decision log
+
+Dated entries; newest last. Anything that deviates from `docs/BRIEF.md` is marked **Deviation**.
+
+## 2026-10-11
+
+- **Defaults for the open questions in PLAN section 9** (the owner started Phase 0 without answering them, so the simplest option was taken; reversible): Python + Pillow + numpy as tool-only dependencies; `typescript-eslint` + `@eslint/js` as dev dependencies; balance sim to run through Vitest (no `tsx`); Vite `base` is `./` (works on any Pages path).
+- **Deviation: numpy is used by the slicer.** Pillow alone is too slow on the 20 631 px tall enemies sheet. Tool-only, never shipped.
+- **Deviation: labels are decoded, not read by eye.** The sheets hold ~11 000 sections (steve 1352, alex 1352, rana 1224, enemies 793, allies 460, animals 3345, villagers 609), far too many to catalogue visually. `tools/ocr_labels.py` matches the sheets' single bitmap font glyph by glyph (`tools/font_glyphs.json`, 36 glyphs) and `tools/build_catalog.py` derives ids and the catalogue from the decoded text.
+- **Sheet structure (measured).** A section is a header strip plus a cell grid. The label box sits inside the strip (black text on cell-bg). Hero sheets have one header row per section, with the armor tier given by a title above each column group. Mob sheets have 1-2 header rows (name + animation labels); each animation owns the cell columns from its label to the next one. Cell separators are full-height/width 1 px lines; the label box interrupts the separator colour in the header rows, so vertical separators are measured below the headers.
+- **Manifest entry format:** `{id, sheet, section, frames:[k...], fps, loop, tags, ship}`. `ship: true` entries are packed by `build_atlas.py`. Frames are `<sheet>.<section>.<k>` in `atlas.json`; flash silhouettes are `<key>@flash`. Hurt tint is not baked yet (mob sheets already carry red hurt frames).
+- **Atlas v0:** all three heroes (idle, punch, swing, every armor and sword tier) = 1864 frames + flash variants, 1 page, ~600 KiB. Mobs are not shipped yet; the roster is confirmed at Checkpoint 0.
+- **Font:** Pixelify Sans could not be downloaded here (network policy), so no font file is bundled yet; the UI falls back to `monospace`. Needs the owner to drop `PixelifySans.ttf` + `OFL.txt` into `public/fonts/` (or allow the download).
+- **Visual check:** Playwright (`playwright-core` + the preinstalled Chromium at `/opt/pw-browsers`) works headless in this environment; the hub screenshot shows Steve idle at x3, unsmoothed. `@playwright/cli` installed globally and its skill added under `.claude/skills/playwright-cli` (not committed).
+- **`assets-work/` is scratch:** a safety check blocked a wildcard delete of it, so re-slicing overwrites files in place and old frame PNGs from earlier slicer iterations may remain. `sections.json` is the source of truth. The owner can delete `assets-work/` and re-run the tools at any time.
