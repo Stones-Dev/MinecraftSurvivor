@@ -47,7 +47,11 @@ export function bindSaveToAuth(auth: AuthService, store: CloudSaveStore): () => 
   };
   const unsubAuth = auth.onChange((u) => onChange(u));
   // Push pending progress while the account is still signed in.
-  const unsubHook = auth.addSignOutHook(() => store.flush());
+  // (Bounded: a slow network must not hold the sign-out; unsent changes stay in the account's
+  // device copy and sync on the next sign-in.)
+  const unsubHook = auth.addSignOutHook(() =>
+    Promise.race([store.flush(), new Promise((r) => setTimeout(r, 4000))]),
+  );
   const unsubData = store.onDataReplaced(() => {
     const cur = auth.user();
     if (cur && cur.kind !== 'guest' && store.status !== 'conflict') applyProfile(cur);

@@ -6,8 +6,13 @@ import { GamepadInput } from './core/gamepad';
 import { KeyboardInput, MergedInput } from './core/input';
 import { TouchInput } from './core/touch';
 import { Loop } from './core/loop';
-import { LocalSaveStore } from './core/save';
 import { loadoutFromSave, type RunLoadout } from './systems/meta';
+import { HEROES } from './data/companions';
+import { AuthService } from './net/auth';
+import { loadBackend } from './net/backend';
+import { CloudSaveStore } from './net/cloudSave';
+import { cloudConfigured } from './net/config';
+import { bindSaveToAuth, leaderboardFor } from './net/session';
 import type { WeaponId } from './weapons/types';
 import { aboutScreen } from './ui/aboutScreen';
 import { collectionScreen } from './ui/collectionScreen';
@@ -53,8 +58,20 @@ async function boot(): Promise<void> {
   const input = new MergedInput([keyboard, gamepad, touch]);
   const audio = new AudioEngine();
   const router = new Router();
-  const store = new LocalSaveStore(safeStorage());
   const params = new URLSearchParams(window.location.search);
+  // `?cloud=memory` runs the in-memory demo backend (visual tests of the account flows without Firebase).
+  const demoCloud = params.get('cloud') === 'memory';
+  const store = new CloudSaveStore({ storage: safeStorage() });
+  const auth = new AuthService({
+    storage: safeStorage(),
+    configured: cloudConfigured || demoCloud,
+    loadBackend: () => loadBackend({ memoryFallback: demoCloud }),
+  });
+  bindSaveToAuth(auth, store);
+  store.onConflict(async (c) => {
+    const m = await import('./ui/authOverlay');
+    void store.resolve(await m.openConflictDialog(c));
+  });
   const num = (key: string, fallback: number): number => {
     const v = Number(params.get(key));
     return params.has(key) && Number.isFinite(v) ? v : fallback;
@@ -89,6 +106,17 @@ async function boot(): Promise<void> {
     touch,
     router,
     store,
+    cloud: store,
+    auth,
+    leaderboard: () => leaderboardFor(auth, store),
+    openAccount: async (tab) => {
+      const m = await import('./ui/authOverlay');
+      await m.openAuthOverlay(auth, {
+        heroes: HEROES.map((h) => ({ id: h.id, name: h.name })),
+        initialTab: tab,
+        textScale: store.load().settings.accessibility.textScale,
+      });
+    },
     params,
     pointer: { x: 0, y: 0 },
     data: () => store.load(),
@@ -123,6 +151,8 @@ async function boot(): Promise<void> {
       ),
   };
 
+  store.onDataReplaced(() => app.applySettings());
+  void auth.init();
   app.applySettings();
   if ('serviceWorker' in navigator && import.meta.env.PROD) {
     // Offline after the first load; failures (private mode, file://) are harmless. The `load` event has
