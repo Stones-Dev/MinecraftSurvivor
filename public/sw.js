@@ -1,7 +1,7 @@
 /* MineSurvive service worker: offline after the first load.
  * Install precaches the page and every asset index.html references; everything else is cached as it is
  * fetched (atlas, fonts). Navigations go network-first so a new deploy is picked up, assets cache-first. */
-const VERSION = 'minesurvive-v2';
+const VERSION = 'minesurvive-v3';
 const CORE = [
   './',
   './atlas/atlas.json',
@@ -48,25 +48,33 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put('./index.html', copy));
+          // Never cache an error page as the offline shell.
+          if (res.ok && res.type === 'basic') {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put('./index.html', copy));
+          }
           return res;
         })
         .catch(async () => (await caches.match('./index.html', { ignoreSearch: true })) ?? (await caches.match('./'))),
     );
     return;
   }
+  // Hashed build output (assets/*) never changes under its URL: cache-first. Everything else (atlas, fonts,
+  // icons, manifest) is stale-while-revalidate so a deploy that changes sprites reaches returning players.
+  const hashed = new URL(req.url).pathname.includes('/assets/');
+  const refresh = (cache) =>
+    fetch(req).then((res) => {
+      if (res.ok) cache.put(req, res.clone());
+      return res;
+    });
   event.respondWith(
-    caches.match(req, { ignoreVary: true, ignoreSearch: false }).then(
-      (hit) =>
-        hit ??
-        fetch(req).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(VERSION).then((c) => c.put(req, copy));
-          }
-          return res;
-        }),
-    ),
+    caches.open(VERSION).then(async (cache) => {
+      const hit = await cache.match(req, { ignoreVary: true });
+      if (hit) {
+        if (!hashed) refresh(cache).catch(() => undefined);
+        return hit;
+      }
+      return refresh(cache);
+    }),
   );
 });

@@ -4,6 +4,7 @@ import {
   defaultSave,
   LocalSaveStore,
   MAX_COUNT,
+  MAX_SAVE_JSON,
   migrate,
   SAVE_VERSION,
   summarizeSave,
@@ -200,5 +201,47 @@ describe('save v2 sanitize hardening', () => {
 
   it('refuses saves from a newer build', () => {
     expect(tryMigrate({ saveVersion: 3 })).toBeNull();
+  });
+});
+
+describe('save hardening (review)', () => {
+  interface Raw {
+    owned: Record<string, unknown>;
+    pity: Record<string, unknown>;
+    settings: Record<string, unknown>;
+    cloud: Record<string, unknown>;
+    lastModified: number;
+    createdAt: number;
+  }
+  const base = (): Raw =>
+    JSON.parse(JSON.stringify(defaultSave(1_700_000_000_000))) as unknown as Raw;
+
+  it('caps free-form maps and drops oversize control lists', () => {
+    const raw = base();
+    for (let i = 0; i < 5000; i++) raw.owned[`mob_${i}`] = { level: 1, shards: 0, obtainedAt: 1 };
+    for (let i = 0; i < 500; i++) raw.pity[`b${i}`] = 3;
+    raw.settings.controls = { up: Array.from({ length: 50 }, () => 'KeyW'), down: ['KeyS'] };
+    const data = migrate(raw);
+    expect(Object.keys(data.owned).length).toBeLessThanOrEqual(257);
+    expect(Object.keys(data.pity).length).toBeLessThanOrEqual(64);
+    expect(data.settings.controls.up).toBeUndefined();
+    expect(data.settings.controls.down).toEqual(['KeyS']);
+  });
+
+  it('clamps absurd timestamps so cloud stamping can still advance', () => {
+    const raw = base();
+    raw.lastModified = 2 ** 60;
+    raw.createdAt = 1e300;
+    raw.cloud.lastSyncedAt = 2 ** 70;
+    const data = migrate(raw);
+    expect(data.lastModified).toBeLessThanOrEqual(4_102_444_800_000);
+    expect(data.lastModified + 1).not.toBe(data.lastModified);
+    expect(data.createdAt).toBeLessThanOrEqual(4_102_444_800_000);
+    expect(data.cloud.lastSyncedAt).toBeLessThanOrEqual(4_102_444_800_000);
+  });
+
+  it('rejects oversize imports before parsing', () => {
+    const store = new LocalSaveStore(null);
+    expect(() => store.import(' '.repeat(MAX_SAVE_JSON + 1))).toThrow(/too large/);
   });
 });

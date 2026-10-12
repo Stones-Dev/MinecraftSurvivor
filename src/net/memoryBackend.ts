@@ -13,6 +13,7 @@ import { CloudError } from './errors';
 import {
   compareEntries,
   isBetterEntry,
+  MAX_KILLS_BASE,
   MAX_KILLS_PER_SEC,
   MAX_RUN_SEC,
   RUN_TIME_SLACK_SEC,
@@ -314,7 +315,7 @@ export class MemoryBackend implements CloudBackend {
           entry.timeSec > 0 &&
           entry.timeSec <= MAX_RUN_SEC &&
           entry.kills >= 0 &&
-          entry.kills <= 100 + entry.timeSec * MAX_KILLS_PER_SEC;
+          entry.kills <= MAX_KILLS_BASE + entry.timeSec * MAX_KILLS_PER_SEC;
         if (!validBoardId(board) || !sane) throw new CloudError('permission');
         const now = this.server.time();
         // Mirrors the rules: a time cannot exceed the real time since the run started (+ slack),

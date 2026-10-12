@@ -247,6 +247,11 @@ const num = (v: unknown, fallback: number, min = -Infinity, max = Infinity): num
 const count = (v: unknown, fallback = 0, max = MAX_COUNT): number =>
   Math.floor(num(v, fallback, 0, max));
 const secs = (v: unknown): number => num(v, 0, 0, MAX_SECONDS);
+/** Wall-clock ms are capped at year 2100: a huge value would freeze `lastModified + 1` and stop cloud sync. */
+const MAX_TIME_MS = 4_102_444_800_000;
+const ts = (v: unknown, fallback: number): number => num(v, fallback, 0, MAX_TIME_MS);
+/** Largest accepted save JSON text (a real save is a few KB; Firestore documents cap at 1 MiB). */
+export const MAX_SAVE_JSON = 512 * 1024;
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 function oneOf<T extends string | number>(v: unknown, allowed: readonly T[], fallback: T): T {
   return allowed.includes(v as T) ? (v as T) : fallback;
@@ -286,24 +291,24 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const cl = isRecord(data.cloud) ? data.cloud : {};
   const owned: SaveData['owned'] = {};
   if (isRecord(data.owned)) {
-    for (const [id, o] of Object.entries(data.owned)) {
+    for (const [id, o] of Object.entries(data.owned).slice(0, 256)) {
       if (!isRecord(o) || badKey(id)) continue;
       owned[id] = {
         level: Math.min(5, Math.max(1, Math.floor(num(o.level, 1)))),
         shards: count(o.shards),
-        obtainedAt: num(o.obtainedAt, d.createdAt),
+        obtainedAt: ts(o.obtainedAt, d.createdAt),
       };
     }
   }
   if (!owned['steve']) owned['steve'] = { level: 1, shards: 0, obtainedAt: d.createdAt };
   const pity: SaveData['pity'] = {};
   if (isRecord(data.pity)) {
-    for (const [k, v] of Object.entries(data.pity))
+    for (const [k, v] of Object.entries(data.pity).slice(0, 64))
       if (!badKey(k)) pity[k] = num(v, 0, 0, MAX_COUNT);
   }
   const upgrades: SaveData['upgrades'] = {};
   if (isRecord(data.upgrades)) {
-    for (const [hero, ranks] of Object.entries(data.upgrades)) {
+    for (const [hero, ranks] of Object.entries(data.upgrades).slice(0, 64)) {
       if (!isRecord(ranks) || badKey(hero)) continue;
       const out: Record<string, number> = {};
       for (const [id, r] of Object.entries(ranks)) {
@@ -317,8 +322,13 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const quality = set.quality;
   const controls: SaveData['settings']['controls'] = {};
   if (isRecord(set.controls)) {
-    for (const [action, keys] of Object.entries(set.controls)) {
-      if (!badKey(action) && Array.isArray(keys) && keys.every((k) => typeof k === 'string')) {
+    for (const [action, keys] of Object.entries(set.controls).slice(0, 16)) {
+      if (
+        !badKey(action) &&
+        Array.isArray(keys) &&
+        keys.length <= 8 &&
+        keys.every((k) => typeof k === 'string' && k.length <= 32)
+      ) {
         (controls as Record<string, string[]>)[action] = keys as string[];
       }
     }
@@ -349,17 +359,17 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const achievements: SaveData['achievements'] = {};
   if (isRecord(data.achievements)) {
     for (const [id, a] of Object.entries(data.achievements).slice(0, 1000)) {
-      if (safeId(id) && isRecord(a)) achievements[id] = { at: num(a.at, 0, 0) };
+      if (safeId(id) && isRecord(a)) achievements[id] = { at: ts(a.at, 0) };
     }
   }
   const avatar = typeof prof.avatar === 'string' ? prof.avatar : '';
-  const createdAt = num(data.createdAt, d.createdAt);
+  const createdAt = ts(data.createdAt, d.createdAt);
   const profileId = cleanText(prof.id, 64);
   const uid = cleanText(cl.uid, 128);
   return {
     saveVersion: SAVE_VERSION,
     createdAt,
-    lastModified: num(data.lastModified, createdAt, 0),
+    lastModified: ts(data.lastModified, createdAt),
     gachaSeed: num(data.gachaSeed, d.gachaSeed),
     pullCount: count(data.pullCount),
     pity,
@@ -424,7 +434,7 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
     cloud: {
       uid: uid || null,
       rev: count(cl.rev),
-      lastSyncedAt: num(cl.lastSyncedAt, 0, 0),
+      lastSyncedAt: ts(cl.lastSyncedAt, 0),
     },
     settings: {
       musicVolume: num(set.musicVolume, d.settings.musicVolume, 0, 1),
@@ -599,6 +609,7 @@ export class LocalSaveStore implements SaveStore {
   }
 
   import(json: string): SaveData {
+    if (json.length > MAX_SAVE_JSON) throw new Error('Save file is too large');
     const raw: unknown = JSON.parse(json);
     const data = looksLikeSave(raw) ? tryMigrate(raw) : null;
     if (!data) throw new Error('Not a valid MineSurvive save');

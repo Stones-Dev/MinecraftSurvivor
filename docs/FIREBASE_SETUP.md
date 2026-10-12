@@ -112,7 +112,7 @@ npm run dev
 
 `localhost` is an authorized domain by default, so Google sign-in works locally. Without `.env.local`
 the game runs in local/guest mode. There is also an in-memory demo backend (no Firebase at all) that the
-app can enable with `loadBackend({ memoryFallback: true })`, e.g. behind a `?cloud=memory` URL parameter:
+app can enable with `loadBackend({ memoryFallback: true })`, e.g. behind a `?cloud=memory&debug` URL parameter (this is what `main.ts` does):
 it fakes Google/email accounts, nicknames, cloud saves and leaderboards inside this browser.
 
 ## 8. Check that it works
@@ -172,7 +172,7 @@ Basic anti-cheat, enforced by the rules (a modified client cannot bypass it):
 
 1. When a run starts, the client writes `runs/{uid}.startedAt` = the **server** time (`request.time`).
 2. An entry is rejected if its `timeSec` is larger than the real time elapsed since `startedAt` plus 5 s,
-   larger than 2 hours, or has more kills than `100 + 30 x timeSec`.
+   larger than 2 hours, or has more kills than `20 + 10 x timeSec`.
 3. The entry's nickname must be the player's claimed nickname, and only the owner can write their entry.
 
 Limits (documented honestly): this stops forged "I survived 3 hours" entries sent a minute after starting,
@@ -186,7 +186,7 @@ Everything not listed below is denied (`match /{document=**} { allow read, write
 | Path | Read | Write | Why |
 |---|---|---|---|
 | `saves/{uid}` | Owner only | Owner only. Keys exactly `save`, `updatedAt`, `v`; `save` is a map with at most 40 top-level fields and an integer `saveVersion`; `updatedAt` must be the server time; `v` must be 1 on create and previous + 1 on update. Owner may delete. | Private progress; the revision check prevents lost updates between devices. |
-| `names/{lower}` | `get` by anyone, no listing | Create only by a signed-in user for themselves (`{uid}` only), id must match `^[a-z0-9_]{3,16}$`, and the same write must set the user's profile to this nickname. Never updated. Deleted only by its holder and only when the profile no longer uses it. | Unique nicknames; a player holds exactly one, so names cannot be squatted. The public `get` lets the sign-up form check availability before the account exists; it only reveals that a nickname is taken (and the holder's uid, which leaderboards show anyway). |
+| `names/{lower}` | `get` by anyone, no listing | Create only by a signed-in user for themselves (`{uid}` only), id must match `^[a-z0-9_]{3,16}$`, and the same write must set the user's profile to this nickname. Never updated. Deleted only by its holder and only when the profile no longer uses it (deleting a profile must release its nickname in the same write). | Unique nicknames; a player holds exactly one, so names cannot be squatted. The public `get` lets the sign-up form check availability before the account exists; it only reveals that a nickname is taken (and the holder's uid, which leaderboards show anyway). |
 | `profiles/{uid}` | Signed-in users | Owner only. Keys exactly `nick`, `lower`, `avatar`, `at`; `nick.lower() == lower`; `lower` is a valid nickname the user holds (`names/{lower}.uid == uid` after the write); `avatar` up to 32 chars; `at` is the server time; renaming must delete the old `names` claim in the same write. | Public identity without exposing emails or real names. |
 | `runs/{uid}` | Owner only | Owner only; only `startedAt`, which must equal the server time. | Server-side start time for the anti-cheat check (can only move forward, which only shrinks the allowed time). |
 | `lb/{board}/e/{uid}` | Signed-in users | Owner only (document id = own uid); board id must match the allowed patterns; exact key set; `nick` equals the owner's profile nickname; `timeSec` integer 1-7200 and within the elapsed-time check; `kills` integer within the plausibility bound; `at` is the server time; updates must improve the previous entry. Owner may delete. | One honest best per player and board. |
@@ -210,6 +210,21 @@ mode is the best way to try changes to the rules.
 No analytics, ads or tracking are included. To delete an account's data, delete its documents in the
 Firestore console and the user under Authentication > Users (an in-game "delete account" button is not
 implemented yet).
+
+## Hardening checklist (recommended before sharing the game publicly)
+
+The rules stop forged writes to other players' data, but sign-up is open, so protect the project itself:
+
+1. **Restrict the Web API key** (Google Cloud console > APIs & Services > Credentials) to HTTP referrers
+   `https://<user>.github.io/*` and `http://localhost:*`, and to the Identity Toolkit and Firestore APIs.
+   The key is public by design; the restriction stops reuse from other sites.
+2. **Enable App Check** (reCAPTCHA v3) in *enforce* mode for Firestore and Authentication. This is the main
+   defence against scripted account creation and quota exhaustion; it needs a small client change (not
+   included yet, so enforce only after adding it).
+3. **Set a budget alert** (Blaze) or watch the Spark quota (about 20k writes and 50k reads per day).
+4. Turn on **Email Enumeration Protection** (Authentication > Settings).
+5. Prefer a dedicated GitHub Pages origin (custom domain or a user/org site): all `github.io` project pages of one
+   account share localStorage, IndexedDB (sign-in tokens) and the Cache API.
 
 ## Troubleshooting
 

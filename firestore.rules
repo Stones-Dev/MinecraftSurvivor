@@ -73,7 +73,8 @@ service cloud.firestore {
         && (resource == null
             || resource.data.lower == request.resource.data.lower
             || !existsAfter(path('names/' + resource.data.lower)));
-      allow delete: if isOwner(uid);
+      // Deleting the profile must release its nickname claim in the same write (no squatting).
+      allow delete: if isOwner(uid) && !existsAfter(path('names/' + resource.data.lower));
     }
 
     // ---------- leaderboards ----------
@@ -86,7 +87,7 @@ service cloud.firestore {
     }
 
     function validBoard(board) {
-      return board.matches('^time_(all|week_[0-9]{4}-W[0-9]{2}|day_[0-9]{4}-[0-9]{2}-[0-9]{2})$');
+      return board.matches('^time_(all|week_20[0-9]{2}-W(0[1-9]|[1-4][0-9]|5[0-3])|day_20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))$');
     }
 
     // A time can never exceed the real time elapsed since the run started (+5 s slack), kills must
@@ -103,7 +104,7 @@ service cloud.firestore {
         && d.hero is string && d.hero.size() > 0 && d.hero.size() <= 32
         && d.timeSec is int && d.timeSec > 0 && d.timeSec <= 7200
         && d.timeSec <= (request.time - run.startedAt).seconds() + 5
-        && d.kills is int && d.kills >= 0 && d.kills <= 100 + d.timeSec * 30
+        && d.kills is int && d.kills >= 0 && d.kills <= 20 + d.timeSec * 10
         && d.at == request.time;
     }
 

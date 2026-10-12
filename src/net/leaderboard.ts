@@ -16,7 +16,9 @@ import { toCloudError } from './errors';
  */
 export const RUN_TIME_SLACK_SEC = 5;
 export const MAX_RUN_SEC = 7200;
-export const MAX_KILLS_PER_SEC = 30;
+export const MAX_KILLS_PER_SEC = 10;
+/** Flat allowance added to the per-second kill bound (mirrors firestore.rules). */
+export const MAX_KILLS_BASE = 20;
 export type Period = 'all' | 'week' | 'day';
 export const PERIODS: readonly Period[] = ['day', 'week', 'all'];
 
@@ -70,7 +72,10 @@ export interface RunResult {
 /** Whole seconds and kills within the bounds the rules accept. */
 export function normalizeRun(r: RunResult): { timeSec: number; kills: number } {
   const timeSec = Math.max(0, Math.min(MAX_RUN_SEC, Math.floor(r.timeSec)));
-  const kills = Math.max(0, Math.min(100 + timeSec * MAX_KILLS_PER_SEC, Math.floor(r.kills)));
+  const kills = Math.max(
+    0,
+    Math.min(MAX_KILLS_BASE + timeSec * MAX_KILLS_PER_SEC, Math.floor(r.kills)),
+  );
   return { timeSec, kills };
 }
 

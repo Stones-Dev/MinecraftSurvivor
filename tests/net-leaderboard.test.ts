@@ -48,7 +48,7 @@ describe('board ids', () => {
       kills: 10,
     });
     expect(normalizeRun({ hero: 'steve', timeSec: 1e9, kills: 1e9 }).timeSec).toBe(7200);
-    expect(normalizeRun({ hero: 'steve', timeSec: 10, kills: 1e9 }).kills).toBe(400);
+    expect(normalizeRun({ hero: 'steve', timeSec: 10, kills: 1e9 }).kills).toBe(120);
   });
 });
 

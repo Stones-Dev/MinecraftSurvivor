@@ -69,8 +69,8 @@ async function boot(): Promise<void> {
   const audio = new AudioEngine();
   const router = new Router();
   const params = new URLSearchParams(window.location.search);
-  // `?cloud=memory` runs the in-memory demo backend (visual tests of the account flows without Firebase).
-  const demoCloud = params.get('cloud') === 'memory';
+  // `?cloud=memory&debug` runs the in-memory demo backend (visual tests of the account flows without Firebase).
+  const demoCloud = params.get('cloud') === 'memory' && params.has('debug');
   const store = new CloudSaveStore({ storage: safeStorage() });
   const auth = new AuthService({
     storage: safeStorage(),

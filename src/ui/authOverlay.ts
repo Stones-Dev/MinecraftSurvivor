@@ -205,9 +205,19 @@ function modal(
   if (textScale > 1) backdrop.style.fontSize = '20px';
   const prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   let closed = false;
+  // While the dialog is open, keys whose focus fell onto the page (a click on dead space) must not reach
+  // the game: swallow them and put the focus back inside the dialog.
+  const keepFocus = (e: KeyboardEvent): void => {
+    if (backdrop.contains(e.target as Node)) return;
+    e.stopPropagation();
+    e.preventDefault();
+    (dialog.querySelector<HTMLElement>(FOCUSABLE) ?? dialog).focus();
+  };
+  document.addEventListener('keydown', keepFocus, true);
   const close = (): void => {
     if (closed) return;
     closed = true;
+    document.removeEventListener('keydown', keepFocus, true);
     backdrop.remove();
     prevFocus?.focus?.();
   };
@@ -392,7 +402,7 @@ export function openAuthOverlay(
       });
       const email = field('Email', {
         type: 'email',
-        autocomplete: 'email',
+        autocomplete: 'username',
         inputmode: 'email',
         disabled: !cloud,
       });
@@ -454,12 +464,16 @@ export function openAuthOverlay(
         const err = el('p', { class: 'msa-error', role: 'alert' });
         const nick = field('Nickname (public, unique)', {
           type: 'text',
-          autocomplete: 'username',
+          autocomplete: 'nickname',
           maxlength: '16',
           spellcheck: 'false',
           autocapitalize: 'off',
         });
-        const email = field('Email', { type: 'email', autocomplete: 'email', inputmode: 'email' });
+        const email = field('Email', {
+          type: 'email',
+          autocomplete: 'username',
+          inputmode: 'email',
+        });
         const pass = field('Password (6+ characters)', {
           type: 'password',
           autocomplete: 'new-password',
