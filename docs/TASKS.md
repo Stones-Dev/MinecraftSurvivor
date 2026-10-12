@@ -92,10 +92,10 @@ Runtime skeleton
 
 ## Phase 4 — Meta
 
-- [ ] P4-01 — `systems/economy`: run rewards, Spawn Egg / Rare Egg drops; tests (deps: P3-16)
-- [ ] P4-02 — `systems/gacha` data-driven banners, rates, ×10 guarantee, pity 60, dupes; tests (±1% over 1e6, pity) (deps: P3-16)
+- [x] P4-01 — `systems/economy`: run rewards, Spawn Egg / Rare Egg drops; tests (deps: P3-16)
+- [x] P4-02 — `systems/gacha` data-driven banners, rates, ×10 guarantee, pity 60, dupes; tests (±1% over 1e6, pity) (deps: P3-16)
 - [ ] P4-03 — Spawner screen with cage animation, rarity flames, ×1/×10, skip (deps: P4-02)
-- [ ] P4-04 — Companions data: ≥ 15 pets, ≥ 10 allies, lore quips [haiku] (deps: P3-16)
+- [x] P4-04 — Companions data: ≥ 15 pets, ≥ 10 allies, lore quips [haiku] (deps: P3-16)
 - [ ] P4-05 — Pets in run (lazy spring follow, buffs by level) (deps: P4-04)
 - [ ] P4-06 — Allies in run (AI, HP, downed/respawn, villager side frames, special roles) (deps: P4-04)
 - [ ] P4-07 — Heroes Alex & Rana with passives (deps: P3-16)
