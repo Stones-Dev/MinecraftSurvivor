@@ -21,7 +21,8 @@ export type PropKind =
   | 'enchant_table'
   | 'tnt_trap'
   | 'cobweb'
-  | 'magma';
+  | 'magma'
+  | 'bamboo';
 
 /** Ore types stored in `variant % 8`. */
 export const ORE_TYPES = ['coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond'] as const;
@@ -80,6 +81,7 @@ const RADIUS: Record<PropKind, number> = {
   tnt_trap: 0,
   cobweb: 0,
   magma: 0,
+  bamboo: 3,
 };
 
 export function propType(p: Pick<Prop, 'variant'>): number {
@@ -104,41 +106,116 @@ function make(
   return { id, kind, biome, variant: type + 8 * shape, x, y, radius, solid: radius > 0 };
 }
 
+/** Flower species stored in `variant % 8` (plains and forest; other biomes map them to their own plants). */
+const MEADOW_FLOWERS = ['poppy', 'dandelion', 'cornflower', 'oxeye_daisy'] as const;
+
 /**
- * Sprite style key of a prop: which art family should draw it. TODO(art): the props agent swaps sprites
- * by switching on this key; today propSprites.ts draws every style with the generic sprite of `kind`
- * tinted by the biome palette (jungle/swamp/cherry trees reuse the oak and dark-oak shapes, mushroom
- * fields have no huge mushrooms yet, badlands rocks are plain boulders).
+ * Sprite style of a prop: which art family draws it (propSprites.ts has one painter per style, checked by
+ * the compiler through `Record<PropStyle, ...>`). The biome palette tints most styles.
  */
-export type PropStyle = string;
+export type PropStyle =
+  // Trees and tree-sized props.
+  | 'oak'
+  | 'birch'
+  | 'dark_oak'
+  | 'spruce'
+  | 'cherry_tree'
+  | 'jungle_tree'
+  | 'jungle_bush'
+  | 'swamp_oak'
+  | 'huge_mushroom'
+  // Rocks.
+  | 'boulder'
+  | 'mossy_boulder'
+  | 'sandstone_rock'
+  | 'snowy_rock'
+  | 'terracotta_rock'
+  | 'basalt'
+  // Ground plants (no collision).
+  | 'tall_grass'
+  | 'fern'
+  | 'large_fern'
+  | 'sweet_berry_bush'
+  | 'dead_bush'
+  | 'dry_grass'
+  | 'sugar_cane'
+  | (typeof MEADOW_FLOWERS)[number]
+  | 'allium'
+  | 'blue_orchid'
+  | 'pink_tulip'
+  | 'pink_petals'
+  | 'red_mushroom'
+  | 'brown_mushroom'
+  // Everything else is drawn by the style of the same name as its kind.
+  | Exclude<PropKind, 'tree' | 'boulder' | 'tallgrass' | 'flower'>;
 
 export function propStyleFor(biome: BiomeId, kind: PropKind, variant = 0): PropStyle {
   const type = variant % 8;
+  const shape = Math.floor(variant / 8);
   switch (kind) {
     case 'tree':
       if (biome === 'cherry_grove') return 'cherry_tree';
       if (biome === 'jungle') return type === 2 ? 'jungle_tree' : 'jungle_bush';
       if (biome === 'swamp') return 'swamp_oak';
+      if (biome === 'mushroom_fields') return 'huge_mushroom';
       return type === 1 ? 'birch' : type === 2 ? 'dark_oak' : type === 3 ? 'spruce' : 'oak';
     case 'boulder':
-      if (biome === 'nether') return 'basalt';
-      if (biome === 'badlands') return 'terracotta_rock';
-      if (biome === 'mushroom_fields') return 'huge_mushroom';
-      if (biome === 'snowy_taiga') return 'snowy_rock';
-      return 'boulder';
+      switch (biome) {
+        case 'nether':
+          return 'basalt';
+        case 'badlands':
+          return 'terracotta_rock';
+        case 'mushroom_fields':
+          return 'huge_mushroom';
+        case 'snowy_taiga':
+          return 'snowy_rock';
+        case 'desert':
+          return 'sandstone_rock';
+        case 'forest':
+        case 'dark_forest':
+        case 'swamp':
+        case 'jungle':
+          return 'mossy_boulder';
+        default:
+          return 'boulder';
+      }
     case 'tallgrass':
-      return biome === 'desert' || biome === 'badlands'
-        ? 'dead_bush'
-        : biome === 'snowy_taiga'
-          ? 'sweet_berry_bush'
-          : biome === 'swamp'
-            ? 'swamp_reed'
-            : 'tall_grass';
+      switch (biome) {
+        case 'desert':
+          return 'dead_bush';
+        case 'badlands':
+          return shape < 2 ? 'dead_bush' : 'dry_grass';
+        case 'snowy_taiga':
+          return shape === 3 ? 'sweet_berry_bush' : 'fern';
+        case 'swamp':
+          return shape === 3 ? 'sugar_cane' : 'tall_grass';
+        case 'jungle':
+          return shape >= 2 ? 'large_fern' : 'fern';
+        case 'mushroom_fields':
+          return shape % 2 === 0 ? 'red_mushroom' : 'brown_mushroom';
+        case 'dark_forest':
+          return shape === 3 ? 'fern' : 'tall_grass';
+        default:
+          return 'tall_grass';
+      }
     case 'flower':
-      if (biome === 'cherry_grove') return 'pink_petals';
-      if (biome === 'mushroom_fields') return 'mushroom';
-      if (biome === 'swamp') return 'blue_orchid';
-      return 'flower';
+      switch (biome) {
+        case 'cherry_grove':
+          return type === 3 ? 'pink_tulip' : 'pink_petals';
+        case 'mushroom_fields':
+          return type === 0 ? 'red_mushroom' : type === 1 ? 'brown_mushroom' : 'allium';
+        case 'dark_forest':
+          return type === 3 ? 'poppy' : type % 2 === 0 ? 'red_mushroom' : 'brown_mushroom';
+        case 'swamp':
+          return type === 2 ? 'brown_mushroom' : 'blue_orchid';
+        case 'jungle':
+          return type === 0 ? 'poppy' : 'dandelion';
+        case 'desert':
+        case 'badlands':
+          return 'dead_bush';
+        default:
+          return MEADOW_FLOWERS[type % 4] ?? 'poppy';
+      }
     default:
       return kind;
   }
@@ -250,9 +327,11 @@ export function genProps(
         out.push(make(id, 'magma', 0, shape, x, y, cell));
       } else {
         const d = hash2(gx, gy, seed + 606);
-        if (d < 0.22) out.push(make(id, 'tallgrass', 0, shape, x, y, cell));
+        if (cell === 'jungle' && d < 0.05) out.push(make(id, 'bamboo', 0, shape, x, y, cell));
+        else if (d < 0.22) out.push(make(id, 'tallgrass', 0, shape, x, y, cell));
         else if (d < 0.22 + 0.27 * b.flowers) {
-          out.push(make(id, 'flower', v < 0.4 ? 0 : v < 0.75 ? 1 : 2, shape, x, y, cell));
+          const type = v < 0.32 ? 0 : v < 0.6 ? 1 : v < 0.82 ? 2 : 3;
+          out.push(make(id, 'flower', type, shape, x, y, cell));
         }
       }
     }
