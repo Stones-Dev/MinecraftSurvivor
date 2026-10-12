@@ -26,7 +26,15 @@ export interface SpawnerLayout {
   reveal: { cx: number; feetY: number; fit: number; box: Rect; lines: number[]; textW: number };
   rates: Rect;
   /** x10 tray: 5 x 2 cells. */
-  tray: { x: number; y: number; cw: number; ch: number; cols: number; names: boolean; textY: number };
+  tray: {
+    x: number;
+    y: number;
+    cw: number;
+    ch: number;
+    cols: number;
+    names: boolean;
+    textY: number;
+  };
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
@@ -64,7 +72,12 @@ export function spawnerLayout(width: number, height: number): SpawnerLayout {
   let reveal: SpawnerLayout['reveal'];
   if (compact) {
     const bx = 64;
-    const box: Rect = { x: bx, y: top, w: Math.max(60, width - 6 - bx), h: Math.max(40, bottom - top) };
+    const box: Rect = {
+      x: bx,
+      y: top,
+      w: Math.max(60, width - 6 - bx),
+      h: Math.max(40, bottom - top),
+    };
     reveal = {
       cx: 6 + Math.floor((bx - 6 - 4) / 2),
       feetY: box.y + box.h - 4,

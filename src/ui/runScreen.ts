@@ -256,6 +256,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         }
       }
     },
+    onClick(x, y) {
+      // Tap or click the minimap (or its touch chip) to toggle it, like the M key.
+      minimap.tap(x, y);
+    },
     exit() {
       window.removeEventListener('keydown', onKey);
     },
@@ -419,7 +423,15 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         ctx.fillRect(0, 0, width, height);
       }
       drawHud(view, run, camX, camY);
-      minimap.draw(ctx, run, width, textScale() === 2 ? 74 : 56, app.touch.enabled, run.time);
+      minimap.draw(
+        ctx,
+        run,
+        width,
+        textScale() === 2 ? 74 : 56,
+        height,
+        app.touch.enabled,
+        run.time,
+      );
       app.touch.draw(ctx, width, height);
       if (tutorial && run.time < 22) drawTutorial(ctx, width, height, run.time);
 

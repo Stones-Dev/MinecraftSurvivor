@@ -1,5 +1,6 @@
 /**
- * Corner minimap with exploration fog (toggle with M).
+ * Corner minimap with exploration fog (toggle with M, or tap / click the map; with touch controls up a small
+ * map chip stands where the map is while it is hidden).
  *
  * The world is divided into 8x8-tile explored cells (128 px). The hero reveals a disc of cells around
  * itself as it walks; the set is a sparse bitset (one 32x32-cell chunk = 32 words), so a long run costs a
@@ -13,6 +14,7 @@ import { biomeAtTile } from '../world/biomeMap';
 import { BIOMES, type BiomeId } from '../world/biomes';
 import { TILE } from '../world/terrain';
 import type { World } from '../world/world';
+import type { Rect } from './panel';
 
 /** Tiles per explored cell side, and the cell size in world pixels. */
 export const CELL_TILES = 8;
@@ -175,6 +177,49 @@ export function mapPoint(
   out.y = Math.max(1, Math.min(side - 2, my));
 }
 
+/** Side of the map in art pixels (the frame adds 2 on each side). */
+export const MAP_SIDE = WINDOW_CELLS * PX_PER_CELL;
+/** Side of the chip that stands in for a hidden map on touch screens. */
+export const CHIP_SIDE = 16;
+/** Touch controls need this much height before the map is shown next to them (else it hides, as before). */
+export const TOUCH_MIN_HEIGHT = 150;
+
+export interface MapSlot {
+  /** The map window (without its 2 px frame), or null when it is not drawn. */
+  map: Rect | null;
+  /** The touch toggle chip, or null. */
+  chip: Rect | null;
+}
+
+/**
+ * Where the minimap and its touch chip go for a view: top-right, `top` px down, `right` px across. Without
+ * touch controls only the map exists (the M key toggles it). With them, a map that fits is shown, and while it
+ * is hidden a small chip takes its corner so a tap brings it back; on a view too short for the controls and
+ * the map (below TOUCH_MIN_HEIGHT) neither is drawn.
+ */
+export function minimapSlot(
+  right: number,
+  top: number,
+  height: number,
+  touch: boolean,
+  visible: boolean,
+  arena = false,
+): MapSlot {
+  if (arena || (touch && height < TOUCH_MIN_HEIGHT)) return { map: null, chip: null };
+  if (visible)
+    return { map: { x: right - MAP_SIDE - 3, y: top + 1, w: MAP_SIDE, h: MAP_SIDE }, chip: null };
+  if (!touch) return { map: null, chip: null };
+  return { map: null, chip: { x: right - 1 - CHIP_SIDE, y: top + 1, w: CHIP_SIDE, h: CHIP_SIDE } };
+}
+
+/** Does a tap at (x, y) land on the map (frame included) or chip? `pad` widens it for fingers. */
+export function slotHit(slot: MapSlot, x: number, y: number, pad = 3): boolean {
+  const r = slot.map
+    ? { x: slot.map.x - 2, y: slot.map.y - 2, w: slot.map.w + 4, h: slot.map.h + 4 }
+    : slot.chip;
+  return !!r && x >= r.x - pad && y >= r.y - pad && x < r.x + r.w + pad && y < r.y + r.h + pad;
+}
+
 const STORE_KEY = 'minesurvive.minimap';
 
 function loadVisible(): boolean {
@@ -207,6 +252,15 @@ export class Minimap {
   private lastCy = Number.NaN;
   private lastWorld: World | null = null;
   private dirty = true;
+  /** Where the map or chip was drawn last frame (for taps). */
+  private slot: MapSlot = { map: null, chip: null };
+
+  /** A tap / click at (x, y) on the map or its chip toggles it; true when it did. */
+  tap(x: number, y: number): boolean {
+    if (!slotHit(this.slot, x, y)) return false;
+    this.toggle();
+    return true;
+  }
 
   toggle(): void {
     this.visible = !this.visible;
@@ -244,22 +298,25 @@ export class Minimap {
   }
 
   /**
-   * Draw the map with its top-right corner at (right, top). `touch` hides it while the on-screen
-   * controls are up (no room, no M key).
+   * Draw the map with its top-right corner at (right, top), or the touch chip while it is hidden on a touch
+   * screen (see `minimapSlot`).
    */
   draw(
     ctx: CanvasRenderingContext2D,
     run: RunState,
     right: number,
     top: number,
+    height: number,
     touch: boolean,
     time: number,
   ): void {
     this.update(run);
-    if (!this.visible || touch || run.world.arena || !this.ensureCanvas()) return;
-    const side = WINDOW_CELLS * PX_PER_CELL;
-    const x = right - side - 3;
-    const y = top + 1;
+    this.slot = minimapSlot(right, top, height, touch, this.visible, !!run.world.arena);
+    if (this.slot.chip) drawChip(ctx, this.slot.chip);
+    if (!this.slot.map || !this.ensureCanvas()) return;
+    const side = MAP_SIDE;
+    const x = this.slot.map.x;
+    const y = this.slot.map.y;
     if (this.dirty && this.g && this.img) {
       paintWindow(
         this.explored,
@@ -295,4 +352,21 @@ export class Minimap {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + Math.round(pt.x) - 1, y + Math.round(pt.y) - 1, 2, 2);
   }
+}
+
+/** The touch chip: a tiny map glyph on a dark tile, as faint as the other touch buttons. */
+function drawChip(ctx: CanvasRenderingContext2D, r: Rect): void {
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = '#101014';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.fillStyle = '#4a4a56';
+  ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+  ctx.fillStyle = '#3f7a45';
+  ctx.fillRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6);
+  ctx.fillStyle = '#4f86c8';
+  ctx.fillRect(r.x + r.w - 8, r.y + r.h - 7, 5, 4);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(r.x + 6, r.y + 6, 2, 2);
+  ctx.restore();
 }
