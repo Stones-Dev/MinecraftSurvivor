@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import { Camera } from '../core/camera';
 import type { View } from '../core/canvas';
+import { makeEnemy } from '../systems/spawner';
 import { newWeapon } from '../weapons';
 import type { WeaponId } from '../weapons/types';
 import { RunState } from '../game';
@@ -58,6 +59,8 @@ export interface RunOptions {
   portal?: boolean;
   trader?: boolean;
   villager?: boolean;
+  /** Debug: spawn this many enemies around the hero at the start (performance checks). */
+  crowd?: number;
   /** Hero, pet, allies and upgrades chosen in the hub. */
   loadout?: RunLoadout;
 }
@@ -70,6 +73,9 @@ type Drawable =
   | { y: number; kind: 'pet'; pet: PetState }
   | { y: number; kind: 'hero' };
 
+const RAIN_DROPS = [20, 50, 90] as const;
+const SNOW_FLAKES = [16, 40, 70] as const;
+
 /** Rain, snow, lightning flash and the Warden's darkness (screen-space, drawn over the world). */
 function drawWeather(
   ctx: CanvasRenderingContext2D,
@@ -77,13 +83,14 @@ function drawWeather(
   w: number,
   h: number,
   snowing: boolean,
+  quality: 0 | 1 | 2,
 ): void {
   const t = run.time;
   if (run.storm) {
     ctx.fillStyle = 'rgba(20,30,60,0.28)';
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = 'rgba(190,210,255,0.55)';
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < RAIN_DROPS[quality]; i++) {
       const x = (i * 37 + t * 60) % w;
       const y = (i * 53 + t * 340) % h;
       ctx.fillRect(Math.round(x), Math.round(y), 1, 4);
@@ -91,7 +98,7 @@ function drawWeather(
   }
   if (snowing) {
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < SNOW_FLAKES[quality]; i++) {
       const x = (i * 41 + Math.sin(t * 0.9 + i) * 12 + t * 9 + w * 4) % w;
       const y = (i * 29 + t * (26 + (i % 5) * 6)) % h;
       ctx.fillRect(Math.round(x), Math.round(y), i % 3 === 0 ? 2 : 1, i % 3 === 0 ? 2 : 1);
@@ -147,6 +154,18 @@ export function runScreen(app: App, opts: RunOptions): Screen {
     run.recomputeStats();
     run.player.hp = run.player.maxHp;
   }
+  if (opts.crowd) {
+    const ids = ['zombie', 'skeleton', 'spider', 'husk', 'slime_big', 'zombie'];
+    for (let i = 0; i < opts.crowd; i++) {
+      const e = makeEnemy(run, ids[i % ids.length] ?? 'zombie', 0, 0, false);
+      if (!e) continue;
+      const a = (i / opts.crowd) * Math.PI * 2 * 7;
+      const r = 50 + ((i * 37) % 220);
+      e.x = Math.cos(a) * r;
+      e.y = Math.sin(a) * r;
+      run.enemies.push(e);
+    }
+  }
   if (opts.portal) run.rift.portal = { x: 50, y: -20, left: 45 };
   if (opts.trader) spawnTrader(run);
   if (opts.villager) spawnVillager(run);
@@ -162,6 +181,34 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   let propsVisible = 0;
   let lastCamX = 0;
   let lastCamY = 0;
+
+  // Quality tier: fixed by the setting, or adapted to the measured frame time when set to auto.
+  let autoTier: 0 | 1 | 2 = 2;
+  let slowFrames = 0;
+  let fastFrames = 0;
+  const updateQuality = (): void => {
+    const q = app.data().settings.quality;
+    if (q !== 'auto') {
+      run.quality = q === 'high' ? 2 : q === 'medium' ? 1 : 0;
+      return;
+    }
+    if (stats.ms > 24) {
+      fastFrames = 0;
+      if (++slowFrames >= 90 && autoTier > 0) {
+        autoTier = (autoTier - 1) as 0 | 1 | 2;
+        slowFrames = 0;
+      }
+    } else if (stats.ms < 15) {
+      slowFrames = 0;
+      if (++fastFrames >= 900 && autoTier < 2) {
+        autoTier = (autoTier + 1) as 0 | 1 | 2;
+        fastFrames = 0;
+      }
+    } else {
+      slowFrames = Math.max(0, slowFrames - 1);
+    }
+    run.quality = autoTier;
+  };
 
   const onKey = (e: KeyboardEvent): void => {
     if (e.code === 'F3') {
@@ -210,6 +257,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
     render(view: View) {
       const { ctx, width, height } = view;
       stats.tick(performance.now());
+      updateQuality();
       const state = run.biomeState();
       const p = run.player;
       const nextRenderer = run.rift.active ? arenaRenderer : overRenderer;
@@ -254,9 +302,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         }
       }
       for (const e of run.enemies) {
-        if (!e.dying) renderer.drawShadow(ctx, e.x, e.y, e.radius / 6, camX, camY);
+        if (!e.dying && run.quality > 0)
+          renderer.drawShadow(ctx, e.x, e.y, e.radius / 6, camX, camY);
       }
-      renderer.drawShadow(ctx, p.x, p.y, 0.9, camX, camY);
+      if (run.quality > 0) renderer.drawShadow(ctx, p.x, p.y, 0.9, camX, camY);
 
       const drawables: Drawable[] = items.map((item) => ({ y: item.prop.y, kind: 'prop', item }));
       for (const enemy of run.enemies) drawables.push({ y: enemy.y, kind: 'enemy', enemy });
@@ -286,7 +335,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         height,
         nightFactor(run.time) * (1 - Math.min(0.6, run.mods.nightVision)),
       );
-      drawWeather(ctx, run, width, height, state.current === 'snowy_taiga');
+      drawWeather(ctx, run, width, height, state.current === 'snowy_taiga', run.quality);
       if (app.data().settings.damageNumbers) drawFxTexts(ctx, run.fx, camX, camY);
       if (run.rift.active) {
         ctx.fillStyle = 'rgba(120,20,0,0.14)';

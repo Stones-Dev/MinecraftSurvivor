@@ -95,6 +95,7 @@ async function boot(): Promise<void> {
           weapons: params.get('weapons')?.split(',') as WeaponId[] | undefined,
           startXp: num('xp', 0),
           hp: num('hp', 0),
+          crowd: num('crowd', 0),
           portal: params.has('portal'),
           trader: params.has('trader'),
           villager: params.has('villager'),

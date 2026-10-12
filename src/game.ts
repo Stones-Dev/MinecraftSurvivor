@@ -168,6 +168,8 @@ export class RunState {
   /** Item offers that arrived while another choice was open. */
   pendingQueue: ItemId[] = [];
   nextNpcId = 1;
+  /** Visual quality tier 0 (low) .. 2 (high); set by the screen, read by particle and text spawners. */
+  quality: 0 | 1 | 2 = 2;
   /** Traps and ground hazards near the hero, refreshed a few times per second. */
   hazards: Prop[] = [];
   hazardT = 0;

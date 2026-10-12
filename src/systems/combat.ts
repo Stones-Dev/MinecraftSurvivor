@@ -14,6 +14,10 @@ const SPARK_COLORS = ['#ffffff', '#ffe27a', '#ffb347'];
  * Hurt an enemy: damage (shield first), knockback away from (fromX, fromY), flash, number, sparks.
  * `quiet` suppresses the feedback (used for damage-over-time ticks).
  */
+/** Per quality tier (low, medium, high): hit sparks per hit and the live-effect cap that gates damage numbers. */
+const QUALITY_SPARKS = [0, 1, 3] as const;
+const QUALITY_TEXT_CAP = [70, 150, 260] as const;
+
 export function damageEnemy(
   run: RunState,
   e: Enemy,
@@ -46,10 +50,10 @@ export function damageEnemy(
       run.hash.query(e.x, e.y, 140, mates);
       for (const m of mates) if (m.def.packAggro) m.angry = 6;
     }
-    if (run.fx.length < 260) {
+    if (run.fx.length < QUALITY_TEXT_CAP[run.quality]) {
       run.fx.push(makeFx('text', e.x, e.y - 16, 0.55, { text: String(Math.round(dmg)), vy: -26 }));
     }
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < QUALITY_SPARKS[run.quality]; i++) {
       const a = run.rng.fx.range(0, Math.PI * 2);
       const sp = run.rng.fx.range(30, 70);
       run.fx.push(
