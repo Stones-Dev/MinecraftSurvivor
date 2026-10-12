@@ -434,12 +434,9 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
     });
     const s = secs[idx];
     if (s) {
-      const top = bodyTop + 14;
-      const maxLines = Math.max(
-        1,
-        Math.floor((r.y + r.h - 4 - top - 10 - (s.bar ? 10 : 0)) / LINE),
-      );
-      drawSection(ctx, s, r.x + pad4, top, innerW, maxLines);
+      const top = bodyTop + 13;
+      const maxLines = Math.max(1, Math.floor((r.y + r.h - 4 - top - 9) / LINE));
+      drawSection(ctx, s, r.x + pad4, top, innerW, maxLines, true);
     }
   };
 
