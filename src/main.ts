@@ -33,6 +33,7 @@ import { achievementsScreen } from './ui/achievementsScreen';
 import { createMetaWatcher } from './ui/metaWatch';
 import { missionsScreen } from './ui/missionsScreen';
 import { drawToasts } from './ui/toast';
+import { demoResults } from './ui/resultsDemo';
 import { WorldRenderer } from './world/renderer';
 import { type BiomeId, isBiomeId } from './world/biomes';
 import { World } from './world/world';
@@ -196,6 +197,7 @@ async function boot(): Promise<void> {
     else if (which === 'ranking') router.push(rankingScreen(app, back));
     else if (which === 'missions') router.push(missionsScreen(app, back));
     else if (which === 'achievements') router.push(achievementsScreen(app, back));
+    else if (which === 'results' && params.has('debug')) router.push(demoResults(app));
     else if (which === 'setup') router.push(runSetupScreen(app, (l) => app.startRun(l), back));
   } else if (params.has('run')) {
     app.startRun();

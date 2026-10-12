@@ -48,7 +48,12 @@ const note = (text: string, color: string = UI.soft): Line => ({
   },
 });
 
-export function resultsScreen(app: App, run: RunState, persist = true): Screen {
+export function resultsScreen(
+  app: App,
+  run: RunState,
+  persist = true,
+  opts: { submit?: boolean } = {},
+): Screen {
   const data = app.data();
   const rec: RunRecord = run.stats.snapshot(run);
   // Permanent bonuses only (Looting, Pig): Golden Hour and other timed buffs must not depend on the final second.
@@ -79,7 +84,7 @@ export function resultsScreen(app: App, run: RunState, persist = true): Screen {
 
   // Leaderboard: fire and forget, never blocks the screen (errors are swallowed).
   let boardNote = '';
-  if (persist) {
+  if (persist && opts.submit !== false) {
     try {
       const lb = app.leaderboard();
       const p = lb.submitRun?.({ hero: rec.hero, timeSec: rec.timeSec, kills: rec.kills });

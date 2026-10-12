@@ -383,7 +383,7 @@ describe('progress', () => {
 
   it('class missions only count runs played with a matching hero', () => {
     const s = withMissions(['d_ranged_5'], 'alex');
-    const only = (c: { id: string }[]) => c.filter((m) => m.id === 'd_ranged_5');
+    const only = <T extends { id: string }>(c: T[]): T[] => c.filter((m) => m.id === 'd_ranged_5');
     expect(only(applyRunToMissions(s, rec({ hero: 'steve', timeSec: 400 }), NOON))).toEqual([]);
     const moved = only(applyRunToMissions(s, rec({ hero: 'alex', timeSec: 400 }), NOON));
     expect(moved[0]?.completedNow).toBe(true);
