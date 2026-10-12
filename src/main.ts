@@ -7,7 +7,12 @@ import { Loop } from './core/loop';
 import { LocalSaveStore } from './core/save';
 import { loadoutFromSave, type RunLoadout } from './systems/meta';
 import type { WeaponId } from './weapons/types';
+import { collectionScreen } from './ui/collectionScreen';
 import { galleryScreen } from './ui/gallery';
+import { runSetupScreen } from './ui/runSetupScreen';
+import { settingsScreen } from './ui/settingsScreen';
+import { spawnerScreen } from './ui/spawnerScreen';
+import { upgradesScreen } from './ui/upgradesScreen';
 import { Router } from './ui/router';
 import { runScreen } from './ui/runScreen';
 import { hubScreen, titleScreen } from './ui/screens';
@@ -99,6 +104,16 @@ async function boot(): Promise<void> {
   app.applySettings();
   if (params.has('gallery')) {
     router.push(galleryScreen(new WorldRenderer(new World(num('seed', 1337))), num('gallery', 0)));
+  } else if (params.has('screen')) {
+    // Review helper: `?screen=collection|spawner|upgrades|settings|setup` opens a hub screen directly.
+    const back = (): void => app.goHub();
+    router.push(hubScreen(app));
+    const which = params.get('screen');
+    if (which === 'collection') router.push(collectionScreen(app, back));
+    else if (which === 'spawner') router.push(spawnerScreen(app, back));
+    else if (which === 'upgrades') router.push(upgradesScreen(app, back));
+    else if (which === 'settings') router.push(settingsScreen(app, back));
+    else if (which === 'setup') router.push(runSetupScreen(app, (l) => app.startRun(l), back));
   } else if (params.has('run')) {
     app.startRun();
   } else {

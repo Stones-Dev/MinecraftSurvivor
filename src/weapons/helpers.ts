@@ -67,6 +67,8 @@ export function onHitMods(
   const chance = source === 'melee' ? run.mods.burnChance : run.mods.flame;
   if (chance > 0 && run.rng.ai.chance(chance))
     applyStatus(e, 'burn', 3 * run.mods.duration, Math.max(2, baseDmg * 0.3));
+  if (run.mods.poisonChance > 0 && run.rng.ai.chance(run.mods.poisonChance))
+    applyStatus(e, 'poison', 3 * run.mods.duration, Math.max(2, baseDmg * 0.25));
 }
 
 /** Make the hero face a world point (sprites only face left or right). */

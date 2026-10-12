@@ -294,7 +294,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
           if (!r) continue;
           const def = COMPANION_BY_ID.get(r.id);
           if (!def) continue;
-          drawCompanion(ctx, atlas, def, rx + cell.w / 2, ry + 28, t);
+          drawCompanion(ctx, atlas, def, rx + cell.w / 2, ry + 30, t, 1, 1, 24);
           drawText(
             ctx,
             def.name.length > 8 ? def.name.slice(0, 8) : def.name,

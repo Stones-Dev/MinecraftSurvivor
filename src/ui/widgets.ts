@@ -74,11 +74,15 @@ export function drawCompanion(
   t: number,
   scale = 1,
   alpha = 1,
+  fit = 0,
 ): void {
   const key = companionFrame(atlas, def, t);
   if (!key) return;
   if (alpha < 1) ctx.globalAlpha = alpha;
-  atlas.draw(ctx, key, x, y, false, scale);
+  // `fit` caps the drawn height (and width) in px so big sprites (golems, horses) stay inside their box.
+  const size = fit > 0 ? atlas.frameSize(key) : null;
+  const k = size ? Math.min(scale, fit / Math.max(size.w * 0.8, size.h)) : scale;
+  atlas.draw(ctx, key, x, y, false, k);
   ctx.globalAlpha = 1;
 }
 

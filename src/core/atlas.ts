@@ -47,6 +47,12 @@ export class Atlas {
     return def;
   }
 
+  /** Pixel size of a frame, or null when the key is unknown (used to fit portraits into boxes). */
+  frameSize(key: string): { w: number; h: number } | null {
+    const f = this.data.frames[key];
+    return f ? { w: f.w, h: f.h } : null;
+  }
+
   hasAnim(id: string): boolean {
     return id in this.data.anims;
   }

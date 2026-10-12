@@ -33,6 +33,7 @@ import type { Enemy } from '../entities/enemy';
 import { WorldRenderer, type PropItem } from '../world/renderer';
 import { drawDebug, FrameStats } from './debug';
 import { drawHud } from './hud';
+import { drawPanel, drawText } from './panel';
 import {
   itemChoiceScreen,
   levelupScreen,
@@ -110,6 +111,23 @@ function drawWeather(
   }
 }
 
+/** The 20-second first-run hints (BRIEF section 5). */
+function drawTutorial(ctx: CanvasRenderingContext2D, w: number, h: number, t: number): void {
+  const steps = [
+    'Move with WASD or the arrow keys',
+    'Your weapons fire on their own',
+    'Collect the green gems for XP',
+    'Level up to pick a new card',
+  ];
+  const i = Math.min(steps.length - 1, Math.floor(t / 5.5));
+  const text = steps[i] ?? '';
+  const alpha = Math.min(1, (22 - t) / 2, (t % 5.5) / 0.4 + 0.2);
+  ctx.globalAlpha = Math.max(0, alpha);
+  drawPanel(ctx, { x: Math.floor(w / 2) - 100, y: h - 56, w: 200, h: 20 });
+  drawText(ctx, text, w / 2, h - 43, '#ffd84a', 'center');
+  ctx.globalAlpha = 1;
+}
+
 export function runScreen(app: App, opts: RunOptions): Screen {
   const { atlas, input, router } = app;
   const run = new RunState(opts.seed, opts.startTime, opts.loadout);
@@ -128,6 +146,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   let renderer = overRenderer;
   const camera = new Camera();
   const stats = new FrameStats();
+  // First run ever: a short overlay explains movement, auto-attack, XP and level-up cards.
+  const tutorial = !opts.debug && !app.data().flags.tutorialDone && app.data().records.runs === 0;
   let showDebug = opts.debug;
   let prebaked = false;
   let propsVisible = 0;
@@ -263,6 +283,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         ctx.fillRect(0, 0, width, height);
       }
       drawHud(view, run, camX, camY);
+      if (tutorial && run.time < 22) drawTutorial(ctx, width, height, run.time);
 
       if (showDebug) {
         drawDebug(

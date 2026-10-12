@@ -10,6 +10,7 @@ import { Projectile } from '../entities/projectile';
 import type { RunState } from '../game';
 import { explode, hurtPlayer, killEnemy } from './combat';
 import { updateBoss } from './bossAI';
+import { tauntTarget } from './allies';
 import { makeEnemy } from './spawner';
 import { tickStatus } from './status';
 
@@ -324,7 +325,14 @@ export function updateEnemies(run: RunState, dt: number): void {
     }
     switch (def.archetype) {
       case 'chaser': {
-        chase(run, e, ux, uy, dist);
+        // An Iron Golem taunts chasers within 4 tiles: they go for it instead of the hero.
+        const bait = run.allies.length > 0 ? tauntTarget(run, e) : null;
+        if (bait) {
+          const bx = bait.x - e.x;
+          const by = bait.y - e.y;
+          const bd = Math.hypot(bx, by) || 1;
+          chase(run, e, bx / bd, by / bd, bd);
+        } else chase(run, e, ux, uy, dist);
         step(run, e, dir.x * speed, dir.y * speed, dt);
         if (!p.dead) contact(run, e, dist);
         break;
@@ -600,7 +608,7 @@ export function updateEnemies(run: RunState, dt: number): void {
           if (dist < 28 && !p.dead) {
             e.state = 'fuse';
             run.emit('hiss');
-            e.stateT = FUSE_TIME;
+            e.stateT = FUSE_TIME + run.mods.fuseBonus;
             e.animT = 0;
             run.fx.push(
               makeFx('text', e.x, e.y - 22, 0.5, { text: '!', vy: -10, color: '#ff4d4d' }),

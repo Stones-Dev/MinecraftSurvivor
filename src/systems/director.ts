@@ -31,6 +31,8 @@ export class DirectorState {
   raidUntil = 0;
   raidSpawnT = 0;
   bannerDone = false;
+  /** Index of the boss the Parrot already warned about. */
+  squawked = -1;
   /** Game time at which the next Endless boss arrives. */
   nextEndlessAt = ENDLESS_FIRST;
   raidAngle = 0;
@@ -137,6 +139,10 @@ export function updateDirector(run: RunState, dt: number): void {
 
   // Bosses.
   const next = BOSS_SCHEDULE[d.nextBoss];
+  if (next && run.pet?.def.effect === 'parrot' && d.squawked !== d.nextBoss && t >= next.at - 3) {
+    d.squawked = d.nextBoss;
+    run.announce('SQUAWK! A boss is coming!', '#ff9a6a', 3);
+  }
   if (next && t >= next.at) {
     spawnBoss(run, next.id, 1);
     d.nextBoss++;

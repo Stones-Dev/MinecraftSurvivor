@@ -175,9 +175,10 @@ export function drawHero(
   const armor = ARMOR_IDS[run.armorTier] ?? 'none';
   const sword = SWORD_IDS[run.swordTier] ?? 'wood';
   const swinging = p.swingT > 0;
-  const id = `hero.steve.${armor}.sword_${sword}.${swinging ? 'swing' : 'idle'}`;
+  const name = run.loadout.hero;
+  const id = `hero.${name}.${armor}.sword_${sword}.${swinging ? 'swing' : 'idle'}`;
   const t = swinging ? 0.33 - p.swingT : run.time;
-  const anim = atlas.hasAnim(id) ? atlas.anim(id) : atlas.anim('hero.steve.none.sword_wood.idle');
+  const anim = atlas.hasAnim(id) ? atlas.anim(id) : atlas.anim(`hero.${name}.none.sword_wood.idle`);
   let key = frameAt(anim, t);
   if (p.hurtT > 0) key += '@flash';
   const bob = p.moving && !swinging ? -(Math.floor(run.time * 10) % 2) : 0;

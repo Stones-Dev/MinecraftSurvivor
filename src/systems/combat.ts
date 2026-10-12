@@ -73,12 +73,17 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
   run.kills++;
   run.onKill(e);
   const m = run.mods;
-  const xp = e.def.xp * (e.elite ? 1.6 : 1) * (e.charged ? 5 : 1) * m.xpMult;
+  const slimy = e.def.id.startsWith('slime') || e.def.id.startsWith('magma_cube');
+  const slimeXp = slimy ? (1 + m.slimeXp) * (run.loadout.hero === 'rana' ? 2 : 1) : 1;
+  const xp = e.def.xp * (e.elite ? 1.6 : 1) * (e.charged ? 5 : 1) * m.xpMult * slimeXp;
   run.pickups.push(new Pickup('xp', e.x, e.y, xp));
-  if (run.rng.drops.chance(0.08 * m.lootMult)) {
+  if (run.rng.drops.chance(0.08 * m.lootMult + m.emeraldDrop)) {
     run.pickups.push(new Pickup('emerald', e.x + 4, e.y + 2, 1));
   }
   if (m.healOnKill > 0) run.player.heal(m.healOnKill);
+  if (m.healWater > 0 && run.world.surface(run.player.x, run.player.y, run.biome()) === 'water') {
+    run.player.heal(run.player.maxHp * m.healWater);
+  }
   if (run.rng.drops.chance(m.lootMult / 400)) {
     run.spawnEggs++;
     run.fx.push(
@@ -93,7 +98,8 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
     );
   }
   const into = e.def.splitInto;
-  if (into && e.splitDepth < 2) {
+  const maxSplit = run.loadout.hero === 'rana' ? 1 : 2;
+  if (into && e.splitDepth < maxSplit) {
     for (let i = 0; i < 2; i++) {
       const child = makeEnemy(run, into, e.x + (i === 0 ? -6 : 6), e.y, false);
       if (!child) continue;
@@ -184,7 +190,8 @@ export function explode(
   }
   if (playerDmg > 0) {
     const p = run.player;
-    if (Math.hypot(p.x - x, p.y - y) < radius + p.radius) hurtPlayer(run, playerDmg, skip);
+    if (Math.hypot(p.x - x, p.y - y) < radius + p.radius)
+      hurtPlayer(run, playerDmg * (1 - Math.min(0.8, run.mods.explosionResist)), skip);
   }
   // Chain reaction: nearby mines light their fuses.
   for (const m of run.mines) {

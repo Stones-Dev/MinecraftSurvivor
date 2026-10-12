@@ -2,6 +2,7 @@
 //
 // Usage (from the repo root, with `npm run build` done):
 //   NODE_PATH=<dir containing playwright-core> node tools/screenshot.mjs <shots.json>
+// Optional per shot: "storage" (localStorage seed) and "clicks" ([{x,y,waitMs}] CSS pixels).
 // shots.json: { "base": "http://localhost:4174/", "shots": [
 //   { "path": "?run&debug&t=0", "out": "docs/screenshots/run.png", "hold": "KeyD", "holdMs": 1500, "waitMs": 600, "fpsMs": 3000 } ] }
 // Chromium is taken from CHROMIUM_PATH or the preinstalled /opt/pw-browsers build.
@@ -22,7 +23,19 @@ for (const s of cfg.shots) {
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(String(e)));
+  if (s.storage) {
+    // Seed localStorage before the app boots: { "key": value } (objects are JSON-stringified).
+    await page.addInitScript((entries) => {
+      for (const [k, v] of Object.entries(entries)) {
+        localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+      }
+    }, s.storage);
+  }
   await page.goto(cfg.base + (s.path || ''));
+  for (const c of s.clicks ?? []) {
+    await page.waitForTimeout(c.waitMs ?? 300);
+    await page.mouse.click(c.x, c.y);
+  }
   await page.waitForTimeout(s.waitMs ?? 600);
   if (s.hold) {
     await page.keyboard.down(s.hold);

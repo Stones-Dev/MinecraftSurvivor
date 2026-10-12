@@ -32,7 +32,16 @@ function floatText(run: RunState, text: string, color: string): void {
 export function useItem(run: RunState, dirX: number, dirY: number): void {
   const id = run.item;
   const p = run.player;
-  if (!id || p.dead || run.itemCd > 0 || !ITEMS[id].active) return;
+  if (p.dead || run.itemCd > 0) return;
+  // The Horse gives the Space key a sprint when no active item is equipped.
+  if ((!id || !ITEMS[id].active) && run.loadout.allies.some((a) => a.id === 'horse')) {
+    const len = Math.hypot(dirX, dirY);
+    run.dash = { dx: len > 0 ? dirX / len : p.facing, dy: len > 0 ? dirY / len : 0, t: 0.3 };
+    p.iframes = Math.max(p.iframes, 0.2);
+    run.itemCd = 6;
+    return;
+  }
+  if (!id || !ITEMS[id].active) return;
   switch (id) {
     case 'golden_apple':
       p.heal(p.maxHp * 0.5);

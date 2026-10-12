@@ -3,7 +3,9 @@ import type { App } from '../app';
 import type { View } from '../core/canvas';
 import type { RunState } from '../game';
 import { ITEMS } from '../data/items';
+import { baseMods } from '../data/upgrades';
 import { runReward } from '../systems/economy';
+import { applyLoadoutMods } from '../systems/meta';
 import { resolveItemChoice } from '../systems/items';
 import {
   applyCard,
@@ -290,17 +292,24 @@ export function pauseScreen(app: App, onQuit: () => void): Screen {
 /** Results: totals, emeralds earned, records. Saves progress when created. */
 export function resultsScreen(app: App, run: RunState): Screen {
   const data = app.data();
-  const earned = runReward({
-    timeSec: run.time,
-    kills: run.kills,
-    bosses: run.bossKills,
-    miniBosses: run.miniKills,
-    picked: run.emeraldsPicked,
-  });
+  // Permanent bonuses only (Looting, Pig): Golden Hour and other timed buffs must not depend on the final second.
+  const meta = baseMods();
+  applyLoadoutMods(run.loadout, meta);
+  const earned = runReward(
+    {
+      timeSec: run.time,
+      kills: run.kills,
+      bosses: run.bossKills,
+      miniBosses: run.miniKills,
+      picked: run.emeraldsPicked,
+    },
+    meta.lootMult,
+  );
   const newTime = Math.floor(run.time) > Math.floor(data.records.bestTimeSec);
   const newKills = run.kills > data.records.bestKills;
   data.currencies.emeralds += earned;
   data.records.runs += 1;
+  data.flags.tutorialDone = true;
   if (run.won) data.records.wins += 1;
   data.currencies.spawnEggs += run.spawnEggs;
   data.currencies.rareSpawnEggs += run.rareSpawnEggs;

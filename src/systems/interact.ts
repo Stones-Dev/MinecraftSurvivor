@@ -123,6 +123,12 @@ export function updateInteract(run: RunState, dt: number): void {
   const biome = run.biome();
   const b = BIOMES[biome];
   p.envMult = b.snow && run.mods.frost <= 0 ? 0.9 : 1;
+  if (
+    run.mods.lavaSpeed > 0 &&
+    (run.rift.active || run.world.surface(p.x, p.y, biome) === 'lava')
+  ) {
+    p.envMult *= 1 + run.mods.lavaSpeed;
+  }
   if (p.dead) return;
   const props = run.world.propsInRect(p.x - 40, p.y - 40, p.x + 40, p.y + 40, biome);
   const hits = run.hitPoints;
@@ -247,6 +253,7 @@ export function updateInteract(run: RunState, dt: number): void {
 }
 
 function burnHero(run: RunState): void {
+  if (run.mods.lavaImmune) return;
   const p = run.player;
   p.dotKind = 'burn';
   p.dotT = Math.max(p.dotT, 2.5);
