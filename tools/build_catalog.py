@@ -28,6 +28,12 @@ SRC = ROOT / "assets-src"
 KNOWN = json.loads((Path(__file__).resolve().parent / "font_glyphs.json").read_text())
 OVR_PATH = Path(__file__).resolve().parent / "manifest_overrides.json"
 OVR = json.loads(OVR_PATH.read_text()) if OVR_PATH.exists() else {"ship": [], "unship": []}
+# Extra ship lists: tools/ship_*.json ({"ship": [...], "unship": [...]}), so several people can add sprites
+# without editing the same file. They are merged on top of manifest_overrides.json.
+for extra in sorted(Path(__file__).resolve().parent.glob("ship_*.json")):
+    data = json.loads(extra.read_text())
+    OVR["ship"] = list(OVR.get("ship", [])) + list(data.get("ship", []))
+    OVR["unship"] = list(OVR.get("unship", [])) + list(data.get("unship", []))
 
 HEROES = ["steve", "alex", "rana"]
 # Rare animation labels (fewer than 20 blocks) that must not be mistaken for mob names.
