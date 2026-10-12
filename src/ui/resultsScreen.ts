@@ -114,11 +114,11 @@ export function resultsScreen(
       },
     });
     const bits = [
-      parts.time > 0 ? `time ${parts.time}` : '',
-      parts.kills > 0 ? `kills ${parts.kills}` : '',
-      parts.bosses + parts.miniBosses > 0 ? `bosses ${parts.bosses + parts.miniBosses}` : '',
-      parts.picked > 0 ? `picked ${parts.picked}` : '',
-      parts.bonus > 0 ? `bonus ${parts.bonus}` : '',
+      parts.time > 0 ? `time +${parts.time}` : '',
+      parts.kills > 0 ? `kills +${parts.kills}` : '',
+      parts.bosses + parts.miniBosses > 0 ? `bosses +${parts.bosses + parts.miniBosses}` : '',
+      parts.picked > 0 ? `pickups +${parts.picked}` : '',
+      parts.bonus > 0 ? `bonus +${parts.bonus}` : '',
     ].filter(Boolean);
     if (bits.length) out.push(note(bits.join('  '), UI.dim));
     if (rec.eggsFound + rec.rareEggsFound > 0) {
