@@ -11,10 +11,21 @@ import {
   type CompanionRarity,
 } from '../data/companions';
 import { OVERWORLD_BANNER, type PullResult, spendAndPull } from '../systems/gacha';
-import { drawIcon } from './icons';
-import { drawPanel, drawText, inRect, wrap } from './panel';
+import type { IconName } from './icons';
+import {
+  UI,
+  drawBar,
+  drawPanel,
+  drawText,
+  drawTooltip,
+  fitText,
+  inRect,
+  tooltipLines,
+  wrap,
+  type Rect,
+} from './panel';
 import type { Screen } from './router';
-import { Buttons, drawCompanion, drawRarity, drawTitle } from './widgets';
+import { Buttons, drawCompanion, drawPill, drawRarity, drawTitle } from './widgets';
 
 type Phase = 'idle' | 'spin' | 'reveal' | 'tray';
 
@@ -94,6 +105,47 @@ function drawBars(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
   ctx.fillRect(cx - 24, cy - 26, 48, 1);
 }
 
+/** A wall torch: a stick with a flickering flame. */
+function drawTorch(ctx: CanvasRenderingContext2D, x: number, y: number, t: number): void {
+  ctx.fillStyle = '#101014';
+  ctx.fillRect(x - 2, y, 4, 12);
+  ctx.fillStyle = '#7a5530';
+  ctx.fillRect(x - 1, y + 1, 2, 10);
+  const f = Math.floor(t * 10);
+  const h = 4 + Math.floor(jitter(f) * 3);
+  ctx.fillStyle = '#ff8a2a';
+  ctx.fillRect(x - 2, y - h, 4, h);
+  ctx.fillStyle = '#ffd84a';
+  ctx.fillRect(x - 1, y - h + 1, 2, h - 1);
+  ctx.fillStyle = '#fff6c8';
+  ctx.fillRect(x - 1, y - 2, 2, 2);
+  ctx.globalAlpha = 0.1;
+  ctx.fillStyle = '#ffb040';
+  ctx.fillRect(x - 12, y - 14, 24, 28);
+  ctx.globalAlpha = 1;
+}
+
+/** Embers drifting up from the cage in its glow colour. */
+function drawEmbers(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  t: number,
+  color: string,
+  heat: number,
+): void {
+  ctx.fillStyle = color;
+  const n = 6 + Math.floor(heat * 10);
+  for (let i = 0; i < n; i++) {
+    const life = (t * (12 + jitter(i) * 10) + i * 17) % 60;
+    const x = cx - 22 + jitter(i * 3.7) * 44 + Math.sin(t * 2 + i) * 3;
+    const y = cy + 18 - life;
+    ctx.globalAlpha = Math.max(0, 1 - life / 60) * 0.8;
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
 export function spawnerScreen(app: App, onBack: () => void): Screen {
   const { atlas } = app;
   const buttons = new Buttons();
@@ -107,6 +159,9 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
   let showRates = false;
   let message = '';
   let ratesRect = { x: 0, y: 0, w: 0, h: 0 };
+  let pills: { r: Rect; tip: string }[] = [];
+  let mx = -1;
+  let my = -1;
 
   const save = () => app.data();
 
@@ -186,31 +241,46 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
     render(view: View) {
       const { ctx, width, height } = view;
       const data = save();
-      drawTitle(view, 'THE SPAWNER', OVERWORLD_BANNER.name);
+      drawTitle(view, 'THE SPAWNER');
       const cx = Math.floor(width / 2);
-      const cy = Math.floor(66 + (height - 180) * 0.3);
-      // Counters.
-      drawPanel(ctx, { x: 6, y: 6, w: 92, h: 44 });
-      drawIcon(ctx, 'egg', 10, 10);
-      drawText(ctx, `Spawn Eggs  ${data.currencies.spawnEggs}`, 26, 19, '#7dff9a');
-      drawIcon(ctx, 'egg', 10, 22);
-      drawText(ctx, `Rare Eggs  ${data.currencies.rareSpawnEggs}`, 26, 31, '#ffd84a');
-      drawIcon(ctx, 'emerald', 10, 34);
-      drawText(ctx, `Emeralds  ${data.currencies.emeralds}`, 26, 43, '#7dff9a');
-      const pity = data.pity[OVERWORLD_BANNER.id] ?? 0;
-      drawPanel(ctx, { x: width - 98, y: 6, w: 92, h: 30 });
-      drawText(ctx, 'Legendary pity', width - 52, 18, '#cfcfd8', 'center');
-      const bar = { x: width - 92, y: 24, w: 80, h: 6 };
-      ctx.fillStyle = '#101014';
-      ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
-      ctx.fillStyle = RARITY_COLOR.legendary;
-      ctx.fillRect(
-        bar.x + 1,
-        bar.y + 1,
-        Math.round(((bar.w - 2) * pity) / OVERWORLD_BANNER.pity),
-        bar.h - 2,
+      const cy = Math.floor(70 + (height - 180) * 0.3);
+      // Resources (left) and the Legendary pity bar (right) under the header.
+      pills = [];
+      let px = 6;
+      const addPill = (icon: IconName, text: string, color: string, tip: string): void => {
+        const r = drawPill(ctx, px, 24, icon, text, color);
+        pills.push({ r, tip });
+        px += r.w + 3;
+      };
+      addPill('egg', String(data.currencies.spawnEggs), '#9ad978', 'Spawn Eggs: one pull each.');
+      addPill(
+        'egg_rare',
+        String(data.currencies.rareSpawnEggs),
+        UI.gold,
+        'Rare Spawn Eggs: a x10 pull.',
       );
-      drawText(ctx, `${pity} / ${OVERWORLD_BANNER.pity}`, width - 52, 44, '#9a9aa8', 'center');
+      addPill(
+        'emerald',
+        String(data.currencies.emeralds),
+        UI.green,
+        'Emeralds (duplicates refund some).',
+      );
+      const pity = data.pity[OVERWORLD_BANNER.id] ?? 0;
+      const pw = Math.max(84, Math.min(120, width - px - 10));
+      const pityBar = { x: width - 6 - pw, y: 24, w: pw, h: 14 };
+      drawBar(ctx, pityBar, pity / OVERWORLD_BANNER.pity, RARITY_COLOR.legendary);
+      drawText(
+        ctx,
+        fitText(`Legendary pity ${pity}/${OVERWORLD_BANNER.pity}`, pw - 6),
+        pityBar.x + pw / 2,
+        pityBar.y + 10,
+        '#fff',
+        'center',
+      );
+      pills.push({
+        r: pityBar,
+        tip: `A Legendary is guaranteed after ${OVERWORLD_BANNER.pity} pulls without one.`,
+      });
 
       // Cage and the thing inside it.
       let color = '#ff9a3a';
@@ -227,7 +297,10 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
         heat = Math.max(0.2, 1 - t * 0.6);
         lightning = cur.rarity === 'legendary' && t < 1.4;
       }
+      drawTorch(ctx, cx - 50, cy + 2, t);
+      drawTorch(ctx, cx + 50, cy + 2, t);
       drawCage(ctx, cx, cy, t, color, heat, lightning);
+      drawEmbers(ctx, cx, cy, t, color, heat);
       if (phase === 'spin') {
         // A whirl of silhouettes: companions cycle faster the closer the spin is to its end.
         const total = tenMode ? SPIN_TEN : SPIN_ONE;
@@ -326,12 +399,25 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
       const bw = Math.min(78, Math.floor((width - 12 - 18) / 4));
       const gap = 6;
       const x0 = Math.floor((width - (4 * bw + 3 * gap)) / 2);
-      buttons.add({ x: x0, y: by, w: bw, h: 16 }, 'Pull x1  (1 egg)', () => startPull(1), busy());
+      const canOne = data.currencies.spawnEggs >= 1;
+      const canTen = data.currencies.rareSpawnEggs >= 1;
+      buttons.add({ x: x0, y: by, w: bw, h: 16 }, 'Pull x1', () => startPull(1), busy(), {
+        key: 'pull1',
+        icon: 'egg',
+        variant: canOne ? 'primary' : 'normal',
+        tooltip: 'Spend 1 Spawn Egg for one companion.',
+      });
       buttons.add(
         { x: x0 + bw + gap, y: by, w: bw, h: 16 },
-        'Pull x10  (rare)',
+        'Pull x10',
         () => startPull(10),
         busy(),
+        {
+          key: 'pull10',
+          icon: 'egg_rare',
+          variant: canTen ? 'gold' : 'normal',
+          tooltip: 'Spend 1 Rare Spawn Egg for ten pulls, at least one Rare.',
+        },
       );
       buttons.add(
         { x: x0 + 2 * (bw + gap), y: by, w: bw, h: 16 },
@@ -339,10 +425,24 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
         () => {
           showRates = !showRates;
         },
+        false,
+        { key: 'rates', icon: 'info' },
       );
-      buttons.add({ x: x0 + 3 * (bw + gap), y: by, w: bw, h: 16 }, 'Back', onBack);
+      buttons.add({ x: x0 + 3 * (bw + gap), y: by, w: bw, h: 16 }, 'Back', onBack, false, {
+        key: 'back',
+      });
       buttons.draw(view);
       if (message) drawText(ctx, message, cx, by - 5, '#ff9a9a', 'center');
+      else if (phase === 'idle') {
+        drawText(
+          ctx,
+          'Click the cage or press Space to skip animations.',
+          cx,
+          by - 5,
+          UI.faint,
+          'center',
+        );
+      }
 
       ratesRect = { x: Math.floor(width / 2) - 96, y: 54, w: 192, h: 100 };
       if (showRates) {
@@ -350,7 +450,9 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
         drawText(ctx, 'Drop rates', width / 2, ratesRect.y + 12, '#ffd84a', 'center');
         let y = ratesRect.y + 24;
         for (const r of [...RARITY_ORDER].reverse() as CompanionRarity[]) {
-          drawText(ctx, RARITY_LABEL[r], ratesRect.x + 10, y, RARITY_COLOR[r]);
+          ctx.fillStyle = RARITY_COLOR[r];
+          ctx.fillRect(ratesRect.x + 8, y - 6, 5, 6);
+          drawText(ctx, RARITY_LABEL[r], ratesRect.x + 18, y, RARITY_COLOR[r]);
           drawText(ctx, `${OVERWORLD_BANNER.rates[r]}%`, ratesRect.x + 100, y, '#fff');
           drawText(
             ctx,
@@ -371,8 +473,13 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
           'center',
         );
       }
+      const tip = pills.find((p) => inRect(p.r, mx, my));
+      if (tip && !buttons.over(mx, my))
+        drawTooltip(ctx, tooltipLines(tip.tip), mx, my, width, height);
     },
     onMove(x, y) {
+      mx = x;
+      my = y;
       buttons.move(x, y);
     },
     onClick(x, y) {

@@ -4,7 +4,7 @@
  */
 import type { View } from '../core/canvas';
 import type { IconName } from './icons';
-import { drawToast } from './panel';
+import { drawToast, fitText, textWidth } from './panel';
 
 export interface ToastItem {
   text: string;
@@ -47,5 +47,15 @@ export function drawToasts(view: View, nowMs: number): void {
     age = 0;
     return;
   }
-  drawToast(view.ctx, view.width, cur.text, { age, life: LIFE, icon: cur.icon, color: cur.color });
+  // Top-right corner: `drawToast` centres on the width it is given, so give it a width whose centre
+  // puts the toast against the right edge.
+  const iconW = cur.icon ? 14 : 0;
+  const text = fitText(cur.text, view.width - 8 - iconW - 14);
+  const bw = textWidth(text) + iconW + 14;
+  drawToast(view.ctx, 2 * (view.width - 4) - bw, text, {
+    age,
+    life: LIFE,
+    icon: cur.icon,
+    color: cur.color,
+  });
 }

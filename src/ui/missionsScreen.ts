@@ -5,7 +5,6 @@
  * does not fit (tiny windows).
  */
 import type { App } from '../app';
-import type { View } from '../core/canvas';
 import { DAILY_LOGIN_REWARDS, rewardText, type MissionKind } from '../data/missions';
 import {
   claimDailyReward,
@@ -176,11 +175,11 @@ export function missionsScreen(app: App, back: () => void): Screen {
     }
   };
 
-  const drawLogin = (ctx: CanvasRenderingContext2D, view: View, st: DailyRewardState): void => {
+  const drawLogin = (ctx: CanvasRenderingContext2D, st: DailyRewardState): void => {
     const c = content;
     const cellGap = 3;
     const cellW = Math.floor((c.w - cellGap * 6) / 7);
-    const cellH = view.height < 200 ? 50 : 62;
+    const cellH = 56;
     const claimedDays = st.status === 'claimed' ? st.day : st.done;
     for (let i = 1; i <= 7; i++) {
       const r: Rect = { x: c.x + (i - 1) * (cellW + cellGap), y: c.y + 2, w: cellW, h: cellH };
@@ -197,7 +196,7 @@ export function missionsScreen(app: App, back: () => void): Screen {
         ctx,
         `${reward.emeralds ?? 0}`,
         r.x + r.w / 2,
-        r.y + 34,
+        r.y + 33,
         claimed ? UI.dim : UI.green,
         'center',
       );
@@ -209,7 +208,7 @@ export function missionsScreen(app: App, back: () => void): Screen {
           ctx,
           t,
           r.x + r.w / 2,
-          r.y + 43 + k * 9,
+          r.y + 42 + k * 9,
           reward.rareSpawnEggs && k === extra.length - 1 ? '#c98cff' : UI.gold,
           'center',
         ),
@@ -289,7 +288,7 @@ export function missionsScreen(app: App, back: () => void): Screen {
       hits.begin();
       track = null;
       if (tab === 2) {
-        drawLogin(ctx, view, st);
+        drawLogin(ctx, st);
         hits.draw(ctx);
       } else {
         const list = views();
