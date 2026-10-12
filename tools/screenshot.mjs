@@ -19,7 +19,7 @@ const cfg = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 
 const browser = await chromium.launch({ executablePath: exe, args: ['--no-sandbox'] });
 for (const s of cfg.shots) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const page = await browser.newPage({ viewport: s.viewport ?? { width: 1280, height: 720 } });
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(String(e)));

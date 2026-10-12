@@ -3,7 +3,11 @@ import type { View } from '../core/canvas';
 import { t } from '../core/i18n';
 import type { App } from '../app';
 import { allyById, heroById, petById } from '../data/companions';
+import { drawNight } from '../systems/daynight';
 import { loadoutFromSave } from '../systems/meta';
+import { biomeState } from '../world/biomes';
+import { WorldRenderer } from '../world/renderer';
+import { World } from '../world/world';
 import { aboutScreen } from './aboutScreen';
 import { collectionScreen } from './collectionScreen';
 import { drawIcon } from './icons';
@@ -80,6 +84,8 @@ export function hubScreen(app: App): Screen {
   const { atlas, router } = app;
   const buttons = new Buttons();
   let time = 0;
+  let baked = false;
+  const world = new WorldRenderer(new World(1337 + (app.data().createdAt % 97)));
   const heroAnim = (): Animator => {
     const id = `hero.${heroById(app.data().loadout.hero).hero}.none.none.idle`;
     return new Animator(
@@ -107,24 +113,27 @@ export function hubScreen(app: App): Screen {
     render(view) {
       const { ctx, width, height } = view;
       const data = app.data();
-      const g = ctx.createLinearGradient(0, 0, 0, height);
-      g.addColorStop(0, '#2b1f3a');
-      g.addColorStop(0.7, '#a2536a');
-      g.addColorStop(1, '#d8895a');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, width, height);
+      // Live slice of the world at dusk behind the menu: the hero and companions stand on real terrain.
       const ground = Math.floor(height * 0.72);
-      ctx.fillStyle = '#3d5a2e';
-      ctx.fillRect(0, ground, width, height - ground);
-      ctx.fillStyle = '#4b6b3a';
-      ctx.fillRect(0, ground, width, 2);
-      // Stars.
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      for (let i = 0; i < 24; i++) {
-        const sx = (i * 97) % width;
-        const sy = (i * 53) % Math.floor(ground * 0.6);
-        if ((Math.floor(time * 2) + i) % 7 !== 0) ctx.fillRect(sx, sy, 1, 1);
+      const camX = -Math.floor(width * 0.3);
+      const camY = -(ground + 14);
+      const state = biomeState(0);
+      if (!baked) {
+        world.drawGround(ctx, camX, camY, width, height, state, true);
+        baked = true;
       }
+      world.beginFrame();
+      world.drawGround(ctx, camX, camY, width, height, state);
+      for (const item of world.collectProps(camX, camY, width, height, state)) {
+        if (Math.abs(item.prop.x) > 14 || Math.abs(item.prop.y) > 8)
+          world.drawProp(ctx, item, camX, camY);
+      }
+      drawNight(ctx, width, height, 1);
+      const glow = ctx.createLinearGradient(0, 0, 0, height);
+      glow.addColorStop(0, 'rgba(214,110,70,0)');
+      glow.addColorStop(1, 'rgba(214,110,70,0.2)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, width, height);
       drawText(ctx, t('game.title'), width / 2, 30, '#7ddc6f', 'center');
       drawText(ctx, t('game.tagline'), width / 2, 42, '#e8d8c8', 'center');
       // Hero and companions.
@@ -168,14 +177,7 @@ export function hubScreen(app: App): Screen {
       if (data.records.bestTimeSec > 0) {
         const m = Math.floor(data.records.bestTimeSec / 60);
         const sec = String(Math.floor(data.records.bestTimeSec % 60)).padStart(2, '0');
-        drawText(
-          ctx,
-          `Best ${m}:${sec}  Kills ${data.records.bestKills}`,
-          width / 2,
-          54,
-          '#e8d8c8',
-          'center',
-        );
+        drawText(ctx, `Best ${m}:${sec}  Kills ${data.records.bestKills}`, 6, 10, '#e8d8c8');
       }
     },
     onMove(x, y) {
