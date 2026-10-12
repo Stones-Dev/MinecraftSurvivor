@@ -1,8 +1,10 @@
 /** Shared bits of the missions, achievements and results screens: hit list, tabs, checkmark, formatting. */
 import type { MissionReward } from '../data/missions';
+import { FocusTracker, type FocusItem, type NavEvent } from './hubModel';
 import { drawIcon, type IconName } from './icons';
 import {
   drawButton,
+  drawFocusRing,
   drawText,
   fitText,
   inRect,
@@ -22,24 +24,44 @@ export interface Hit {
   style: ButtonStyle;
   /** Draw nothing (the rect is only a click target, e.g. a whole card or a tab). */
   invisible: boolean;
+  /** Can the keyboard / pad focus ring land on it (default: every visible hit). */
+  focusable: boolean;
+  /** Stable identity for focus tracking (default: the label). */
+  id: string;
+  /** Called when keyboard / pad navigation moves the focus here (scroll it into view, select its row). */
+  onFocus: (() => void) | null;
 }
 
-/** Buttons and click targets rebuilt every frame, with hover tracking and viewport clipping. */
+type HitOpts = Partial<
+  Pick<Hit, 'disabled' | 'clip' | 'style' | 'invisible' | 'focusable' | 'onFocus'>
+> & {
+  /** Stable identity for focus tracking when labels repeat. */
+  key?: string;
+};
+
+/**
+ * Buttons and click targets rebuilt every frame, with hover tracking, viewport clipping and keyboard / gamepad
+ * focus (`handleNav`: arrows move a focus ring between the focusable hits, OK presses it).
+ */
 export class HitList {
   private list: Hit[] = [];
   private mx = -1;
   private my = -1;
+  private readonly focus = new FocusTracker();
+  private seen = new Map<string, number>();
 
   begin(): void {
+    // Settle the focus on the finished frame so a vanished target hands the ring to its neighbour.
+    this.focus.sync(this.items());
     this.list = [];
+    this.seen.clear();
   }
 
-  add(
-    rect: Rect,
-    label: string,
-    fn: () => void,
-    opts: Partial<Pick<Hit, 'disabled' | 'clip' | 'style' | 'invisible'>> = {},
-  ): void {
+  add(rect: Rect, label: string, fn: () => void, opts: HitOpts = {}): void {
+    const base = opts.key ?? (label || 'hit');
+    const n = this.seen.get(base) ?? 0;
+    this.seen.set(base, n + 1);
+    const invisible = opts.invisible ?? false;
     this.list.push({
       rect,
       label,
@@ -47,8 +69,20 @@ export class HitList {
       disabled: opts.disabled ?? false,
       clip: opts.clip ?? null,
       style: opts.style ?? {},
-      invisible: opts.invisible ?? false,
+      invisible,
+      focusable: opts.focusable ?? !invisible,
+      id: `${base}#${n}`,
+      onFocus: opts.onFocus ?? null,
     });
+  }
+
+  /** Focusable targets in insertion order (scrolled-away ones too: focusing them is how a list scrolls). */
+  private targets(): Hit[] {
+    return this.list.filter((h) => h.focusable);
+  }
+
+  private items(): FocusItem[] {
+    return this.targets().map((h) => ({ ...h.rect, enabled: !h.disabled, id: h.id }));
   }
 
   private reachable(h: Hit, x: number, y: number): boolean {
@@ -56,25 +90,68 @@ export class HitList {
   }
 
   hovered(h: Hit): boolean {
-    return this.reachable(h, this.mx, this.my);
+    return !this.focus.active && this.reachable(h, this.mx, this.my);
   }
 
-  /** Draw the visible buttons (call inside the right clip for scrolled ones). */
+  /** Is the focus ring showing (the keyboard or a pad was the last input)? */
+  get keyboardActive(): boolean {
+    return this.focus.active;
+  }
+
+  /** Id of the focused hit (its `key`, else its label, plus `#n`), or null. */
+  get focusedId(): string | null {
+    return this.focus.focusedId;
+  }
+
+  /** Is the focus ring on the hit added with this key / label? */
+  focusedIs(key: string): boolean {
+    return this.focus.focusedId?.startsWith(`${key}#`) === true;
+  }
+
+  private focusedHit(): Hit | undefined {
+    const id = this.focus.focusedId;
+    return id === null ? undefined : this.list.find((h) => h.id === id && !h.disabled);
+  }
+
+  /** Draw the visible buttons (call inside the right clip for scrolled ones), then the focus ring. */
   draw(ctx: CanvasRenderingContext2D, only?: (h: Hit) => boolean): void {
+    const foc = this.focusedHit();
+    const tick = typeof performance !== 'undefined' ? performance.now() / 1000 : 0;
     for (const h of this.list) {
-      if (h.invisible || (only && !only(h))) continue;
-      drawButton(ctx, h.rect, h.label, this.hovered(h), h.disabled, h.style);
+      if (only && !only(h)) continue;
+      const focused = h === foc;
+      if (h.invisible && !focused) continue;
+      if (h.clip) {
+        // Scrolled hits (and their ring) never spill out of the viewport.
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(h.clip.x, h.clip.y, h.clip.w, h.clip.h);
+        ctx.clip();
+      }
+      if (!h.invisible) {
+        drawButton(ctx, h.rect, h.label, this.hovered(h), h.disabled, {
+          ...h.style,
+          focused,
+          tick,
+        });
+      } else {
+        drawFocusRing(ctx, h.clip ? inset(h.rect) : h.rect, tick);
+      }
+      if (h.clip) ctx.restore();
     }
   }
 
   move(x: number, y: number): void {
+    if (x !== this.mx || y !== this.my) this.focus.release();
     this.mx = x;
     this.my = y;
   }
 
   /** Topmost enabled hit under the point is activated; returns true when something handled it. */
   click(x: number, y: number): boolean {
-    this.move(x, y);
+    this.mx = x;
+    this.my = y;
+    this.focus.release();
     for (let i = this.list.length - 1; i >= 0; i--) {
       const h = this.list[i];
       if (h && this.reachable(h, x, y)) {
@@ -85,7 +162,60 @@ export class HitList {
     }
     return false;
   }
+
+  /** Show the ring on the first hit whose key / label starts with `key` (or the first focusable one). */
+  focusOn(key?: string): void {
+    const items = this.items();
+    this.focus.focusFirst(items, key ? items.find((i) => i.id.startsWith(key))?.id : undefined);
+    this.focusedHit()?.onFocus?.();
+  }
+
+  /** Move the ring in a direction (the first press only shows it); true when it moved or appeared. */
+  nav(dir: 'up' | 'down' | 'left' | 'right'): boolean {
+    const before = this.focus.focusedId;
+    const items = this.items();
+    if (items.length === 0) return false;
+    const i = this.focus.move(items, dir);
+    if (i < 0) return false;
+    const after = items[i]?.id ?? null;
+    if (after !== before) this.focusedHit()?.onFocus?.();
+    return after !== before;
+  }
+
+  /** Press the focused hit; true when one fired. */
+  activate(): boolean {
+    const h = this.focusedHit();
+    if (!h) return false;
+    h.fn();
+    return true;
+  }
+
+  /**
+   * Arrows move the ring, OK presses it (the first OK only shows the ring). Returns true when the event was
+   * consumed; 'back', 'prev' and 'next' are left to the screen.
+   */
+  handleNav(ev: NavEvent): boolean {
+    switch (ev) {
+      case 'up':
+      case 'down':
+      case 'left':
+      case 'right':
+        this.nav(ev);
+        return true;
+      case 'ok':
+        if (!this.focus.active) {
+          this.focusOn();
+          return true;
+        }
+        return this.activate();
+      default:
+        return false;
+    }
+  }
 }
+
+/** The rect shrunk by one pixel per side: a ring drawn around it stays inside the original bounds. */
+const inset = (r: Rect): Rect => ({ x: r.x + 1, y: r.y + 1, w: r.w - 2, h: r.h - 2 });
 
 /** A tab strip: equal-width tabs across `area`, the active one raised and gold. Returns each tab's rect. */
 export function drawTabs(

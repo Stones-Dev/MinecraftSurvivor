@@ -1,12 +1,10 @@
 /** The Spawner (gacha) screen: a pixel-art mob spawner cage, x1 / x10 pulls, pity counter and rates. */
-import { cb } from '../core/accessibility';
 import type { App } from '../app';
 import type { View } from '../core/canvas';
 import {
   COMPANION_BY_ID,
   COMPANIONS,
   DUPE_EMERALDS,
-  RARITY_COLOR,
   RARITY_LABEL,
   RARITY_ORDER,
   type CompanionRarity,
@@ -26,7 +24,7 @@ import {
   type Rect,
 } from './panel';
 import type { Screen } from './router';
-import { Buttons, drawCompanion, drawPill, drawRarity, drawTitle } from './widgets';
+import { Buttons, drawCompanion, drawPill, drawRarity, drawTitle, rarityColor } from './widgets';
 
 type Phase = 'idle' | 'spin' | 'reveal' | 'tray';
 
@@ -273,7 +271,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
       const pity = data.pity[OVERWORLD_BANNER.id] ?? 0;
       const pw = Math.max(84, Math.min(120, width - px - 10));
       const pityBar = { x: width - 6 - pw, y: 24, w: pw, h: 14 };
-      drawBar(ctx, pityBar, pity / OVERWORLD_BANNER.pity, cb(RARITY_COLOR.legendary));
+      drawBar(ctx, pityBar, pity / OVERWORLD_BANNER.pity, rarityColor('legendary'));
       drawText(
         ctx,
         fitText(`Legendary pity ${pity}/${OVERWORLD_BANNER.pity}`, pw - 6),
@@ -294,11 +292,11 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
       if (phase === 'spin' && cur) {
         const total = tenMode ? SPIN_TEN : SPIN_ONE;
         const prog = 1 - spinT / total;
-        color = cb(RARITY_COLOR[cur.rarity]);
+        color = rarityColor(cur.rarity);
         heat = 0.2 + 0.8 * prog;
         lightning = cur.rarity === 'legendary' && prog > 0.4;
       } else if (phase === 'reveal' && cur) {
-        color = cb(RARITY_COLOR[cur.rarity]);
+        color = rarityColor(cur.rarity);
         heat = Math.max(0.2, 1 - t * 0.6);
         lightning = cur.rarity === 'legendary' && t < 1.4;
       }
@@ -333,7 +331,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
           const rise = 6 + (1 - pop) * 10;
           drawCompanion(ctx, atlas, def, cx, cy - 24 - rise + 6, t, 1 + pop * 0.8);
           const box = { x: cx - 100, y: cy + 36, w: 200, h: 58 };
-          drawPanel(ctx, box, false, cb(RARITY_COLOR[cur.rarity]));
+          drawPanel(ctx, box, false, rarityColor(cur.rarity));
           drawText(ctx, def.name, cx, box.y + 13, '#fff', 'center');
           drawRarity(ctx, def, cx, box.y + 23, 'center');
           const status = cur.isNew
@@ -367,7 +365,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
             ctx,
             { x: rx + 1, y: ry, w: cell.w - 2, h: cell.h },
             false,
-            r ? cb(RARITY_COLOR[r.rarity]) : null,
+            r ? rarityColor(r.rarity) : null,
           );
           if (!r) continue;
           const def = COMPANION_BY_ID.get(r.id);
@@ -455,9 +453,9 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
         drawText(ctx, 'Drop rates', width / 2, ratesRect.y + 12, '#ffd84a', 'center');
         let y = ratesRect.y + 24;
         for (const r of [...RARITY_ORDER].reverse() as CompanionRarity[]) {
-          ctx.fillStyle = cb(RARITY_COLOR[r]);
+          ctx.fillStyle = rarityColor(r);
           ctx.fillRect(ratesRect.x + 8, y - 6, 5, 6);
-          drawText(ctx, RARITY_LABEL[r], ratesRect.x + 18, y, cb(RARITY_COLOR[r]));
+          drawText(ctx, RARITY_LABEL[r], ratesRect.x + 18, y, rarityColor(r));
           drawText(ctx, `${OVERWORLD_BANNER.rates[r]}%`, ratesRect.x + 100, y, '#fff');
           drawText(
             ctx,

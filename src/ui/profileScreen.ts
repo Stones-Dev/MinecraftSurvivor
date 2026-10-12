@@ -18,7 +18,8 @@ import {
 import { drawAvatar } from './avatar';
 import { drawPanel, drawText, drawTextScaled, fitText, textWidth } from './panel';
 import type { Screen } from './router';
-import { Buttons, drawTitle } from './widgets';
+import { keyToNav, type NavEvent } from './hubModel';
+import { Buttons, PadNav, drawTitle } from './widgets';
 
 type Mode = 'main' | 'avatar';
 
@@ -31,6 +32,7 @@ export function avatarChoices(data: SaveData, current: string): string[] {
 
 export function profileScreen(app: App, back: () => void): Screen {
   const buttons = new Buttons();
+  const pad = new PadNav();
   let time = 0;
   let mode: Mode = 'main';
   let note = '';
@@ -60,6 +62,27 @@ export function profileScreen(app: App, back: () => void): Screen {
     pending = app.auth.user()?.avatar ?? app.data().profile.avatar;
     mode = 'avatar';
   };
+  const stepAvatar = (d: number): void => {
+    const current = app.auth.user()?.avatar ?? app.data().profile.avatar;
+    const ids = avatarChoices(app.data(), current);
+    const at = Math.max(0, ids.indexOf(pending));
+    pending = ids[(at + d + ids.length) % ids.length] ?? current;
+  };
+  /** One navigation event from the keyboard or a pad. */
+  const navigate = (ev: NavEvent): void => {
+    if (ev === 'back') {
+      if (mode === 'avatar') mode = 'main';
+      else back();
+      return;
+    }
+    if (mode === 'avatar') {
+      // The avatar stepper owns left / right (and the bumpers); up / down and OK use the focus ring.
+      if (ev === 'left' || ev === 'prev') return stepAvatar(-1);
+      if (ev === 'right' || ev === 'next') return stepAvatar(1);
+      if (ev === 'ok' && !buttons.keyboardActive) return setAvatar(pending);
+    }
+    if (buttons.handleNav(ev) && ev === 'ok') app.audio.play('click');
+  };
   const rename = async (): Promise<void> => {
     const m = await import('./authOverlay');
     const u = await m.openNameEditor(app.auth, { textScale: textScale() });
@@ -77,6 +100,7 @@ export function profileScreen(app: App, back: () => void): Screen {
   return {
     update(dt) {
       time += dt;
+      for (const ev of pad.poll(dt)) navigate(ev);
     },
     render(view: View) {
       const { ctx, width, height } = view;
@@ -146,9 +170,7 @@ export function profileScreen(app: App, back: () => void): Screen {
         drawText(ctx, 'Choose your avatar', width / 2, top + 11, '#ffd84a', 'center');
         const ids = avatarChoices(data, heroId);
         const at = Math.max(0, ids.indexOf(pending));
-        const step = (d: number): void => {
-          pending = ids[(at + d + ids.length) % ids.length] ?? heroId;
-        };
+        const step = stepAvatar;
         const cw = 56;
         const ch = Math.max(40, Math.min(area - 34, 78));
         const bx = Math.floor((width - cw) / 2);
@@ -279,18 +301,8 @@ export function profileScreen(app: App, back: () => void): Screen {
       if (buttons.click(x, y)) app.audio.play('click');
     },
     onKey(code) {
-      if (code === 'Escape') {
-        if (mode === 'avatar') mode = 'main';
-        else back();
-      } else if (mode === 'avatar') {
-        const ids = avatarChoices(app.data(), app.auth.user()?.avatar ?? app.data().profile.avatar);
-        const at = Math.max(0, ids.indexOf(pending));
-        if (code === 'ArrowLeft' || code === 'KeyA')
-          pending = ids[(at + ids.length - 1) % ids.length] ?? pending;
-        else if (code === 'ArrowRight' || code === 'KeyD')
-          pending = ids[(at + 1) % ids.length] ?? pending;
-        else if (code === 'Enter') setAvatar(pending);
-      }
+      const ev = keyToNav(code);
+      if (ev) navigate(ev);
     },
   };
 }

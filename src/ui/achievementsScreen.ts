@@ -1,7 +1,8 @@
 /**
  * Achievements: a tab per category, a medal per achievement (gold when unlocked, iron when locked,
- * "?" while hidden), progress bars and rewards. Keyboard: Left/Right (or Q/E) change category,
- * Up/Down select, Esc goes back; the wheel scrolls long categories.
+ * "?" while hidden), progress bars and rewards. Keyboard and gamepad: Q / E (LB / RB) change category,
+ * arrows / d-pad move the focus ring over the tabs, the rows and Back (rows scroll into view), Enter / A
+ * presses it, Esc / B goes back; the wheel scrolls long categories.
  */
 import type { App } from '../app';
 import { ACHIEVEMENT_CATEGORIES, type AchievementCategory } from '../data/achievements';
@@ -10,7 +11,7 @@ import {
   achievementProgress,
   type AchievementProgress,
 } from '../systems/achievements';
-import { keyToNav } from './hubModel';
+import { keyToNav, type NavEvent } from './hubModel';
 import { drawIcon } from './icons';
 import {
   drawCheck,
@@ -23,7 +24,7 @@ import {
 import { drawBar, drawPanel, drawText, fitText, inRect, textWidth, UI, type Rect } from './panel';
 import type { Screen } from './router';
 import { Scroller, withClip } from './scroll';
-import { drawTitle } from './widgets';
+import { drawTitle, PadNav } from './widgets';
 
 const ROW_H = 24;
 const ROW_GAP = 2;
@@ -36,6 +37,7 @@ function dateText(ms: number): string {
 
 export function achievementsScreen(app: App, back: () => void): Screen {
   const hits = new HitList();
+  const pad = new PadNav();
   const scroll = new Scroller();
   let tab = 0;
   let sel = 0;
@@ -60,7 +62,16 @@ export function achievementsScreen(app: App, back: () => void): Screen {
   ): void => {
     const { def } = p;
     const hidden = def.hidden && !p.unlocked;
-    hits.add(r, '', () => (sel = index), { clip: content, invisible: true });
+    hits.add(r, '', () => (sel = index), {
+      clip: content,
+      invisible: true,
+      focusable: true,
+      key: `row:${def.id}`,
+      onFocus: () => {
+        sel = index;
+        scroll.reveal(index * (ROW_H + ROW_GAP), ROW_H, content.h);
+      },
+    });
     drawPanel(ctx, r, index === sel, p.unlocked ? '#9a7418' : null);
     drawMedal(
       ctx,
@@ -102,8 +113,21 @@ export function achievementsScreen(app: App, back: () => void): Screen {
     }
   };
 
+  /** One navigation event from the keyboard or a pad. */
+  const navigate = (ev: NavEvent): void => {
+    if (ev === 'back') return back();
+    if (ev === 'prev' || ev === 'next') {
+      setTab(tab + (ev === 'prev' ? -1 : 1));
+      app.audio.play('click');
+      return;
+    }
+    hits.handleNav(ev);
+  };
+
   return {
-    update() {},
+    update(dt) {
+      for (const ev of pad.poll(dt)) navigate(ev);
+    },
     render(view) {
       const { ctx, width, height } = view;
       const data = app.data();
@@ -135,7 +159,7 @@ export function achievementsScreen(app: App, back: () => void): Screen {
             w: rowW,
             h: ROW_H,
           };
-          if (r.y + r.h < content.y || r.y > content.y + content.h) return;
+          // Off-screen rows still register so the focus ring can walk to them.
           drawRow(ctx, p, r, i);
         });
       });
@@ -147,6 +171,15 @@ export function achievementsScreen(app: App, back: () => void): Screen {
       // Footer: back, and the full text of the selected achievement.
       const fy = height - 20;
       hits.add({ x: x0, y: fy, w: 52, h: 16 }, 'Back', back);
+      ACHIEVEMENT_CATEGORIES.forEach((c, i) => {
+        const r = tabRects[i];
+        if (r)
+          hits.add(r, c.label, () => setTab(i), {
+            invisible: true,
+            focusable: true,
+            key: `tab:${i}`,
+          });
+      });
       const cur = list[sel];
       if (cur) {
         const hidden = cur.def.hidden && !cur.unlocked;
@@ -174,15 +207,8 @@ export function achievementsScreen(app: App, back: () => void): Screen {
       scroll.by(dy > 0 ? 18 : -18);
     },
     onKey(code) {
-      const nav = keyToNav(code);
-      if (nav === 'back') return back();
-      if (nav === 'left' || nav === 'prev') return setTab(tab - 1);
-      if (nav === 'right' || nav === 'next') return setTab(tab + 1);
-      if (nav === 'up' || nav === 'down') {
-        const n = achievementProgress(app.data(), cat()).length;
-        sel = Math.max(0, Math.min(n - 1, sel + (nav === 'up' ? -1 : 1)));
-        scroll.reveal(sel * (ROW_H + ROW_GAP), ROW_H, content.h);
-      }
+      const ev = keyToNav(code);
+      if (ev) navigate(ev);
     },
   };
 }

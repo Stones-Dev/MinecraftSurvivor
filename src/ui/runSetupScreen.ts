@@ -2,7 +2,6 @@
  * Run setup: pick the Hero, Pet and Allies from what you own (slots on the left, a picker on the right),
  * choose an optional start biome, then start (BRIEF section 5).
  */
-import { cb } from '../core/accessibility';
 import { abilityText } from '../abilities';
 import type { App } from '../app';
 import type { SaveData } from '../core/save';
@@ -12,7 +11,6 @@ import {
   HEROES,
   MAX_COMPANION_LEVEL,
   PETS,
-  RARITY_COLOR,
   RARITY_LABEL,
   allyById,
   petById,
@@ -50,7 +48,7 @@ import {
   type Rect,
 } from './panel';
 import type { Screen } from './router';
-import { Buttons, PadNav, drawPortrait, drawTitle } from './widgets';
+import { Buttons, PadNav, drawPortrait, drawTitle, rarityColor } from './widgets';
 
 interface Picked {
   hero: string;
@@ -215,15 +213,10 @@ export function runSetupScreen(
     const on = s === slot;
     const id = equippedId(data, s);
     const def = id ? (COMPANION_BY_ID.get(id) ?? null) : null;
-    drawPanel(
-      ctx,
-      r,
-      on || inRect(r, mx, my),
-      on ? UI.gold : def ? cb(RARITY_COLOR[def.rarity]) : null,
-    );
+    drawPanel(ctx, r, on || inRect(r, mx, my), on ? UI.gold : def ? rarityColor(def.rarity) : null);
     const box = r.h - 6;
     const ps = { x: r.x + 3, y: r.y + 3, w: box, h: box };
-    drawSlot(ctx, ps, { color: def ? cb(RARITY_COLOR[def.rarity]) : null, locked: off });
+    drawSlot(ctx, ps, { color: def ? rarityColor(def.rarity) : null, locked: off });
     const tx = ps.x + box + 4;
     const tw = r.x + r.w - 4 - tx;
     if (off) {
@@ -253,7 +246,7 @@ export function runSetupScreen(
     hover: boolean,
   ): void => {
     drawSlot(ctx, r, {
-      color: def ? cb(RARITY_COLOR[def.rarity]) : null,
+      color: def ? rarityColor(def.rarity) : null,
       selected: isCursor,
       hover,
     });
@@ -283,7 +276,7 @@ export function runSetupScreen(
       const lv = data.owned[def.id]?.level ?? 1;
       const px = Math.round(r.x + (r.w - (MAX_COMPANION_LEVEL * 5 - 1)) / 2);
       for (let i = 0; i < MAX_COMPANION_LEVEL; i++) {
-        ctx.fillStyle = i < lv ? cb(RARITY_COLOR[def.rarity]) : '#06060a';
+        ctx.fillStyle = i < lv ? rarityColor(def.rarity) : '#06060a';
         ctx.fillRect(px + i * 5, r.y + r.h - 5, 4, 2);
       }
     }
@@ -297,7 +290,7 @@ export function runSetupScreen(
     r: Rect,
     tier: string,
   ): void => {
-    drawPanel(ctx, r, false, def ? cb(RARITY_COLOR[def.rarity]) : null, 'slate');
+    drawPanel(ctx, r, false, def ? rarityColor(def.rarity) : null, 'slate');
     const x = r.x + 5;
     const w = r.w - 10;
     if (!def) {
@@ -305,7 +298,7 @@ export function runSetupScreen(
       drawText(ctx, 'Nothing equipped here.', x, r.y + 21, UI.dim);
       return;
     }
-    const rc = cb(RARITY_COLOR[def.rarity]);
+    const rc = rarityColor(def.rarity);
     const label = RARITY_LABEL[def.rarity];
     drawText(ctx, label, r.x + r.w - 5, r.y + 11, rc, 'right');
     drawText(ctx, fitText(def.name, w - textWidth(label) - 6), x, r.y + 11, '#fff');

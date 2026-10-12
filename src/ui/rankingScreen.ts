@@ -2,6 +2,10 @@
  * Ranking: the leaderboard of the current session (global when signed in with a nickname, otherwise
  * the player's own bests on this device). Period tabs (Today / Week / All time, online only) and a
  * hero filter; the own row is highlighted; the list scrolls with the wheel, keys or the arrows.
+ *
+ * Keyboard and gamepad: Up / Down scroll the list (and walk the focus ring out of it at either end), Left /
+ * Right step the hero filter, Q / E (LB / RB) switch the period, Enter / A jumps to your own row (or presses
+ * the focused button), Esc / B goes back. Every button is reachable with the focus ring.
  */
 import type { App } from '../app';
 import type { View } from '../core/canvas';
@@ -12,8 +16,9 @@ import type { Period } from '../net/leaderboard';
 import { compactNumber, formatClock } from './accountInfo';
 import { drawAvatar } from './avatar';
 import { drawButton, drawPanel, drawText, fitText, inRect, type Rect } from './panel';
+import { keyToNav, type NavEvent } from './hubModel';
 import type { Screen } from './router';
-import { Buttons, drawTitle } from './widgets';
+import { Buttons, PadNav, drawTitle } from './widgets';
 
 /** Rows requested per board (the list scrolls through them). */
 const FETCH_ROWS = 50;
@@ -62,8 +67,11 @@ function errorMessage(e: unknown): string {
   return friendlyMessage(toCloudError(e).code);
 }
 
+const noDraw = (): void => undefined;
+
 export function rankingScreen(app: App, back: () => void): Screen {
   const buttons = new Buttons();
+  const padNav = new PadNav();
   let time = 0;
   let period: Period = 'all';
   let hero = ''; // '' = every hero
@@ -71,10 +79,9 @@ export function rankingScreen(app: App, back: () => void): Screen {
   let fit = 6;
   const cache = new Map<string, Load>();
   let sessionKey = '';
-  /** Clickable tabs of the current frame, and the pointer for their hover state. */
-  let tabHits: { r: Rect; fn: () => void }[] = [];
-  let mx = -1;
-  let my = -1;
+  /** Where the list panel is this frame (null when it cannot scroll) and how to jump to the own row. */
+  let listRect: Rect | null = null;
+  let findMe: (() => void) | null = null;
 
   const sessionId = (): string => {
     const u = app.auth.user();
@@ -114,10 +121,61 @@ export function rankingScreen(app: App, back: () => void): Screen {
     scroll = 0;
     load();
   };
+  const stepHero = (d: number): void => {
+    const ids = ['', ...HEROES.map((h) => h.id)];
+    const at = Math.max(0, ids.indexOf(hero));
+    select(period, ids[(at + d + ids.length) % ids.length] ?? '');
+  };
+  const stepPeriod = (d: number): void => {
+    const i = PERIOD_TABS.findIndex((t) => t.id === period);
+    const n = PERIOD_TABS[(i + d + PERIOD_TABS.length) % PERIOD_TABS.length];
+    if (n) select(n.id, hero);
+  };
   const move = (dy: number): void => {
     const cur = cache.get(keyOf());
     const n = cur?.status === 'ok' ? cur.rows.length : 0;
     scroll = clampScroll(scroll + dy, n, fit);
+  };
+
+  /** One navigation event from the keyboard or a pad. */
+  const navigate = (ev: NavEvent): void => {
+    if (ev === 'back') return back();
+    if (ev === 'prev' || ev === 'next') {
+      const d = ev === 'prev' ? -1 : 1;
+      if (app.leaderboard().online) stepPeriod(d);
+      else stepHero(d);
+      app.audio.play('click');
+      return;
+    }
+    const onList = !buttons.keyboardActive || buttons.focusedIs('list');
+    if (ev === 'up' || ev === 'down') {
+      if (!buttons.keyboardActive) {
+        buttons.focusOn('list');
+        if (canScroll(ev)) move(ev === 'up' ? -1 : 1);
+      } else if (onList && canScroll(ev)) move(ev === 'up' ? -1 : 1);
+      else buttons.nav(ev);
+      return;
+    }
+    if (ev === 'left' || ev === 'right') {
+      if (onList) stepHero(ev === 'left' ? -1 : 1);
+      else buttons.nav(ev);
+      return;
+    }
+    // OK
+    if (!buttons.keyboardActive) {
+      buttons.focusOn('list');
+    } else if (buttons.focusedIs('list')) {
+      findMe?.();
+    } else if (buttons.activate()) {
+      app.audio.play('click');
+    }
+  };
+  /** Can the list scroll further in this direction (else the ring leaves it)? */
+  const canScroll = (dir: 'up' | 'down'): boolean => {
+    const cur = cache.get(keyOf());
+    const n = cur?.status === 'ok' ? cur.rows.length : 0;
+    if (n <= fit) return false;
+    return dir === 'up' ? scroll > 0 : scroll < n - fit;
   };
 
   return {
@@ -127,6 +185,7 @@ export function rankingScreen(app: App, back: () => void): Screen {
     },
     update(dt) {
       time += dt;
+      for (const ev of padNav.poll(dt)) navigate(ev);
       const k = sessionId();
       if (k !== sessionKey) {
         // Signed in or out while on this screen: the board is a different one now.
@@ -146,7 +205,8 @@ export function rankingScreen(app: App, back: () => void): Screen {
       const user = app.auth.user();
       const cloudOn = app.auth.cloudAvailable;
       buttons.begin();
-      tabHits = [];
+      listRect = null;
+      findMe = null;
       const arrows: { r: Rect; up: boolean; off: boolean }[] = [];
       drawTitle(view, 'RANKING');
 
@@ -160,12 +220,16 @@ export function rankingScreen(app: App, back: () => void): Screen {
         const tw = Math.floor((w - gap * (items.length - 1)) / items.length);
         items.forEach((it, i) => {
           const r = { x: x0 + i * (tw + gap), y: ty, w: tw, h: 13 };
-          drawButton(ctx, r, fitText(it.label, tw - 4), it.active || inRect(r, mx, my));
-          if (it.active) {
-            ctx.fillStyle = '#ffd84a';
-            ctx.fillRect(r.x, r.y + r.h, r.w, 2);
-          }
-          tabHits.push({ r, fn: it.fn });
+          buttons.add(r, it.label, it.fn, false, {
+            key: `tab:${i}`,
+            custom: (c, rr, st) => {
+              drawButton(c, rr, fitText(it.label, tw - 4), it.active || st.hover);
+              if (it.active) {
+                c.fillStyle = '#ffd84a';
+                c.fillRect(rr.x, rr.y + rr.h, rr.w, 2);
+              }
+            },
+          });
         });
       };
       if (online) {
@@ -181,10 +245,6 @@ export function rankingScreen(app: App, back: () => void): Screen {
       }
       // Hero filter: a stepper (all heroes, then each hero) instead of one tab per hero.
       {
-        const ids = ['', ...HEROES.map((h) => h.id)];
-        const at = Math.max(0, ids.indexOf(hero));
-        const stepHero = (d: number): void =>
-          select(period, ids[(at + d + ids.length) % ids.length] ?? '');
         const label = `Hero: ${hero ? heroById(hero).name : 'All heroes'}`;
         const mw = Math.min(190, w - 40);
         const mxx = Math.floor((width - mw) / 2);
@@ -285,18 +345,20 @@ export function rankingScreen(app: App, back: () => void): Screen {
           ctx.fillRect(tx, ky, 3, knob);
           const upR = { x: width - pad - 28, y: backY, w: 14, h: 16 };
           const downR = { x: width - pad - 14, y: backY, w: 14, h: 16 };
-          buttons.add(upR, '', () => move(-1), scroll <= 0);
-          buttons.add(downR, '', () => move(1), scroll >= span);
+          buttons.add(upR, '', () => move(-1), scroll <= 0, { key: 'scroll-up' });
+          buttons.add(downR, '', () => move(1), scroll >= span, { key: 'scroll-down' });
           arrows.push(
             { r: upR, up: true, off: scroll <= 0 },
             { r: downR, up: false, off: scroll >= span },
           );
           const own = state.rows.findIndex((e) => e.uid === me);
           if (own >= 0) {
-            buttons.add({ x: upR.x - 4 - 52, y: backY, w: 52, h: 16 }, 'Find me', () => {
+            findMe = () => {
               scroll = clampScroll(own - Math.floor(fit / 2), state.rows.length, fit);
-            });
+            };
+            buttons.add({ x: upR.x - 4 - 52, y: backY, w: 52, h: 16 }, 'Find me', findMe);
           }
+          listRect = { x: x0, y: listTop - 1, w, h: fit * ROW_H + 3 };
         }
       }
 
@@ -331,6 +393,9 @@ export function rankingScreen(app: App, back: () => void): Screen {
           () => void app.openAccount('signin'),
         );
       }
+      // The list itself takes the focus ring so Up / Down can scroll it; added last so real buttons win clicks.
+      if (listRect)
+        buttons.add(listRect, 'list', () => undefined, false, { key: 'list', custom: noDraw });
       buttons.draw(view);
       // Scroll arrows: small triangles (the UI font has no arrow glyphs).
       for (const a of arrows) {
@@ -344,46 +409,31 @@ export function rankingScreen(app: App, back: () => void): Screen {
       }
     },
     onMove(x, y) {
-      mx = x;
-      my = y;
       buttons.move(x, y);
     },
     onClick(x, y) {
-      mx = x;
-      my = y;
-      if (buttons.click(x, y)) {
-        app.audio.play('click');
+      // A click on the bare list is not a button press.
+      if (
+        listRect &&
+        inRect(listRect, x, y) &&
+        !buttons.items.some((b) => b.opts.key !== 'list' && inRect(b.rect, x, y))
+      ) {
+        buttons.move(x, y);
         return;
       }
-      const tab = tabHits.find((t) => inRect(t.r, x, y));
-      if (tab) {
-        app.audio.play('click');
-        tab.fn();
-      }
+      if (buttons.click(x, y)) app.audio.play('click');
     },
     onWheel(dy) {
       move(dy > 0 ? 2 : -2);
     },
     onKey(code) {
-      if (code === 'Escape') return back();
-      if (code === 'ArrowUp' || code === 'KeyW') move(-1);
-      else if (code === 'ArrowDown' || code === 'KeyS') move(1);
+      if (code === 'Home') scroll = 0;
+      else if (code === 'End') move(1e9);
       else if (code === 'PageUp') move(-fit);
       else if (code === 'PageDown') move(fit);
-      else if (code === 'Home') scroll = 0;
-      else if (code === 'End') move(1e9);
-      else if (code === 'ArrowLeft' || code === 'ArrowRight') {
-        const d = code === 'ArrowLeft' ? -1 : 1;
-        const online = app.leaderboard().online;
-        if (online) {
-          const i = PERIOD_TABS.findIndex((t) => t.id === period);
-          const n = PERIOD_TABS[(i + d + PERIOD_TABS.length) % PERIOD_TABS.length];
-          if (n) select(n.id, hero);
-        } else {
-          const ids = ['', ...HEROES.map((h) => h.id)];
-          const i = ids.indexOf(hero);
-          select(period, ids[(i + d + ids.length) % ids.length] ?? '');
-        }
+      else {
+        const ev = keyToNav(code);
+        if (ev) navigate(ev);
       }
     },
   };

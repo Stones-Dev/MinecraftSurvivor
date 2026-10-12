@@ -28,6 +28,7 @@ import {
   type Rect,
 } from './panel';
 import type { Screen } from './router';
+import { PadNav } from './widgets';
 import { Scroller, withClip } from './scroll';
 
 interface Line {
@@ -202,8 +203,16 @@ export function resultsScreen(
     ];
   };
 
+  const pad = new PadNav();
   return {
-    update() {},
+    update(dt) {
+      // Pad: A / B continue, the d-pad scrolls a long list.
+      for (const ev of pad.poll(dt)) {
+        if (ev === 'ok' || ev === 'back') done();
+        else if (ev === 'down') scroll.by(14);
+        else if (ev === 'up') scroll.by(-14);
+      }
+    },
     render(view: View) {
       const { ctx, width, height } = view;
       ctx.fillStyle = '#14141c';

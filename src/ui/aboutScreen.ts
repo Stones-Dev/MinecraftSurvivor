@@ -2,7 +2,8 @@
 import type { App } from '../app';
 import { drawPanel, drawText, wrap } from './panel';
 import type { Screen } from './router';
-import { Buttons, drawTitle } from './widgets';
+import { keyToNav, type NavEvent } from './hubModel';
+import { Buttons, PadNav, drawTitle } from './widgets';
 
 export const GAME_VERSION = '1.1.0';
 
@@ -64,12 +65,23 @@ const GENERAL: Section[] = [
 
 export function aboutScreen(_app: App, onBack: () => void): Screen {
   const buttons = new Buttons();
+  const pad = new PadNav();
   let page = 0;
   const ENTRY_H = 18;
   const perPage = (boxH: number): number => Math.max(3, Math.floor((boxH - 36) / ENTRY_H));
   const pageCount = (boxH: number): number => 1 + Math.ceil(SPRITE_CREDITS.length / perPage(boxH));
+  /** Keyboard and pad: left / right (or Q / E) turn pages, OK presses the focused button or turns the page. */
+  const navigate = (ev: NavEvent): void => {
+    if (ev === 'back') return onBack();
+    if (ev === 'left' || ev === 'prev') page = Math.max(0, page - 1);
+    else if (ev === 'right' || ev === 'next') page++;
+    else if (ev === 'ok' && !buttons.keyboardActive) page++;
+    else buttons.handleNav(ev);
+  };
   return {
-    update() {},
+    update(dt) {
+      for (const ev of pad.poll(dt)) navigate(ev);
+    },
     render(view) {
       const { ctx, width, height } = view;
       const box = { x: 12, y: 30, w: width - 24, h: height - 58 };
@@ -129,9 +141,8 @@ export function aboutScreen(_app: App, onBack: () => void): Screen {
       buttons.click(x, y);
     },
     onKey(code) {
-      if (code === 'Escape') onBack();
-      else if (code === 'Enter' || code === 'Space' || code === 'ArrowRight') page++;
-      else if (code === 'ArrowLeft') page = Math.max(0, page - 1);
+      const ev = keyToNav(code);
+      if (ev) navigate(ev);
     },
   };
 }

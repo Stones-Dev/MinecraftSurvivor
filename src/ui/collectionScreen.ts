@@ -2,7 +2,6 @@
  * The Collection screen: Heroes / Pets / Allies tabs, a paged card grid with rarity frames and locked
  * silhouettes, and a detail panel (stats, hero ability, passive, lore) with equip controls.
  */
-import { cb } from '../core/accessibility';
 import { abilityById, abilityText } from '../abilities';
 import type { App } from '../app';
 import type { View } from '../core/canvas';
@@ -12,7 +11,6 @@ import {
   HEROES,
   MAX_COMPANION_LEVEL,
   PETS,
-  RARITY_COLOR,
   RARITY_LABEL,
   petText,
   type CompanionDef,
@@ -47,7 +45,7 @@ import {
 import type { Screen } from './router';
 import { spawnerScreen } from './spawnerScreen';
 import { pushToast } from './toast';
-import { Buttons, PadNav, drawPortrait, drawTitle } from './widgets';
+import { Buttons, PadNav, drawPortrait, drawTitle, rarityColor } from './widgets';
 
 export { drawPortrait };
 
@@ -246,22 +244,22 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
     if (def.kind === 'hero') {
       if (lo.hero === def.id) return;
       lo.hero = def.id;
-      pushToast({ text: `${def.name} equipped`, color: cb(RARITY_COLOR[def.rarity]) });
+      pushToast({ text: `${def.name} equipped`, color: rarityColor(def.rarity) });
     } else if (def.kind === 'pet') {
       lo.pet = lo.pet === def.id ? null : def.id;
       pushToast({
         text: lo.pet ? `${def.name} equipped` : `${def.name} unequipped`,
-        color: cb(RARITY_COLOR[def.rarity]),
+        color: rarityColor(def.rarity),
       });
     } else if (lo.allies.includes(def.id)) {
       lo.allies = lo.allies.filter((id) => id !== def.id);
-      pushToast({ text: `${def.name} unequipped`, color: cb(RARITY_COLOR[def.rarity]) });
+      pushToast({ text: `${def.name} unequipped`, color: rarityColor(def.rarity) });
     } else if (lo.allies.length >= maxAllySlots(data)) {
       pushToast({ text: 'Ally slots full. Unequip an ally first.', color: UI.red });
       return;
     } else {
       lo.allies = [...lo.allies, def.id];
-      pushToast({ text: `${def.name} equipped`, color: cb(RARITY_COLOR[def.rarity]) });
+      pushToast({ text: `${def.name} equipped`, color: rarityColor(def.rarity) });
     }
     app.audio.play('click');
     app.store.save(data);
@@ -308,7 +306,7 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
     named: boolean,
   ): void => {
     const o = data.owned[def.id];
-    const color = cb(RARITY_COLOR[def.rarity]);
+    const color = rarityColor(def.rarity);
     drawSlot(ctx, r, { color, selected, hover, locked: !o });
     const nameH = named ? 10 : 0;
     const boxH = r.h - 6 - nameH - (o && def.kind !== 'hero' ? 4 : 0);
@@ -354,7 +352,7 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
     tier: string,
   ): void => {
     const o = data.owned[def.id];
-    const rc = cb(RARITY_COLOR[def.rarity]);
+    const rc = rarityColor(def.rarity);
     drawPanel(ctx, r, false, o ? rc : null);
     const pad4 = 5;
     const innerW = r.w - pad4 * 2;
@@ -574,7 +572,7 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
           my,
           width,
           height,
-          cb(RARITY_COLOR[hd.rarity]),
+          rarityColor(hd.rarity),
           have ? hd.name : '???',
         );
       }

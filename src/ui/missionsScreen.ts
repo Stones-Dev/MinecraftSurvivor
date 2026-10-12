@@ -1,8 +1,9 @@
 /**
  * Daily / weekly missions and the 7-day login reward. Tabs: Daily, Weekly, Login. Cards show the
- * mission, its reward and a progress bar, with Claim and Reroll buttons. Keyboard: Left/Right (or Q/E)
- * switch tabs, Up/Down select, Enter claims, R rerolls, Esc goes back. The wheel scrolls when the list
- * does not fit (tiny windows).
+ * mission, its reward and a progress bar, with Claim and Reroll buttons. Keyboard and gamepad: arrows / d-pad
+ * move the focus ring over the tabs, buttons and Back, Enter / A presses it, Q / E (LB / RB) switch tabs,
+ * R rerolls the selected mission, Esc / B goes back. The wheel scrolls when the list does not fit (tiny
+ * windows) and focus scrolls the list.
  */
 import type { App } from '../app';
 import { DAILY_LOGIN_REWARDS, rewardText, type MissionKind } from '../data/missions';
@@ -18,7 +19,7 @@ import {
   type DailyRewardState,
   type MissionView,
 } from '../systems/missions';
-import { keyToNav } from './hubModel';
+import { keyToNav, type NavEvent } from './hubModel';
 import { drawIcon } from './icons';
 import {
   drawCheck,
@@ -43,7 +44,7 @@ import {
 import type { Screen } from './router';
 import { Scroller, withClip } from './scroll';
 import { pushToast } from './toast';
-import { drawTitle } from './widgets';
+import { drawTitle, PadNav } from './widgets';
 
 const TABS = ['Daily', 'Weekly', 'Login'] as const;
 const CARD_H = 34;
@@ -57,6 +58,7 @@ function progressText(v: MissionView): string {
 
 export function missionsScreen(app: App, back: () => void): Screen {
   const hits = new HitList();
+  const pad = new PadNav();
   const scroll = new Scroller();
   let tab = 0;
   let sel = 0;
@@ -125,6 +127,38 @@ export function missionsScreen(app: App, back: () => void): Screen {
     }
   }
 
+  /** Focus landed on a card's button: select the card and scroll it into view. */
+  const focusCard = (index: number): void => {
+    sel = index;
+    scroll.reveal(index * (CARD_H + CARD_GAP), CARD_H, content.h);
+  };
+
+  /** One navigation event from the keyboard or a pad. */
+  const navigate = (ev: NavEvent): void => {
+    if (ev === 'back') return back();
+    if (ev === 'prev' || ev === 'next') {
+      setTab(tab + (ev === 'prev' ? -1 : 1));
+      app.audio.play('click');
+      return;
+    }
+    if (ev === 'ok' && hits.keyboardActive) {
+      if (hits.activate()) app.audio.play('click');
+      return;
+    }
+    if (ev === 'ok') {
+      // The first press shows the ring, on whatever can be collected.
+      hits.focusOn(
+        tab === 2
+          ? 'claim-login'
+          : views().some((v) => v.done && !v.claimed)
+            ? 'claim:'
+            : undefined,
+      );
+      return;
+    }
+    hits.handleNav(ev);
+  };
+
   const drawCard = (
     ctx: CanvasRenderingContext2D,
     v: MissionView,
@@ -135,7 +169,7 @@ export function missionsScreen(app: App, back: () => void): Screen {
   ): void => {
     const selected = index === sel;
     // The whole card is a click target for selection; the buttons added after it sit on top.
-    hits.add(r, '', () => (sel = index), { clip, invisible: true });
+    hits.add(r, '', () => (sel = index), { clip, invisible: true, key: `card:${v.def.id}` });
     const ready = v.done && !v.claimed;
     drawPanel(ctx, r, selected, ready ? UI.gold : v.claimed ? '#3f7a45' : null);
     drawSlot(ctx, { x: r.x + 4, y: r.y + 5, w: 20, h: 20 }, { locked: v.claimed });
@@ -164,14 +198,23 @@ export function missionsScreen(app: App, back: () => void): Screen {
     const bx = r.x + r.w - btnW - 5;
     if (ready) {
       const cr = { x: bx, y: r.y + 5, w: btnW, h: 14 };
-      hits.add(cr, 'Claim', () => claim(v), { clip, style: { variant: 'gold' } });
+      hits.add(cr, 'Claim', () => claim(v), {
+        clip,
+        style: { variant: 'gold' },
+        key: `claim:${v.def.id}`,
+        onFocus: () => focusCard(index),
+      });
     } else if (v.claimed) {
       drawCheck(ctx, bx + 6, r.y + 8, UI.green);
       drawText(ctx, 'Done', bx + 17, r.y + 15, UI.green);
     }
     if (!v.done && !v.claimed && rerolls > 0) {
       const rr = { x: bx, y: r.y + r.h - 16, w: btnW, h: 12 };
-      hits.add(rr, 'Reroll', () => reroll(v), { clip });
+      hits.add(rr, 'Reroll', () => reroll(v), {
+        clip,
+        key: `reroll:${v.def.id}`,
+        onFocus: () => focusCard(index),
+      });
     }
   };
 
@@ -243,6 +286,7 @@ export function missionsScreen(app: App, back: () => void): Screen {
     const br = { x: c.x + Math.floor((c.w - bw) / 2), y, w: bw, h: 16 };
     if (br.y + br.h <= c.y + c.h) {
       hits.add(br, label, claimLogin, {
+        key: 'claim-login',
         disabled: !st.canClaim,
         style: { variant: st.canClaim ? 'gold' : 'normal' },
       });
@@ -262,6 +306,7 @@ export function missionsScreen(app: App, back: () => void): Screen {
   return {
     update(dt) {
       noteT = Math.max(0, noteT - dt);
+      for (const ev of pad.poll(dt)) navigate(ev);
     },
     render(view) {
       const { ctx, width, height } = view;
@@ -304,7 +349,7 @@ export function missionsScreen(app: App, back: () => void): Screen {
               w: cardW,
               h: CARD_H,
             };
-            if (r.y + r.h < content.y || r.y > content.y + content.h) return;
+            // Off-screen cards still register their buttons so the focus ring can walk to them.
             drawCard(ctx, v, r, i, content, data.missions.rerollsLeft);
           });
           hits.draw(ctx);
@@ -321,6 +366,15 @@ export function missionsScreen(app: App, back: () => void): Screen {
       // Footer: back, reset timer and rerolls (or the latest note).
       const fy = height - 20;
       hits.add({ x: x0, y: fy, w: 52, h: 16 }, 'Back', back);
+      TABS.forEach((label, i) => {
+        const r = tabRects[i];
+        if (r)
+          hits.add(r, label, () => setTab(i), {
+            invisible: true,
+            focusable: true,
+            key: `tab:${i}`,
+          });
+      });
       const mid = x0 + cw / 2;
       if (noteT > 0 && note) {
         drawText(ctx, fitText(note, cw - 120), mid, fy + 11, noteColor, 'center');
@@ -347,7 +401,7 @@ export function missionsScreen(app: App, back: () => void): Screen {
           'right',
         );
       }
-      hits.draw(ctx, (h) => h.label === 'Back');
+      hits.draw(ctx, (h) => h.id.startsWith('Back#') || h.id.startsWith('tab:'));
     },
     onMove(x, y) {
       mx = x;
@@ -370,24 +424,12 @@ export function missionsScreen(app: App, back: () => void): Screen {
       scroll.by(dy > 0 ? 18 : -18);
     },
     onKey(code) {
-      const nav = keyToNav(code);
-      if (nav === 'back') return back();
-      if (nav === 'left' || nav === 'prev') return setTab(tab - 1);
-      if (nav === 'right' || nav === 'next') return setTab(tab + 1);
-      const list = views();
-      if (nav === 'up' || nav === 'down') {
-        sel = Math.max(0, Math.min(list.length - 1, sel + (nav === 'up' ? -1 : 1)));
-        scroll.reveal(sel * (CARD_H + CARD_GAP), CARD_H, content.h);
-        return;
+      const ev = keyToNav(code);
+      if (ev) navigate(ev);
+      else if (code === 'KeyR') {
+        const v = views()[sel];
+        if (v && !v.done && !v.claimed) reroll(v);
       }
-      if (tab === 2) {
-        if (nav === 'ok') claimLogin();
-        return;
-      }
-      const v = list[sel];
-      if (!v) return;
-      if (nav === 'ok' && v.done && !v.claimed) claim(v);
-      else if (code === 'KeyR' && !v.done && !v.claimed) reroll(v);
     },
   };
 }

@@ -2,7 +2,8 @@
 //
 // Usage (from the repo root, with `npm run build` done):
 //   NODE_PATH=<dir containing playwright-core> node tools/screenshot.mjs <shots.json>
-// Optional per shot: "storage" (localStorage seed) and "clicks" ([{x,y,waitMs}] CSS pixels).
+// Optional per shot: "storage" (localStorage seed), "clicks" ([{x,y,waitMs}] CSS pixels) and "keys"
+// (key codes pressed one after another after the page settled, e.g. ["ArrowDown", "ArrowDown"]).
 // shots.json: { "base": "http://localhost:4174/", "shots": [
 //   { "path": "?run&debug&t=0", "out": "docs/screenshots/run.png", "hold": "KeyD", "holdMs": 1500, "waitMs": 600, "fpsMs": 3000 } ] }
 // Chromium is taken from CHROMIUM_PATH or the preinstalled /opt/pw-browsers build.
@@ -37,6 +38,10 @@ for (const s of cfg.shots) {
     await page.mouse.click(c.x, c.y);
   }
   await page.waitForTimeout(s.waitMs ?? 600);
+  for (const k of s.keys ?? []) {
+    await page.keyboard.press(k);
+    await page.waitForTimeout(150);
+  }
   if (s.hold) {
     await page.keyboard.down(s.hold);
     await page.waitForTimeout(s.holdMs ?? 1000);

@@ -6,7 +6,7 @@ import { cb } from '../core/accessibility';
 import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
 import type { View } from '../core/canvas';
-import { RARITY_COLOR, type CompanionDef } from '../data/companions';
+import { RARITY_COLOR, type CompanionDef, type CompanionRarity } from '../data/companions';
 import { keyToNav, spatialFocus, stickDir, type FocusRect, type NavEvent } from './hubModel';
 import type { IconName } from './icons';
 import { drawIcon } from './icons';
@@ -199,6 +199,11 @@ export class Buttons {
     return true;
   }
 
+  /** Does the focused button (if any) carry this key / label? */
+  focusedIs(key: string): boolean {
+    return this.kbd && this.focusId?.startsWith(`${key}#`) === true;
+  }
+
   /** Is the focus ring currently shown (keyboard or pad was the last input)? */
   get keyboardActive(): boolean {
     return this.kbd;
@@ -252,6 +257,8 @@ interface PadLike {
 export class PadNav {
   private down = new Set<string>();
   private timers = new Map<string, number>();
+  /** When the pad was last polled; a long gap means this screen was covered (or is new). */
+  private lastPoll = 0;
 
   private pad(): PadLike | null {
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
@@ -262,6 +269,11 @@ export class PadNav {
   poll(dt: number): NavEvent[] {
     const pad = this.pad();
     const out: NavEvent[] = [];
+    // Buttons already held when polling (re)starts, e.g. the A press that opened this screen or the B press
+    // that closed the screen above it, are not new presses.
+    const now = nowMs();
+    const resumed = this.lastPoll === 0 || now - this.lastPoll > 250;
+    this.lastPoll = now;
     if (!pad) {
       this.down.clear();
       this.timers.clear();
@@ -301,7 +313,7 @@ export class PadNav {
     for (const [i, ev] of edges) {
       if (!b(i)) continue;
       nowDown.add(`b${i}`);
-      if (!this.down.has(`b${i}`)) out.push(ev);
+      if (!this.down.has(`b${i}`) && !resumed) out.push(ev);
     }
     this.down = nowDown;
     return out;
@@ -502,6 +514,14 @@ export function drawPortrait(
   else drawCompanion(ctx, atlas, def, cx, feetY, t, scale, alpha);
 }
 
+/**
+ * A rarity's colour as the current colour-blind mode wants it. Every screen asks here (never `RARITY_COLOR`
+ * directly) so frames, labels and bars stay distinguishable in the colour-blind modes.
+ */
+export function rarityColor(rarity: CompanionRarity): string {
+  return cb(RARITY_COLOR[rarity]);
+}
+
 /** Rarity-coloured badge text. */
 export function drawRarity(
   ctx: CanvasRenderingContext2D,
@@ -510,5 +530,5 @@ export function drawRarity(
   y: number,
   align: CanvasTextAlign = 'left',
 ): void {
-  drawText(ctx, def.rarity.toUpperCase(), x, y, cb(RARITY_COLOR[def.rarity]), align);
+  drawText(ctx, def.rarity.toUpperCase(), x, y, rarityColor(def.rarity), align);
 }

@@ -1,9 +1,8 @@
 /** Permanent upgrades (BRIEF 12.1): spend Emeralds on per-hero ranks plus the two account-wide upgrades. */
-import { cb } from '../core/accessibility';
 import type { App } from '../app';
 import type { View } from '../core/canvas';
 import type { SaveData } from '../core/save';
-import { HEROES, RARITY_COLOR, heroById } from '../data/companions';
+import { HEROES, heroById } from '../data/companions';
 import { ACCOUNT_KEY, META_UPGRADES, upgradeCost, type MetaUpgrade } from '../data/metaUpgrades';
 import { gridMove, keyToNav, layoutTier, pageCount, wrapIndex, type NavEvent } from './hubModel';
 import { drawIcon } from './icons';
@@ -20,7 +19,15 @@ import {
   type Rect,
 } from './panel';
 import type { Screen } from './router';
-import { Buttons, PadNav, drawPillRight, drawPortrait, drawSilhouette, drawTitle } from './widgets';
+import {
+  Buttons,
+  PadNav,
+  drawPillRight,
+  drawPortrait,
+  drawSilhouette,
+  drawTitle,
+  rarityColor,
+} from './widgets';
 
 const PIP = 5;
 
@@ -170,7 +177,7 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
         const owned = !!data.owned[h.id];
         stripHits.push({ r, key: h.id, owned, name: owned ? h.name : '???' });
         drawSlot(ctx, r, {
-          color: owned ? cb(RARITY_COLOR[h.rarity]) : null,
+          color: owned ? rarityColor(h.rarity) : null,
           selected: h.id === key,
           hover: owned && inRect(r, mx, my),
           locked: !owned,

@@ -234,6 +234,94 @@ export function spatialFocus(rects: readonly FocusRect[], cur: number, dir: Dir)
   return wrap >= 0 ? wrap : cur;
 }
 
+/** A focus target with a stable identity (survives the per-frame rebuild of the item list). */
+export interface FocusItem extends FocusRect {
+  id: string;
+}
+
+/**
+ * Keyboard / gamepad focus for screens that rebuild their targets every frame. It remembers the focused
+ * id; when that target disappears (a claimed mission loses its button, a tab switch) the focus moves to the
+ * nearest enabled target instead of vanishing.
+ */
+export class FocusTracker {
+  /** True once the keyboard or a pad drove the last input (the ring shows instead of hover). */
+  active = false;
+  private id: string | null = null;
+  private lastX = 0;
+  private lastY = 0;
+
+  /** Id of the focused target (null when none). */
+  get focusedId(): string | null {
+    return this.active ? this.id : null;
+  }
+
+  private remember(r: FocusRect): void {
+    this.lastX = r.x + r.w / 2;
+    this.lastY = r.y + r.h / 2;
+  }
+
+  /** Nearest enabled item to the last known focus position (the first one when nothing was focused yet). */
+  private nearest(items: readonly FocusItem[]): number {
+    let best = -1;
+    let bestD = Infinity;
+    items.forEach((r, i) => {
+      if (r.enabled === false) return;
+      const d = Math.hypot(r.x + r.w / 2 - this.lastX, r.y + r.h / 2 - this.lastY);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  private set(items: readonly FocusItem[], i: number): number {
+    const r = items[i];
+    if (!r) {
+      this.id = null;
+      return -1;
+    }
+    this.id = r.id;
+    this.remember(r);
+    return i;
+  }
+
+  /** Index of the focused item in `items`, re-targeting when it vanished; -1 when the ring is hidden. */
+  sync(items: readonly FocusItem[]): number {
+    if (!this.active) return -1;
+    const i = items.findIndex((r) => r.id === this.id && r.enabled !== false);
+    if (i >= 0) {
+      this.remember(items[i] as FocusItem);
+      return i;
+    }
+    return this.set(
+      items,
+      this.id === null ? items.findIndex((r) => r.enabled !== false) : this.nearest(items),
+    );
+  }
+
+  /** Show the ring on `preferId` or else the first enabled item; returns its index (-1 when none). */
+  focusFirst(items: readonly FocusItem[], preferId?: string): number {
+    this.active = true;
+    let i = preferId ? items.findIndex((r) => r.id === preferId && r.enabled !== false) : -1;
+    if (i < 0) i = items.findIndex((r) => r.enabled !== false);
+    return this.set(items, i);
+  }
+
+  /** Move the ring one step; the first press only shows it. Returns the newly focused index (-1 when none). */
+  move(items: readonly FocusItem[], dir: Dir): number {
+    const cur = this.sync(items);
+    if (cur < 0) return this.focusFirst(items);
+    return this.set(items, spatialFocus(items, cur, dir));
+  }
+
+  /** The pointer took over: hide the ring. */
+  release(): void {
+    this.active = false;
+  }
+}
+
 /** Move inside a `cols`-wide grid of `count` cells; stays put at the edges (the last row may be short). */
 export function gridMove(index: number, dir: Dir, cols: number, count: number): number {
   if (count <= 0) return 0;

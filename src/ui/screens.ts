@@ -1,9 +1,8 @@
 /** Title screen and the hub (main menu): live world backdrop, profile chip, resources and the menu buttons. */
-import { cb } from '../core/accessibility';
 import { abilityById, abilityText } from '../abilities';
 import { t } from '../core/i18n';
 import type { App } from '../app';
-import { allyById, heroById, petById, RARITY_COLOR, type CompanionDef } from '../data/companions';
+import { allyById, heroById, petById, type CompanionDef } from '../data/companions';
 import { abilityRank, loadoutFromSave } from '../systems/meta';
 import { accountBadge } from './accountInfo';
 import { GAME_VERSION } from './aboutScreen';
@@ -47,7 +46,7 @@ import { settingsScreen } from './settingsScreen';
 import { spawnerScreen } from './spawnerScreen';
 import { upgradesScreen } from './upgradesScreen';
 import { aboutScreen } from './aboutScreen';
-import { Buttons, drawActor, drawPill, PadNav } from './widgets';
+import { Buttons, drawActor, drawPill, PadNav, rarityColor } from './widgets';
 
 export const SCREEN_NAMES = [
   'run-setup',
@@ -321,7 +320,7 @@ export function hubScreen(app: App): Screen {
       heroById(data.profile.avatar).id,
       { x: r.x + 3, y: r.y + 3, w: av, h: av },
       time,
-      cb(RARITY_COLOR[heroById(data.profile.avatar).rarity]),
+      rarityColor(heroById(data.profile.avatar).rarity),
     );
     const info = levelInfo(playerXp(data.stats));
     const rank = rankOf(info.level);
@@ -360,7 +359,7 @@ export function hubScreen(app: App): Screen {
     const ab = abilityById(hero.ability);
     const rank = abilityRank(lo.heroShards ?? 0);
     const txt = abilityText(hero.id, rank);
-    drawPanel(ctx, r, false, cb(RARITY_COLOR[hero.rarity]));
+    drawPanel(ctx, r, false, rarityColor(hero.rarity));
     const x = r.x + 5;
     const w = r.w - 10;
     drawSlot(ctx, { x: r.x + 4, y: r.y + 4, w: 14, h: 14 });
@@ -478,7 +477,7 @@ export function hubScreen(app: App): Screen {
         });
       }
       // Name plate under the hero's feet.
-      drawText(ctx, hero.name, L.stage.x, L.stage.y + 10, cb(RARITY_COLOR[hero.rarity]), 'center');
+      drawText(ctx, hero.name, L.stage.x, L.stage.y + 10, rarityColor(hero.rarity), 'center');
       drawCard(ctx, L.card, L.tier);
 
       // Small logo between the chip and the resources when there is room.

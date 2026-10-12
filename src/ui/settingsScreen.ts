@@ -10,7 +10,8 @@ import { accountBadge, syncLine } from './accountInfo';
 import { drawButton, drawPanel, drawText, fitText, inRect, type Rect } from './panel';
 import { profileScreen } from './profileScreen';
 import type { Screen } from './router';
-import { Buttons, drawTitle } from './widgets';
+import { keyToNav, type NavEvent } from './hubModel';
+import { Buttons, PadNav, drawTitle } from './widgets';
 
 type Tab = 'audio' | 'graphics' | 'controls' | 'access' | 'account' | 'data';
 type Quality = SaveData['settings']['quality'];
@@ -56,6 +57,7 @@ const keyName = (code: string): string => code.replace(/^(Key|Digit)/, '');
 
 export function settingsScreen(app: App, onBack: () => void): Screen {
   const buttons = new Buttons();
+  const pad = new PadNav();
   let tab: Tab = 'audio';
   let capture: Action | null = null;
   let clock = 0;
@@ -77,6 +79,29 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
     tab = t;
     capture = null;
     message = '';
+  };
+  /** One navigation event from the keyboard or a pad: arrows move the focus ring, Q / E switch the tab. */
+  const navigate = (ev: NavEvent): void => {
+    if (capture) {
+      // Waiting for a key: only Back (Esc / B) cancels; the next key press is handled in onKey.
+      if (ev === 'back') capture = null;
+      return;
+    }
+    if (ev === 'back') return onBack();
+    if (ev === 'prev' || ev === 'next') {
+      const at = TABS.findIndex((t) => t.id === tab);
+      const next = TABS[(at + (ev === 'prev' ? -1 : 1) + TABS.length) % TABS.length];
+      if (!next) return;
+      setTab(next.id);
+      app.audio.play('click');
+      if (buttons.keyboardActive) buttons.focusOn(`tab:${next.id}`);
+      return;
+    }
+    if (ev === 'ok' && !buttons.keyboardActive) {
+      buttons.focusOn(`tab:${tab}`);
+      return;
+    }
+    if (buttons.handleNav(ev) && ev === 'ok') app.audio.play('click');
   };
   const setVolume = (key: 'musicVolume' | 'sfxVolume', v: number): void => {
     app.data().settings[key] = Math.round(Math.max(0, Math.min(1, v)) * 10) / 10;
@@ -140,6 +165,7 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
   return {
     update(dt) {
       clock += dt;
+      for (const ev of pad.poll(dt)) navigate(ev);
     },
     render(view: View) {
       const { ctx, width, height } = view;
@@ -154,10 +180,19 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
       const x0 = Math.floor((width - rowW) / 2);
       const tgap = 2;
       const tw = Math.floor((rowW - tgap * (TABS.length - 1)) / TABS.length);
-      const tabRects = TABS.map((t, i) => {
+      TABS.forEach((t, i) => {
         const r = { x: x0 + i * (tw + tgap), y: 28, w: tw, h: 14 };
-        buttons.add(r, t.label, () => setTab(t.id));
-        return r;
+        buttons.add(r, t.label, () => setTab(t.id), false, {
+          key: `tab:${t.id}`,
+          custom: (c, rr, st) => {
+            const on = t.id === tab;
+            drawButton(c, rr, t.label, on || st.hover);
+            if (on) {
+              c.fillStyle = '#ffd84a';
+              c.fillRect(rr.x, rr.y + rr.h, rr.w, 2);
+            }
+          },
+        });
       });
 
       // Row helpers: a panel per row, label on the left, controls on the right. The pitch shrinks so
@@ -347,15 +382,6 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
         onBack,
       );
       buttons.draw(view);
-      // Highlight the active tab on top of the plain buttons.
-      const active = TABS.findIndex((t) => t.id === tab);
-      const ar = tabRects[active];
-      const label = TABS[active]?.label ?? '';
-      if (ar) {
-        drawButton(ctx, ar, label, true);
-        ctx.fillStyle = '#ffd84a';
-        ctx.fillRect(ar.x, ar.y + ar.h, ar.w, 2);
-      }
     },
     onMove(x, y) {
       buttons.move(x, y);
@@ -384,8 +410,9 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
           commit();
         }
         capture = null;
-      } else if (code === 'Escape') {
-        onBack();
+      } else {
+        const ev = keyToNav(code);
+        if (ev) navigate(ev);
       }
     },
   };
