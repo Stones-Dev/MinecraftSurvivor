@@ -158,6 +158,32 @@ export function evolutionCards(run: RunState): Card[] {
   return out;
 }
 
+/** Free enchantment choice from an enchanting table: passive cards only. */
+export function enchantOffer(run: RunState): Card[] {
+  const pool = candidateCards(run).filter((c) => c.kind === 'passive');
+  const offer: Card[] = [];
+  while (offer.length < run.offerSize && pool.length > 0) {
+    const [card] = pool.splice(run.rng.levelup.int(pool.length), 1);
+    if (card) offer.push(card);
+  }
+  while (offer.length < run.offerSize) offer.push(emeraldCard());
+  return offer;
+}
+
+function emeraldCard(): Card {
+  return {
+    kind: 'emeralds',
+    id: 'emeralds',
+    level: 0,
+    isNew: false,
+    title: 'Emeralds',
+    desc: `+${SKIP_EMERALDS} emeralds.`,
+    icon: 'emerald',
+    rarity: 'common',
+    gold: false,
+  };
+}
+
 export function buildOffer(run: RunState): Card[] {
   const offer: Card[] = evolutionCards(run).slice(0, 1);
   const pool = candidateCards(run);
@@ -176,19 +202,7 @@ export function buildOffer(run: RunState): Card[] {
     const [card] = pool.splice(idx, 1);
     if (card) offer.push(card);
   }
-  while (offer.length < run.offerSize) {
-    offer.push({
-      kind: 'emeralds',
-      id: 'emeralds',
-      level: 0,
-      isNew: false,
-      title: 'Emeralds',
-      desc: `+${SKIP_EMERALDS} emeralds.`,
-      icon: 'emerald',
-      rarity: 'common',
-      gold: false,
-    });
-  }
+  while (offer.length < run.offerSize) offer.push(emeraldCard());
   return offer;
 }
 
@@ -229,11 +243,25 @@ export function gainXp(run: RunState, amount: number): void {
     run.level++;
     run.pendingLevelups++;
   }
-  if (run.pendingLevelups > 0 && run.offer === null) run.offer = buildOffer(run);
+  if (run.offer === null) openNextOffer(run);
 }
 
 /** Close the current offer after a pick/skip and open the next queued one, if any. */
 export function finishOffer(run: RunState): void {
-  run.pendingLevelups = Math.max(0, run.pendingLevelups - 1);
-  run.offer = run.pendingLevelups > 0 ? buildOffer(run) : null;
+  if (run.offerKind === 'enchant') run.bonusOffers = Math.max(0, run.bonusOffers - 1);
+  else run.pendingLevelups = Math.max(0, run.pendingLevelups - 1);
+  openNextOffer(run);
+}
+
+/** Level-ups first, then free enchantments; sets `run.offer` or clears it. */
+export function openNextOffer(run: RunState): void {
+  if (run.pendingLevelups > 0) {
+    run.offerKind = 'level';
+    run.offer = buildOffer(run);
+  } else if (run.bonusOffers > 0) {
+    run.offerKind = 'enchant';
+    run.offer = enchantOffer(run);
+  } else {
+    run.offer = null;
+  }
 }

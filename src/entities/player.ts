@@ -1,6 +1,6 @@
 import type { InputSource } from '../core/input';
 import type { BiomeId } from '../world/biomes';
-import type { World } from '../world/world';
+import { WATER_SLOW, type World } from '../world/world';
 
 export class Player {
   x = 0;
@@ -11,6 +11,11 @@ export class Player {
   readonly radius = 5;
   speed = 72; // art px per second (4.5 tiles/s)
   speedMult = 1;
+  /** Environmental speed factor set each step (snowfall, cobwebs). */
+  envMult = 1;
+  /** Current velocity (art px/s); only differs from the input on ice. */
+  vx = 0;
+  vy = 0;
 
   hp = 110;
   maxHp = 110;
@@ -24,10 +29,10 @@ export class Player {
   swingT = 0;
   /** Slowed by enemy attacks (seconds left; movement x0.6). */
   slowT = 0;
-  /** Damage over time on the hero: poison (cannot kill) or wither (can). */
+  /** Damage over time on the hero: poison (cannot kill), wither and burning (can). */
   dotT = 0;
   dotDps = 0;
-  dotKind: 'poison' | 'wither' = 'poison';
+  dotKind: 'poison' | 'wither' | 'burn' = 'poison';
   /** Regeneration disabled while > 0 (husk hunger). */
   hungerT = 0;
   dead = false;
@@ -41,12 +46,24 @@ export class Player {
     if (this.dead) return;
     if (this.regen > 0 && this.hungerT <= 0) this.heal(this.regen * dt);
     const v = input.moveVector();
-    this.moving = v.x !== 0 || v.y !== 0;
+    const surface = world.surface(this.x, this.y, biome);
+    const water = surface === 'water' && !waterImmune ? WATER_SLOW : 1;
+    const sp = this.speed * this.speedMult * this.envMult * water * (this.slowT > 0 ? 0.6 : 1);
+    const wantX = v.x * sp;
+    const wantY = v.y * sp;
+    if (surface === 'ice') {
+      // Slippery: velocity eases towards the input instead of snapping to it.
+      const k = Math.min(1, 2.2 * dt);
+      this.vx += (wantX - this.vx) * k;
+      this.vy += (wantY - this.vy) * k;
+    } else {
+      this.vx = wantX;
+      this.vy = wantY;
+    }
+    this.moving = v.x !== 0 || v.y !== 0 || Math.hypot(this.vx, this.vy) > 6;
     if (v.x !== 0) this.facing = v.x > 0 ? 1 : -1;
-    if (!this.moving) return;
-    const water = waterImmune ? 1 : world.speedFactor(this.x, this.y);
-    const step = this.speed * this.speedMult * water * (this.slowT > 0 ? 0.6 : 1) * dt;
-    const next = world.collide(this.x + v.x * step, this.y + v.y * step, this.radius, biome);
+    if (Math.hypot(this.vx, this.vy) < 0.01) return;
+    const next = world.collide(this.x + this.vx * dt, this.y + this.vy * dt, this.radius, biome);
     this.x = next.x;
     this.y = next.y;
   }

@@ -3,10 +3,7 @@ import type { EnemyDef } from '../data/enemies';
 export type EnemyState =
   'move' | 'aim' | 'fuse' | 'windup' | 'leap' | 'cast' | 'blink' | 'orbit' | 'rest' | 'dying';
 
-let nextId = 1;
-
 export class Enemy {
-  readonly id = nextId++;
   x = 0;
   y = 0;
   radius: number;
@@ -64,7 +61,11 @@ export class Enemy {
   /** Mini-boss / boss marker (bosses never despawn). */
   boss: 'mini' | 'boss' | null = null;
 
-  constructor(readonly def: EnemyDef) {
+  /** `id` is allocated per run (RunState.nextEnemyId) so simulations stay deterministic. */
+  constructor(
+    readonly def: EnemyDef,
+    readonly id: number,
+  ) {
     this.radius = def.radius;
     this.speed = def.speed;
   }

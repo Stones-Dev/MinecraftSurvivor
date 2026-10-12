@@ -7,7 +7,8 @@ export const CHUNK_PX = CHUNK_TILES * TILE_PX;
 /** Radius in tiles around the origin kept clear of lakes and props. */
 export const SPAWN_CLEAR = 9;
 
-export const TILE = { GRASS: 0, SAND: 1, WATER: 2 } as const;
+/** Raw terrain codes; their effect depends on the biome (water freezes in the taiga, lava only exists in the desert). */
+export const TILE = { GRASS: 0, SAND: 1, WATER: 2, LAVA: 3 } as const;
 export type TileId = (typeof TILE)[keyof typeof TILE];
 
 function clamp01(v: number): number {
@@ -21,6 +22,7 @@ export function tileAt(tx: number, ty: number, seed: number): TileId {
   const water = 0.66 + (1 - ramp) * 0.4;
   if (lake > water) return TILE.WATER;
   if (lake > water - 0.035) return TILE.SAND;
+  if (d > 16 && fbm(tx * 0.07 + 500, ty * 0.07 - 300, seed + 777) > 0.8) return TILE.LAVA;
   return TILE.GRASS;
 }
 

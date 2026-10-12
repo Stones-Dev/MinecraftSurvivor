@@ -40,7 +40,7 @@ export function makeEnemy(
   const def = ENEMIES[defId];
   if (!def) return null;
   const minute = run.time / 60;
-  const e = new Enemy(def);
+  const e = new Enemy(def, run.nextEnemyId++);
   e.x = x;
   e.y = y;
   e.elite = elite;

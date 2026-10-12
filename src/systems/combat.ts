@@ -34,6 +34,7 @@ export function damageEnemy(
   if (!quiet) {
     e.hurtT = 0.1;
     run.emit('hit');
+    run.hitPoints.push(e.x, e.y);
     const dx = e.x - fromX;
     const dy = e.y - fromY;
     const len = Math.hypot(dx, dy) || 1;
@@ -76,6 +77,19 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
     run.pickups.push(new Pickup('emerald', e.x + 4, e.y + 2, 1));
   }
   if (m.healOnKill > 0) run.player.heal(m.healOnKill);
+  if (run.rng.drops.chance(m.lootMult / 400)) {
+    run.spawnEggs++;
+    run.fx.push(
+      makeFx('text', e.x, e.y - 20, 1, { text: 'Spawn Egg!', vy: -14, color: '#7dff9a' }),
+    );
+  }
+  if (e.charged) {
+    run.spawnEggs++;
+    run.emeraldsPicked += 150;
+    run.fx.push(
+      makeFx('text', e.x, e.y - 30, 1.2, { text: 'Charged! +150', vy: -14, color: '#6ad0ff' }),
+    );
+  }
   const into = e.def.splitInto;
   if (into && e.splitDepth < 2) {
     for (let i = 0; i < 2; i++) {
@@ -147,6 +161,7 @@ export function explode(
   skip: Enemy | null,
 ): void {
   run.emit('explode');
+  run.hitPoints.push(x, y);
   run.fx.push(makeFx('ring', x, y, 0.35, { r: radius, color: '#ffb347' }));
   for (let i = 0; i < 10; i++) {
     const a = run.rng.fx.range(0, Math.PI * 2);

@@ -14,7 +14,9 @@ import type { Projectile } from './entities/projectile';
 import { applyStatus } from './systems/status';
 import { updateMines, updateOrbiters, updateProjectiles, updateZones } from './systems/combat';
 import { updateEnemies } from './systems/enemyAI';
+import { updateInteract, type PropState } from './systems/interact';
 import { updateItems } from './systems/items';
+import { xpToNext } from './systems/economy';
 import { gainXp, type Card } from './systems/levelup';
 import { Pathing } from './systems/pathing';
 import { SpawnerState, updateSpawner } from './systems/spawner';
@@ -100,6 +102,7 @@ export class RunState {
   readonly spawner = new SpawnerState();
 
   enemies: Enemy[] = [];
+  nextEnemyId = 1;
   projectiles: Projectile[] = [];
   pickups: Pickup[] = [];
   fx: Fx[] = [];
@@ -115,6 +118,20 @@ export class RunState {
   passives = new Map<PassiveId, number>();
   shield: ShieldState = { has: false, ready: false, timer: 0, cd: 8, thorns: 0, reflect: false };
 
+  /** Spawn Eggs and Rare Spawn Eggs found this run (gacha tickets). */
+  spawnEggs = 0;
+  rareSpawnEggs = 0;
+  /** Positions [x0, y0, x1, y1, ...] where damage landed this step; breakable props react to them. */
+  hitPoints: number[] = [];
+  propState = new Map<string, PropState>();
+  /** Free enchantment choices waiting (enchanting tables) and which kind the open offer is. */
+  bonusOffers = 0;
+  offerKind: 'level' | 'enchant' = 'level';
+  lavaT = 0;
+  /** Timed buffs (beacons, ores): game time at which each ends. */
+  buffs = { strength: 0, speed: 0, magnet: 0, haste: 0, lapis: 0, redstone: 0 };
+  private buffTick = 0;
+  private hadBuff = false;
   /** Equipped item (one per run), its cooldown, a queued swap choice and temporary buffs. */
   item: ItemId | null = null;
   itemCd = 0;
@@ -175,6 +192,15 @@ export class RunState {
     this.player.hp = this.player.maxHp;
   }
 
+  xpNeeded(): number {
+    return xpToNext(this.level);
+  }
+
+  addBuff(kind: keyof RunState['buffs'], seconds: number): void {
+    this.buffs[kind] = this.time + seconds;
+    this.recomputeStats();
+  }
+
   get magnetRadius(): number {
     return 28 * this.mods.magnet;
   }
@@ -213,6 +239,13 @@ export class RunState {
       m.regen += armor.regen;
     }
     if (this.item === 'rabbit_foot') m.luck += 0.15;
+    const t = this.time;
+    if (t < this.buffs.strength) m.dmg *= 2;
+    if (t < this.buffs.speed) m.speed *= 1.45;
+    if (t < this.buffs.magnet) m.magnet *= 4;
+    if (t < this.buffs.haste) m.cd *= 0.6;
+    if (t < this.buffs.redstone) m.cd *= 0.8;
+    if (t < this.buffs.lapis) m.luck += 0.3;
     if (this.time < this.resistUntil) m.dmgTaken *= 0.5;
     if (sword) {
       m.burnChance += sword.burn;
@@ -264,6 +297,14 @@ export class RunState {
     updateMines(this, dt);
     updateZones(this, dt);
     updateOrbiters(this, dt);
+    updateInteract(this, dt);
+    this.buffTick -= dt;
+    if (this.buffTick <= 0) {
+      this.buffTick = 0.5;
+      const live = Object.values(this.buffs).some((b) => b > this.time);
+      if (live || this.hadBuff) this.recomputeStats();
+      this.hadBuff = live;
+    }
     this.updatePickups(dt);
     this.updateFx(dt);
     this.updateDot(dt);

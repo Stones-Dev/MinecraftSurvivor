@@ -1,10 +1,12 @@
 /** Pure world queries (no DOM): terrain, props and collision. Rendering lives in renderer.ts. */
-import type { BiomeId } from './biomes';
+import { BIOMES, type BiomeId } from './biomes';
 import { genProps, type Prop } from './props';
 import { CHUNK_PX, TILE, TILE_PX, tileAt } from './terrain';
 
 const MAX_PROP_CHUNKS = 220;
 export const WATER_SLOW = 0.6;
+
+export type Surface = 'ground' | 'water' | 'ice' | 'lava';
 
 export class World {
   private readonly propCache = new Map<string, Prop[]>();
@@ -19,9 +21,29 @@ export class World {
     return tileAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), this.seed);
   }
 
-  /** Movement multiplier at a ground position (water slows the hero). */
-  speedFactor(x: number, y: number): number {
-    return this.tileAtPx(x, y) === TILE.WATER ? WATER_SLOW : 1;
+  /** What the ground is at a point in this biome (water freezes in the taiga, lava only in the desert). */
+  surface(x: number, y: number, biome: BiomeId): Surface {
+    const t = this.tileAtPx(x, y);
+    if (t === TILE.WATER) return BIOMES[biome].iceWater ? 'ice' : 'water';
+    if (t === TILE.LAVA && BIOMES[biome].lava) return 'lava';
+    return 'ground';
+  }
+
+  /** Movement multiplier at a ground position (water slows). */
+  speedFactor(x: number, y: number, biome: BiomeId = 'plains'): number {
+    return this.surface(x, y, biome) === 'water' ? WATER_SLOW : 1;
+  }
+
+  /** Props destroyed or used up this run, as `id|kind` keys. */
+  private readonly removed = new Set<string>();
+
+  isRemoved(p: Prop): boolean {
+    return this.removed.size > 0 && this.removed.has(`${p.id}|${p.kind}`);
+  }
+
+  removeProp(p: Prop): void {
+    this.removed.add(`${p.id}|${p.kind}`);
+    this.solidCache.clear();
   }
 
   chunkProps(cx: number, cy: number, biome: BiomeId): Prop[] {
@@ -44,7 +66,7 @@ export class World {
     for (let cy = Math.floor(y0 / CHUNK_PX); cy <= Math.floor(y1 / CHUNK_PX); cy++) {
       for (let cx = Math.floor(x0 / CHUNK_PX); cx <= Math.floor(x1 / CHUNK_PX); cx++) {
         for (const p of this.chunkProps(cx, cy, biome)) {
-          if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) out.push(p);
+          if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && !this.isRemoved(p)) out.push(p);
         }
       }
     }
@@ -58,7 +80,7 @@ export class World {
     const key = `${cx},${cy},${biome}`;
     let solids = this.solidCache.get(key);
     if (!solids) {
-      solids = this.chunkProps(cx, cy, biome).filter((p) => p.solid);
+      solids = this.chunkProps(cx, cy, biome).filter((p) => p.solid && !this.isRemoved(p));
       this.solidCache.set(key, solids);
       if (this.solidCache.size > MAX_PROP_CHUNKS) {
         const oldest = this.solidCache.keys().next().value;

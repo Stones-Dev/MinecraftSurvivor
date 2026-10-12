@@ -51,7 +51,16 @@ export function paintChunk(
     const d = lat[k + gw + 1] ?? 0;
     return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
   };
-  const at = (tx: number, ty: number): number => terrain[(ty + 1) * side + tx + 1] ?? TILE.GRASS;
+  const raw = (tx: number, ty: number): number => terrain[(ty + 1) * side + tx + 1] ?? TILE.GRASS;
+  // Lava only exists in biomes that allow it; elsewhere the tile is plain ground.
+  const at = (tx: number, ty: number): number => {
+    const t = raw(tx, ty);
+    return t === TILE.LAVA && !biome.lava ? TILE.GRASS : t;
+  };
+  const lCrust = pack([58, 30, 22]);
+  const lBase = pack([226, 86, 18]);
+  const lLight = pack([255, 172, 44]);
+  const lDark = pack([166, 48, 10]);
 
   for (let ty = 0; ty < CHUNK_TILES; ty++) {
     for (let tx = 0; tx < CHUNK_TILES; tx++) {
@@ -60,6 +69,10 @@ export function paintChunk(
       const openR = at(tx + 1, ty) !== TILE.WATER;
       const openU = at(tx, ty - 1) !== TILE.WATER;
       const openD = at(tx, ty + 1) !== TILE.WATER;
+      const lavaL = at(tx - 1, ty) !== TILE.LAVA;
+      const lavaR = at(tx + 1, ty) !== TILE.LAVA;
+      const lavaU = at(tx, ty - 1) !== TILE.LAVA;
+      const lavaD = at(tx, ty + 1) !== TILE.LAVA;
       for (let ly = 0; ly < TILE_PX; ly++) {
         for (let lx = 0; lx < TILE_PX; lx++) {
           const px = tx * TILE_PX + lx;
@@ -68,14 +81,31 @@ export function paintChunk(
           const Y = cy * CHUNK_PX + py;
           const j = (NOISE[(((py + oy) & 255) << 8) | ((px + ox) & 255)] ?? 0) / 256;
           let c: number;
-          if (t === TILE.WATER) {
+          if (t === TILE.LAVA) {
+            const dl = Math.min(
+              lavaL ? lx : 99,
+              lavaR ? TILE_PX - 1 - lx : 99,
+              lavaU ? ly : 99,
+              lavaD ? TILE_PX - 1 - ly : 99,
+            );
+            if (dl < 2) c = lCrust;
+            else if (j < 0.12) c = lLight;
+            else if (j < 0.22) c = lDark;
+            else c = lBase;
+          } else if (t === TILE.WATER) {
             const dist = Math.min(
               openL ? lx : 99,
               openR ? TILE_PX - 1 - lx : 99,
               openU ? ly : 99,
               openD ? TILE_PX - 1 - ly : 99,
             );
-            if (dist === 0) c = wFoam;
+            if (biome.iceWater) {
+              // Frozen water: pale ice with thin cracks.
+              if (dist === 0) c = wFoam;
+              else if ((px + py * 2 + ox) % 29 === 0 || (px * 2 - py + oy + 512) % 31 === 0)
+                c = wDark;
+              else c = j < 0.18 ? wLight : wBase;
+            } else if (dist === 0) c = wFoam;
             else if (dist < 3) c = j < 0.5 ? wLight : wBase;
             else if (
               (NOISE[(((py + oy + 91) & 255) << 8) | (((px >> 2) + ox + 17) & 255)] ?? 255) < 13

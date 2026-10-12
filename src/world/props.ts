@@ -3,13 +3,34 @@ import { fbm, hash2 } from '../core/noise';
 import { BIOMES, type BiomeId } from './biomes';
 import { CHUNK_TILES, SPAWN_CLEAR, TILE, TILE_PX, tileAt } from './terrain';
 
-export type PropKind = 'tree' | 'boulder' | 'ore' | 'chest' | 'tallgrass' | 'flower';
+export type PropKind =
+  | 'tree'
+  | 'boulder'
+  | 'ore'
+  | 'chest'
+  | 'locked_chest'
+  | 'tallgrass'
+  | 'flower'
+  | 'cactus'
+  | 'melon'
+  | 'pumpkin'
+  | 'beacon'
+  | 'campfire'
+  | 'anvil'
+  | 'enchant_table'
+  | 'tnt_trap'
+  | 'cobweb'
+  | 'magma';
+
+/** Ore types stored in `variant % 8`. */
+export const ORE_TYPES = ['coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond'] as const;
+export type OreType = (typeof ORE_TYPES)[number];
 
 export interface Prop {
   /** Cell id, stable across biomes so a crossfade can match props. */
   id: string;
   kind: PropKind;
-  /** type = variant % 4 (e.g. tree species, ore kind), shape = floor(variant / 4) (sprite look). */
+  /** type = variant % 8 (species, ore kind...), shape = floor(variant / 8) (sprite look). */
   variant: number;
   /** Feet position on the ground plane, world pixels. */
   x: number;
@@ -18,19 +39,55 @@ export interface Prop {
   solid: boolean;
 }
 
+/** Per-cell chances (cumulative after trees/cacti). */
+const P = {
+  boulder: 0.012,
+  ore: 0.006,
+  chest: 0.003,
+  locked: 0.0012,
+  melon: 0.004,
+  beacon: 0.0006,
+  campfire: 0.0015,
+  anvil: 0.0006,
+  enchant: 0.0006,
+  tnt: 0.0015,
+} as const;
+
 const CELL_TILES = 2;
 const CELLS_PER_CHUNK = CHUNK_TILES / CELL_TILES;
 
+const RADIUS: Record<PropKind, number> = {
+  tree: 4,
+  boulder: 6,
+  ore: 6,
+  chest: 5,
+  locked_chest: 5,
+  tallgrass: 0,
+  flower: 0,
+  cactus: 4,
+  melon: 4,
+  pumpkin: 4,
+  beacon: 0,
+  campfire: 0,
+  anvil: 0,
+  enchant_table: 0,
+  tnt_trap: 0,
+  cobweb: 0,
+  magma: 0,
+};
+
+export function propType(p: Pick<Prop, 'variant'>): number {
+  return p.variant % 8;
+}
+
+export function propShape(p: Pick<Prop, 'variant'>): number {
+  return Math.floor(p.variant / 8);
+}
+
 function make(id: string, kind: PropKind, type: number, shape: number, x: number, y: number): Prop {
-  const radius = {
-    tree: type === 2 ? 5 : 4,
-    boulder: 6,
-    ore: 6,
-    chest: 5,
-    tallgrass: 0,
-    flower: 0,
-  }[kind];
-  return { id, kind, variant: type + 4 * shape, x, y, radius, solid: radius > 0 };
+  let radius = RADIUS[kind];
+  if (kind === 'tree' && type === 2) radius = 5;
+  return { id, kind, variant: type + 8 * shape, x, y, radius, solid: radius > 0 };
 }
 
 export function genProps(cx: number, cy: number, seed: number, biome: BiomeId): Prop[] {
@@ -57,21 +114,63 @@ export function genProps(cx: number, cy: number, seed: number, biome: BiomeId): 
       const id = `${gx},${gy}`;
       const r = hash2(gx, gy, seed + 404);
       const grove = fbm(gx * 0.12, gy * 0.12, seed + 505);
-      const treeP = b.treeBase + (grove > 0.6 ? b.groveBonus : 0);
       const v = hash2(gx, gy, seed + 707);
-      if (r < treeP) {
-        const type = biome === 'dark_forest' ? (v < 0.8 ? 2 : 0) : v < 0.72 ? 0 : 1;
-        out.push(make(id, 'tree', type, shape, x, y));
-      } else if (r < treeP + 0.012) {
+      let acc = 0;
+      const roll = (p: number): boolean => {
+        acc += p;
+        return r < acc;
+      };
+      if (b.treeKind !== 'none') {
+        const treeP = b.treeBase + (grove > 0.6 ? b.groveBonus : 0);
+        if (roll(treeP)) {
+          const type =
+            b.treeKind === 'dark_oak'
+              ? v < 0.8
+                ? 2
+                : 0
+              : b.treeKind === 'spruce'
+                ? 3
+                : v < 0.72
+                  ? 0
+                  : 1;
+          out.push(make(id, 'tree', type, shape, x, y));
+          continue;
+        }
+      } else if (roll(b.cactusBase + (grove > 0.62 ? 0.05 : 0))) {
+        out.push(make(id, 'cactus', 0, shape, x, y));
+        continue;
+      }
+      if (roll(P.boulder)) {
         out.push(make(id, 'boulder', 0, shape, x, y));
-      } else if (r < treeP + 0.017) {
-        out.push(make(id, 'ore', v < 0.6 ? 0 : 1, shape, x, y));
-      } else if (r < treeP + 0.02) {
+      } else if (roll(P.ore)) {
+        const type = v < 0.4 ? 0 : v < 0.65 ? 1 : v < 0.77 ? 2 : v < 0.85 ? 3 : v < 0.93 ? 4 : 5;
+        out.push(make(id, 'ore', type, shape, x, y));
+      } else if (roll(P.chest)) {
         out.push(make(id, 'chest', 0, 0, x, y));
+      } else if (roll(P.locked)) {
+        out.push(make(id, 'locked_chest', 0, 0, x, y));
+      } else if (roll(biome === 'desert' ? 0 : P.melon)) {
+        out.push(make(id, v < 0.5 ? 'melon' : 'pumpkin', 0, shape, x, y));
+      } else if (roll(P.beacon)) {
+        out.push(make(id, 'beacon', 0, 0, x, y));
+      } else if (roll(P.campfire)) {
+        out.push(make(id, 'campfire', 0, 0, x, y));
+      } else if (roll(P.anvil)) {
+        out.push(make(id, 'anvil', 0, 0, x, y));
+      } else if (roll(P.enchant)) {
+        out.push(make(id, 'enchant_table', 0, 0, x, y));
+      } else if (roll(P.tnt)) {
+        out.push(make(id, 'tnt_trap', 0, 0, x, y));
+      } else if (roll(biome === 'dark_forest' ? 0.006 : 0.003)) {
+        out.push(make(id, 'cobweb', 0, shape, x, y));
+      } else if (roll(biome === 'desert' || biome === 'dark_forest' ? 0.001 : 0)) {
+        out.push(make(id, 'magma', 0, shape, x, y));
       } else {
         const d = hash2(gx, gy, seed + 606);
         if (d < 0.22) out.push(make(id, 'tallgrass', 0, shape, x, y));
-        else if (d < 0.3) out.push(make(id, 'flower', v < 0.4 ? 0 : v < 0.75 ? 1 : 2, shape, x, y));
+        else if (d < 0.3 && biome !== 'desert') {
+          out.push(make(id, 'flower', v < 0.4 ? 0 : v < 0.75 ? 1 : 2, shape, x, y));
+        }
       }
     }
   }

@@ -55,7 +55,7 @@ function waterMult(run: RunState, e: Enemy): number {
   if (e.def.flying) return 1;
   // Drowned are at home in water; everyone else is slowed.
   if (e.def.id === 'drowned') return 1;
-  return run.world.speedFactor(e.x, e.y) < 1 ? 0.55 : 1;
+  return run.world.speedFactor(e.x, e.y, run.biome()) < 1 ? 0.55 : 1;
 }
 
 /** Direction to walk towards the player: the BFS route when far, a straight line when close. */
