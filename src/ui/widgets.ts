@@ -5,24 +5,17 @@
 import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
 import type { View } from '../core/canvas';
-import { RARITY_COLOR, type CompanionDef, type HeroDef } from '../data/companions';
-import {
-  keyToNav,
-  spatialFocus,
-  stickDir,
-  toastAlpha,
-  type FocusRect,
-  type NavEvent,
-} from './hubModel';
+import { RARITY_COLOR, type CompanionDef } from '../data/companions';
+import { keyToNav, spatialFocus, stickDir, type FocusRect, type NavEvent } from './hubModel';
 import type { IconName } from './icons';
 import { drawIcon } from './icons';
 import {
   drawBackdrop,
   drawButton,
+  drawFocusRing,
   drawPanel,
   drawSlot,
   drawText,
-  drawToast,
   drawTooltip,
   fitText,
   inRect,
@@ -38,6 +31,14 @@ export interface BtnOpts extends ButtonStyle {
   tooltip?: string;
   /** Stable identity for focus tracking when two buttons share a label. */
   key?: string;
+  /** Draws the button instead of the standard look (cards, chips); hover / focus ring still apply. */
+  custom?: (ctx: CanvasRenderingContext2D, r: Rect, state: BtnState) => void;
+}
+
+export interface BtnState {
+  hover: boolean;
+  focused: boolean;
+  pressed: boolean;
 }
 
 export interface Btn {
@@ -70,13 +71,7 @@ export class Buttons {
     this.seen.clear();
   }
 
-  add(
-    rect: Rect,
-    label: string,
-    onClick: () => void,
-    disabled = false,
-    opts: BtnOpts = {},
-  ): void {
+  add(rect: Rect, label: string, onClick: () => void, disabled = false, opts: BtnOpts = {}): void {
     const base = opts.key ?? label;
     const n = this.seen.get(base) ?? 0;
     this.seen.set(base, n + 1);
@@ -108,6 +103,11 @@ export class Buttons {
     const tick = nowMs() / 1000;
     for (const b of this.list) {
       const pressed = b.id === this.pressedId && nowMs() - this.pressedAt < PRESS_MS;
+      if (b.opts.custom) {
+        b.opts.custom(view.ctx, b.rect, { hover: b === hov, focused: b === foc, pressed });
+        if (b === foc) drawFocusRing(view.ctx, b.rect, tick);
+        continue;
+      }
       drawButton(view.ctx, b.rect, b.label, b === hov, b.disabled, {
         ...b.opts,
         pressed,
@@ -308,62 +308,6 @@ export class PadNav {
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Toasts.
-
-interface Toast {
-  text: string;
-  color: string;
-  icon?: IconName;
-  age: number;
-  life: number;
-}
-
-/** Short banner messages ("Equipped Alex", "Not enough emeralds"); one shows at a time, the rest queue. */
-export class ToastQueue {
-  private queue: Toast[] = [];
-
-  push(text: string, opts: { color?: string; icon?: IconName; life?: number } = {}): void {
-    // Repeating the visible message restarts it instead of stacking copies.
-    const head = this.queue[0];
-    if (head && head.text === text) {
-      head.age = Math.min(head.age, 0.2);
-      return;
-    }
-    this.queue.push({
-      text,
-      color: opts.color ?? UI.gold,
-      icon: opts.icon,
-      age: 0,
-      life: opts.life ?? 2.6,
-    });
-    if (this.queue.length > 4) this.queue.splice(1, 1);
-  }
-
-  update(dt: number): void {
-    const head = this.queue[0];
-    if (!head) return;
-    head.age += dt;
-    if (head.age >= head.life) this.queue.shift();
-  }
-
-  get active(): boolean {
-    return this.queue.length > 0;
-  }
-
-  draw(ctx: CanvasRenderingContext2D, width: number, y = 6): void {
-    const head = this.queue[0];
-    if (!head || toastAlpha(head.age, head.life) <= 0) return;
-    drawToast(ctx, width, head.text, {
-      age: head.age,
-      life: head.life,
-      color: head.color,
-      icon: head.icon,
-      y,
-    });
-  }
-}
-
-// ---------------------------------------------------------------------------------------------------
 // Resource pills and headers.
 
 /** A dark slot with an icon and a value ("[emerald] 1840"); returns its rect (for tooltips). */
@@ -552,9 +496,7 @@ export function drawPortrait(
   // Size comes from the sprite's own first frame, so any new companion fits its box automatically.
   const key = companionFrame(atlas, def, 0);
   const size = key ? atlas.frameSize(key) : null;
-  const scale = size
-    ? Math.max(0.25, Math.min(maxScale, boxW / size.w, boxH / size.h))
-    : maxScale;
+  const scale = size ? Math.max(0.25, Math.min(maxScale, boxW / size.w, boxH / size.h)) : maxScale;
   if (locked) drawSilhouette(ctx, atlas, def, cx, feetY, scale);
   else drawCompanion(ctx, atlas, def, cx, feetY, t, scale, alpha);
 }
@@ -568,28 +510,4 @@ export function drawRarity(
   align: CanvasTextAlign = 'left',
 ): void {
   drawText(ctx, def.rarity.toUpperCase(), x, y, RARITY_COLOR[def.rarity], align);
-}
-
-/** The hero's head and shoulders in a slot (profile avatar): the portrait cropped to the slot box. */
-export function drawAvatar(
-  ctx: CanvasRenderingContext2D,
-  atlas: Atlas,
-  def: HeroDef,
-  r: Rect,
-  t: number,
-): void {
-  drawSlot(ctx, r, { color: RARITY_COLOR[def.rarity] });
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
-  ctx.clip();
-  // Draw the sprite large enough that its head fills the slot, anchored so the top of the sprite is visible.
-  const key = companionFrame(atlas, def, t);
-  const size = key ? atlas.frameSize(key) : null;
-  if (key && size) {
-    const scale = Math.max(0.5, (r.w - 2) / Math.max(10, size.w * 0.9));
-    const feet = r.y + 1 + size.h * scale + 1;
-    drawCompanion(ctx, atlas, def, r.x + r.w / 2, feet, t, scale);
-  }
-  ctx.restore();
 }

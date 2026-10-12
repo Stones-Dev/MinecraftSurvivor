@@ -68,7 +68,12 @@ const ownedOf = (s: SaveData, kind: 'hero' | 'pet' | 'ally'): number =>
   Object.keys(s.owned).filter((id) => COMPANION_BY_ID.get(id)?.kind === kind).length;
 const upgradeRanks = (s: SaveData): number =>
   Object.values(s.upgrades).reduce(
-    (a, ranks) => a + Object.values(ranks).reduce((x, r) => x + r, 0),
+    (a, ranks) =>
+      a +
+      Object.entries(ranks).reduce(
+        (x, [id, r]) => x + (META_BY_ID.has(id) ? Math.max(0, Math.floor(r) || 0) : 0),
+        0,
+      ),
     0,
   );
 const hasMaxedUpgrade = (s: SaveData): boolean =>

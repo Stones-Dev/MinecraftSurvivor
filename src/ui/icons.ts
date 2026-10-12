@@ -68,6 +68,7 @@ const NAMES = [
   'user',
   'dice',
   'grass',
+  'egg_rare',
 ] as const;
 
 /** Name of a code-drawn icon. */
@@ -1489,6 +1490,29 @@ export const ICON_DATA: Record<
       G: '#3f8a2a',
       d: '#8a5a32',
       D: '#6a4424',
+    },
+  },
+  egg_rare: {
+    rows: [
+      '....KKKK....',
+      '...KeeeeK...',
+      '..KfeeeeEK..',
+      '.KffDeeDEEK.',
+      '.KffeeeeEEK.',
+      '.KeDeeeDEEK.',
+      '.KeeeDeeEEK.',
+      '.KeeeeeeEEK.',
+      '.KeeDeeDEEK.',
+      '..KeeeeeEK..',
+      '...KEEEEK...',
+      '....KKKK....',
+    ],
+    palette: {
+      K: OUTLINE,
+      e: '#e0a21a',
+      f: '#fff0a0',
+      D: '#7a4a08',
+      E: '#b87a12',
     },
   },
 };

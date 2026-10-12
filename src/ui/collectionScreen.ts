@@ -1,6 +1,10 @@
-/** The Collection screen: Heroes / Pets / Allies tabs, a card grid, a detail panel and equip controls. */
+/**
+ * The Collection screen: Heroes / Pets / Allies tabs, a paged card grid with rarity frames and locked
+ * silhouettes, and a detail panel (stats, hero ability, passive, lore) with equip controls.
+ */
+import { abilityById, abilityText } from '../abilities';
 import type { App } from '../app';
-import type { Atlas } from '../core/atlas';
+import type { View } from '../core/canvas';
 import type { SaveData } from '../core/save';
 import {
   ALLIES,
@@ -11,51 +15,54 @@ import {
   RARITY_LABEL,
   petText,
   type CompanionDef,
+  type HeroDef,
 } from '../data/companions';
 import { dupesToReach } from '../systems/gacha';
-import { maxAllySlots } from '../systems/meta';
-import { drawIcon } from './icons';
-import { drawPanel, drawText, fitText, inRect, wrap, type Rect } from './panel';
+import { SHARDS_PER_RANK, abilityRank, maxAllySlots, MAX_ABILITY_RANK } from '../systems/meta';
+import {
+  collectionLayout,
+  gridMove,
+  keyToNav,
+  pageCount,
+  pageOf,
+  wrapIndex,
+  type NavEvent,
+} from './hubModel';
+import { drawIcon, type IconName } from './icons';
+import {
+  clipText,
+  drawBar,
+  drawDivider,
+  drawPanel,
+  drawSlot,
+  drawText,
+  drawTooltip,
+  fitText,
+  inRect,
+  textWidth,
+  UI,
+  type Rect,
+} from './panel';
 import type { Screen } from './router';
-import { Buttons, companionFrame, drawCompanion, drawTitle } from './widgets';
+import { spawnerScreen } from './spawnerScreen';
+import { pushToast } from './toast';
+import { Buttons, PadNav, drawPortrait, drawTitle } from './widgets';
 
-/** Draw a companion centred on `cx` with its feet at `feetY`, shrunk to fit a boxW x boxH box. */
-export function drawPortrait(
-  ctx: CanvasRenderingContext2D,
-  atlas: Atlas,
-  def: CompanionDef,
-  cx: number,
-  feetY: number,
-  t: number,
-  boxW: number,
-  boxH: number,
-  maxScale = 1,
-  alpha = 1,
-): void {
-  // Size comes from the sprite's own first frame, so any new companion fits its box automatically.
-  const key = companionFrame(atlas, def, 0);
-  const size = key ? atlas.frameSize(key) : null;
-  const scale = size ? Math.min(maxScale, boxW / size.w, boxH / size.h) : maxScale;
-  drawCompanion(ctx, atlas, def, cx, feetY, t, scale, alpha);
-}
+export { drawPortrait };
 
 /** Word-wrap `s` into at most maxLines lines; the last visible line ends in '..' when text is cut. */
 export function clipLines(
-  ctx: CanvasRenderingContext2D,
+  _ctx: CanvasRenderingContext2D | null,
   s: string,
   maxW: number,
   maxLines: number,
 ): string[] {
-  const lines = wrap(ctx, s, maxW);
-  if (lines.length <= maxLines) return lines;
-  const cut = lines.slice(0, Math.max(0, maxLines));
-  if (cut.length > 0) cut[cut.length - 1] = fitText(lines.slice(cut.length - 1).join(' '), maxW);
-  return cut;
+  return clipText(s, maxW, maxLines);
 }
 
 /** Display name for tight spaces (villager professions drop the shared prefix). */
 export function shortName(def: CompanionDef): string {
-  return def.name.replace(/^Villager /, '');
+  return def.name.replace(/^(Villager|Village|Wandering) /, '');
 }
 
 /** The one-line buff description at a given level. */
@@ -66,271 +73,543 @@ export function buffLine(def: CompanionDef, level: number): string {
 
 interface Tab {
   label: string;
+  icon: IconName;
   list: CompanionDef[];
 }
 
 const TABS: Tab[] = [
-  { label: 'Heroes', list: HEROES },
-  { label: 'Pets', list: PETS },
-  { label: 'Allies', list: ALLIES },
+  { label: 'Heroes', icon: 'helmet', list: HEROES },
+  { label: 'Pets', icon: 'foot', list: PETS },
+  { label: 'Allies', icon: 'shield', list: ALLIES },
 ];
 
-const CARD_H = 52;
-const GAP = 3;
-
-function isEquipped(data: SaveData, def: CompanionDef): boolean {
+export function isEquipped(data: SaveData, def: CompanionDef): boolean {
   if (def.kind === 'hero') return data.loadout.hero === def.id;
   if (def.kind === 'pet') return data.loadout.pet === def.id;
   return data.loadout.allies.includes(def.id);
 }
 
-function drawCard(
-  ctx: CanvasRenderingContext2D,
-  atlas: Atlas,
-  t: number,
-  data: SaveData,
-  def: CompanionDef,
-  r: Rect,
-  selected: boolean,
-): void {
-  const o = data.owned[def.id];
-  drawPanel(ctx, r, selected, RARITY_COLOR[def.rarity]);
-  drawPortrait(ctx, atlas, def, r.x + r.w / 2, r.y + 36, t, r.w - 6, 32, 1, o ? 1 : 0.3);
-  if (!o) {
-    ctx.fillStyle = 'rgba(12,12,18,0.45)';
-    ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
-  }
-  drawText(
-    ctx,
-    fitText(o ? shortName(def) : '???', r.w - 4),
-    r.x + r.w / 2,
-    r.y + 45,
-    '#fff',
-    'center',
-  );
-  if (o && def.kind !== 'hero') {
-    // Level pips (1-5), centred under the name.
-    const px = Math.round(r.x + (r.w - (MAX_COMPANION_LEVEL * 5 - 1)) / 2);
-    for (let i = 0; i < MAX_COMPANION_LEVEL; i++) {
-      ctx.fillStyle = i < o.level ? RARITY_COLOR[def.rarity] : '#101014';
-      ctx.fillRect(px + i * 5, r.y + r.h - 5, 4, 2);
-    }
-  }
-  if (isEquipped(data, def)) drawIcon(ctx, 'star', r.x + r.w - 12, r.y + 1);
+interface Section {
+  title: string;
+  color: string;
+  icon?: IconName;
+  /** Right-aligned note on the heading line (cooldown). */
+  note?: string;
+  text: string;
+  /** Progress line under the text (hero ability rank). */
+  bar?: { frac: number; label: string };
+  /** Short form of the progress line for the one-at-a-time view (no room for the bar). */
+  brief?: string;
 }
 
-function drawDetail(
-  ctx: CanvasRenderingContext2D,
-  atlas: Atlas,
-  t: number,
-  data: SaveData,
-  def: CompanionDef,
-  r: Rect,
-  message: string,
-): void {
+/** The text blocks of the detail panel for a companion (what the player can read about it). */
+export function detailSections(def: CompanionDef, data: SaveData): Section[] {
   const o = data.owned[def.id];
-  const rc = RARITY_COLOR[def.rarity];
-  drawPanel(ctx, r, false, o ? rc : null);
-  const tx = r.x + 46;
-  const tw = r.w - 50;
-  drawText(ctx, o ? def.name : '???', r.x + 5, r.y + 11);
-  drawPortrait(ctx, atlas, def, r.x + 24, r.y + 59, t, 38, 40, 1.5, o ? 1 : 0.3);
-  drawText(ctx, RARITY_LABEL[def.rarity], tx, r.y + 24, rc);
-  let buff = 'Pull it at the Spawner to unlock.';
-  if (o) {
-    buff = buffLine(def, o.level);
-    if (def.kind === 'hero') {
-      drawText(ctx, `Shards ${o.shards}`, r.x + r.w - 5, r.y + 11, '#9a9aa8', 'right');
-      drawText(ctx, `HP ${def.hp}`, tx, r.y + 33, '#cfcfd8');
-      drawText(ctx, `Dmg x${def.dmg}`, tx, r.y + 42, '#cfcfd8');
-      drawText(ctx, `Speed x${def.speed}`, tx, r.y + 51, '#cfcfd8');
-    } else {
-      drawText(ctx, `Level ${o.level}/${MAX_COMPANION_LEVEL}`, tx, r.y + 33, '#ffd84a');
-      const max = o.level >= MAX_COMPANION_LEVEL;
-      const need = dupesToReach(o.level + 1);
-      drawText(ctx, max ? 'Max level' : `Shards ${o.shards}/${need}`, tx, r.y + 42, '#cfcfd8');
-      if (!max) {
-        ctx.fillStyle = '#101014';
-        ctx.fillRect(tx, r.y + 45, tw, 4);
-        ctx.fillStyle = rc;
-        ctx.fillRect(tx + 1, r.y + 46, Math.round(((tw - 2) * Math.min(o.shards, need)) / need), 2);
-      }
-      if (def.kind === 'ally') drawText(ctx, `HP ${def.hp}`, tx, r.y + 58, '#cfcfd8');
-    }
+  if (!o) {
+    return [
+      {
+        title: 'LOCKED',
+        color: UI.dim,
+        text: 'Not found yet. Find it in the Spawner with Spawn Eggs.',
+      },
+    ];
+  }
+  const out: Section[] = [];
+  if (def.kind === 'hero') {
+    const ab = abilityById(def.ability);
+    const rank = abilityRank(o.shards);
+    const txt = abilityText(def.id, rank);
+    const next = rank >= MAX_ABILITY_RANK ? 1 : (o.shards % SHARDS_PER_RANK) / SHARDS_PER_RANK;
+    out.push({
+      title: txt.name || 'Ability',
+      color: UI.gold,
+      icon: ab?.icon,
+      note: `CD ${txt.cooldown}s`,
+      text: txt.blurb,
+      brief: `R${rank}`,
+      bar: {
+        frac: next,
+        label:
+          rank >= MAX_ABILITY_RANK
+            ? `Rank ${rank}/${MAX_ABILITY_RANK} (max)`
+            : `Rank ${rank}/${MAX_ABILITY_RANK}  ${o.shards % SHARDS_PER_RANK}/${SHARDS_PER_RANK}`,
+      },
+    });
+    out.push({ title: def.passiveName, color: UI.green, text: def.passive });
   } else {
-    drawText(ctx, 'Not found yet', tx, r.y + 33, '#9a9aa8');
+    out.push({ title: 'BUFF', color: UI.green, text: buffLine(def, o.level) });
   }
-  // Buff text, then the lore quip in whatever room is left.
-  const bottom = r.y + r.h - 4;
-  const textW = r.w - 8;
-  let y = r.y + 70;
-  const room = (): number => Math.max(0, Math.floor((bottom - y) / 9) + 1);
-  const buffLines = clipLines(ctx, buff, textW, Math.min(room(), def.kind === 'hero' ? 3 : 4));
-  for (const l of buffLines) {
-    drawText(ctx, l, r.x + 5, y, o ? '#7dff9a' : '#9a9aa8');
-    y += 9;
+  out.push({ title: 'LORE', color: UI.dim, text: `"${def.quip}"` });
+  return out;
+}
+
+const LINE = 9;
+
+function sectionLines(sec: Section, w: number, max = 99): string[] {
+  return clipText(sec.text, w, max);
+}
+
+function sectionHeight(sec: Section, w: number): number {
+  return 10 + sectionLines(sec, w).length * LINE + (sec.bar ? 10 : 0) + 3;
+}
+
+/** Draw a section at (x, y); returns its height. `maxLines` clips the text when room is short. */
+function drawSection(
+  ctx: CanvasRenderingContext2D,
+  sec: Section,
+  x: number,
+  y: number,
+  w: number,
+  maxLines = 99,
+  compact = false,
+): number {
+  let cx = x;
+  if (sec.icon && !compact) {
+    drawIcon(ctx, sec.icon, x, y - 2);
+    cx += 14;
   }
-  if (!o) return;
-  y += 2;
-  const loreRoom = room() - (message ? 1 : 0);
-  clipLines(ctx, `"${def.quip}"`, textW, loreRoom).forEach((l, i) =>
-    drawText(ctx, l, r.x + 5, y + i * 9, '#9a9aa8'),
-  );
-  if (message) drawText(ctx, message, r.x + 5, bottom, '#ff9a9a');
+  const note = compact && sec.brief ? `${sec.brief}  ${sec.note ?? ''}` : (sec.note ?? '');
+  const noteW = note ? textWidth(note) + 4 : 0;
+  drawText(ctx, fitText(sec.title, w - (cx - x) - noteW), cx, y + 7, sec.color);
+  if (note) drawText(ctx, note, x + w, y + 7, UI.dim, 'right');
+  let ty = y + (compact ? 9 : 10 + (sec.icon ? 3 : 0));
+  const lines = sectionLines(sec, w, maxLines);
+  const dim = sec.title === 'LORE';
+  for (const l of lines) {
+    drawText(ctx, l, x, ty + 6, dim ? UI.dim : UI.soft);
+    ty += LINE;
+  }
+  if (sec.bar && !compact) {
+    drawBar(ctx, { x, y: ty + 2, w: Math.min(w, 70), h: 5 }, sec.bar.frac, UI.gold);
+    drawText(ctx, sec.bar.label, x + Math.min(w, 70) + 4, ty + 7, UI.dim);
+    ty += 10;
+  }
+  return ty - y + 3;
+}
+
+function stat(
+  ctx: CanvasRenderingContext2D,
+  icon: IconName,
+  text: string,
+  x: number,
+  y: number,
+  color: string = UI.soft,
+): void {
+  drawIcon(ctx, icon, x, y);
+  drawText(ctx, text, x + 14, y + 9, color);
 }
 
 export function collectionScreen(app: App, onBack: () => void): Screen {
   const { atlas } = app;
   const buttons = new Buttons();
+  const pad = new PadNav();
   let t = 0;
   let tabIdx = 0;
-  let message = '';
-  const selected = TABS.map((tab) => tab.list[0]?.id ?? '');
-  const pages = TABS.map(() => 0);
+  /** Selected index per tab (into the full list). */
+  const sel = TABS.map(() => 0);
+  let section = 0;
+  let mx = -1;
+  let my = -1;
   let tabRects: Rect[] = [];
-  let cardHits: { r: Rect; id: string }[] = [];
+  let cardHits: { r: Rect; i: number }[] = [];
+  let chipRects: Rect[] = [];
+  let perPage = 15;
+
+  const tab = (): Tab => TABS[tabIdx] as Tab;
+  const current = (): CompanionDef => tab().list[sel[tabIdx] ?? 0] ?? (HEROES[0] as HeroDef);
 
   const setTab = (i: number): void => {
-    tabIdx = (i + TABS.length) % TABS.length;
-    message = '';
+    const n = wrapIndex(i, 0, TABS.length);
+    if (n !== tabIdx) app.audio.play('click');
+    tabIdx = n;
+    section = 0;
+  };
+  const select = (i: number): void => {
+    const n = tab().list.length;
+    const next = Math.max(0, Math.min(n - 1, i));
+    if (next !== sel[tabIdx]) {
+      sel[tabIdx] = next;
+      section = 0;
+      app.audio.play('click');
+    }
   };
 
   const toggleEquip = (def: CompanionDef): void => {
     const data = app.data();
     if (!data.owned[def.id]) return;
     const lo = data.loadout;
-    message = '';
     if (def.kind === 'hero') {
+      if (lo.hero === def.id) return;
       lo.hero = def.id;
+      pushToast({ text: `${def.name} equipped`, color: RARITY_COLOR[def.rarity] });
     } else if (def.kind === 'pet') {
       lo.pet = lo.pet === def.id ? null : def.id;
+      pushToast({
+        text: lo.pet ? `${def.name} equipped` : `${def.name} unequipped`,
+        color: RARITY_COLOR[def.rarity],
+      });
     } else if (lo.allies.includes(def.id)) {
       lo.allies = lo.allies.filter((id) => id !== def.id);
+      pushToast({ text: `${def.name} unequipped`, color: RARITY_COLOR[def.rarity] });
     } else if (lo.allies.length >= maxAllySlots(data)) {
-      message = 'Ally slots full';
+      pushToast({ text: 'Ally slots full. Unequip an ally first.', color: UI.red });
       return;
     } else {
       lo.allies = [...lo.allies, def.id];
+      pushToast({ text: `${def.name} equipped`, color: RARITY_COLOR[def.rarity] });
     }
     app.audio.play('click');
     app.store.save(data);
   };
 
+  const toSpawner = (): void => {
+    app.router.push(spawnerScreen(app, () => app.router.pop()));
+  };
+
+  const nav = (ev: NavEvent, cols: number): void => {
+    switch (ev) {
+      case 'left':
+      case 'right':
+      case 'up':
+      case 'down':
+        select(gridMove(sel[tabIdx] ?? 0, ev, cols, tab().list.length));
+        break;
+      case 'ok': {
+        const def = current();
+        if (app.data().owned[def.id]) toggleEquip(def);
+        else toSpawner();
+        break;
+      }
+      case 'back':
+        onBack();
+        break;
+      case 'prev':
+        setTab(tabIdx - 1);
+        break;
+      case 'next':
+        setTab(tabIdx + 1);
+        break;
+    }
+  };
+  let lastCols = 5;
+
+  const drawCard = (
+    ctx: CanvasRenderingContext2D,
+    data: SaveData,
+    def: CompanionDef,
+    r: Rect,
+    selected: boolean,
+    hover: boolean,
+    named: boolean,
+  ): void => {
+    const o = data.owned[def.id];
+    const color = RARITY_COLOR[def.rarity];
+    drawSlot(ctx, r, { color, selected, hover, locked: !o });
+    const nameH = named ? 10 : 0;
+    const boxH = r.h - 6 - nameH - (o && def.kind !== 'hero' ? 4 : 0);
+    const feet = r.y + 3 + boxH + 1;
+    drawPortrait(ctx, atlas, def, r.x + r.w / 2, feet, t, r.w - 6, boxH, 2, 1, !o);
+    if (!o) {
+      drawText(
+        ctx,
+        '?',
+        r.x + r.w / 2,
+        r.y + Math.floor(boxH / 2) + 6,
+        'rgba(255,255,255,0.55)',
+        'center',
+      );
+    }
+    if (named) {
+      drawText(
+        ctx,
+        fitText(o ? shortName(def) : '???', r.w - 4),
+        r.x + r.w / 2,
+        r.y + r.h - (def.kind !== 'hero' && o ? 8 : 4),
+        o ? '#fff' : UI.faint,
+        'center',
+      );
+    }
+    if (o && def.kind !== 'hero') {
+      // Level pips (1-5), centred along the bottom edge.
+      const pw = MAX_COMPANION_LEVEL * 5 - 1;
+      const px = Math.round(r.x + (r.w - pw) / 2);
+      for (let i = 0; i < MAX_COMPANION_LEVEL; i++) {
+        ctx.fillStyle = i < o.level ? color : '#06060a';
+        ctx.fillRect(px + i * 5, r.y + r.h - 5, 4, 2);
+      }
+    }
+    if (o && isEquipped(data, def)) drawIcon(ctx, 'star', r.x + r.w - 12, r.y + 1);
+  };
+
+  const drawDetail = (
+    ctx: CanvasRenderingContext2D,
+    data: SaveData,
+    def: CompanionDef,
+    r: Rect,
+    tier: string,
+  ): void => {
+    const o = data.owned[def.id];
+    const rc = RARITY_COLOR[def.rarity];
+    drawPanel(ctx, r, false, o ? rc : null);
+    const pad4 = 5;
+    const innerW = r.w - pad4 * 2;
+    // Header: name left, rarity right.
+    const rarity = RARITY_LABEL[def.rarity];
+    drawText(ctx, rarity, r.x + r.w - pad4, r.y + 11, rc, 'right');
+    drawText(
+      ctx,
+      fitText(o ? def.name : '???', innerW - textWidth(rarity) - 6),
+      r.x + pad4,
+      r.y + 11,
+      '#fff',
+    );
+    drawDivider(ctx, r.x + pad4, r.y + 14, innerW);
+    // Portrait slot and stats.
+    const ps = tier === 'compact' ? 36 : tier === 'normal' ? 50 : 72;
+    const slot = { x: r.x + pad4, y: r.y + 19, w: ps, h: ps };
+    drawSlot(ctx, slot, { color: rc, locked: !o });
+    drawPortrait(ctx, atlas, def, slot.x + ps / 2, slot.y + ps - 3, t, ps - 6, ps - 6, 3, 1, !o);
+    if (!o)
+      drawText(ctx, '?', slot.x + ps / 2, slot.y + ps / 2 + 4, 'rgba(255,255,255,0.6)', 'center');
+    if (o && isEquipped(data, def)) drawIcon(ctx, 'star', slot.x + ps - 12, slot.y + 1);
+    const sx = slot.x + ps + 6;
+    let sy = slot.y + 1;
+    if (def.kind === 'hero') {
+      stat(ctx, 'heart', o ? String(def.hp) : '?', sx, sy, o ? '#ff9a9a' : UI.faint);
+      stat(ctx, 'sword', o ? `x${def.dmg}` : '?', sx, sy + 12, o ? '#ffd0a0' : UI.faint);
+      stat(ctx, 'boots', o ? `x${def.speed}` : '?', sx, sy + 24, o ? '#a0e0ff' : UI.faint);
+      if (o && ps >= 50) {
+        const rank = abilityRank(data.owned[def.id]?.shards ?? 0);
+        stat(ctx, 'star', `Ability rank ${rank}`, sx, sy + 38, UI.gold);
+      }
+    } else if (o) {
+      stat(ctx, 'star', `Level ${o.level}/${MAX_COMPANION_LEVEL}`, sx, sy, UI.gold);
+      const max = o.level >= MAX_COMPANION_LEVEL;
+      const need = dupesToReach(o.level + 1);
+      sy += 12;
+      drawText(ctx, max ? 'Max level' : `Shards ${o.shards}/${need}`, sx, sy + 9, UI.soft);
+      if (!max) {
+        drawBar(
+          ctx,
+          { x: sx, y: sy + 12, w: Math.min(r.x + r.w - pad4 - sx, 60), h: 5 },
+          o.shards / need,
+          rc,
+        );
+      }
+      if (def.kind === 'ally') stat(ctx, 'heart', `HP ${def.hp}`, sx, sy + 20, '#ff9a9a');
+    } else {
+      drawText(ctx, 'Not found yet', sx, sy + 9, UI.dim);
+      drawText(ctx, 'Pull it at the', sx, sy + 21, UI.faint);
+      drawText(ctx, 'Spawner.', sx, sy + 30, UI.faint);
+    }
+
+    // Body: stacked sections when they fit, otherwise one at a time under chips.
+    const bodyTop = slot.y + ps + 5;
+    const room = r.y + r.h - 4 - bodyTop;
+    const secs = detailSections(def, data);
+    const total = secs.reduce((n, s) => n + sectionHeight(s, innerW), 0);
+    chipRects = [];
+    if (total <= room) {
+      let y = bodyTop;
+      for (const s of secs) y += drawSection(ctx, s, r.x + pad4, y, innerW);
+      return;
+    }
+    const idx = Math.min(section, secs.length - 1);
+    let cx = r.x + pad4;
+    secs.forEach((s, i) => {
+      const label =
+        i === 0 && def.kind === 'hero'
+          ? 'Ability'
+          : i === 1 && def.kind === 'hero'
+            ? 'Passive'
+            : s.title === 'LORE'
+              ? 'Lore'
+              : 'Buff';
+      const cw = textWidth(label) + 8;
+      const chip = { x: cx, y: bodyTop - 1, w: cw, h: 10 };
+      chipRects.push(chip);
+      drawSlot(ctx, chip, { selected: i === idx, hover: inRect(chip, mx, my) });
+      drawText(ctx, label, chip.x + cw / 2, chip.y + 8, i === idx ? UI.gold : UI.soft, 'center');
+      cx += cw + 3;
+    });
+    const s = secs[idx];
+    if (s) {
+      const top = bodyTop + 14;
+      const maxLines = Math.max(
+        1,
+        Math.floor((r.y + r.h - 4 - top - 10 - (s.bar ? 10 : 0)) / LINE),
+      );
+      drawSection(ctx, s, r.x + pad4, top, innerW, maxLines);
+    }
+  };
+
   return {
     update(dt) {
       t += dt;
+      for (const ev of pad.poll(dt)) nav(ev, lastCols);
     },
-    render(view) {
+    render(view: View) {
       const { ctx, width, height } = view;
       const data = app.data();
+      const L = collectionLayout(width, height);
       drawTitle(view, 'COLLECTION');
-      const tab = TABS[tabIdx] as Tab;
-      const list = tab.list;
+      const cur = tab();
+      const list = cur.list;
 
       // Tabs with owned counts.
-      const tw = 82;
+      const labels = TABS.map((tb) => {
+        const have = tb.list.filter((d) => data.owned[d.id]).length;
+        return `${tb.label} ${have}/${tb.list.length}`;
+      });
+      const tw = Math.min(
+        Math.floor((width - 12 - 8) / 3),
+        Math.max(...labels.map((l) => textWidth(l))) + 26,
+      );
       const tx0 = Math.floor((width - (TABS.length * tw + (TABS.length - 1) * 4)) / 2);
-      tabRects = TABS.map((_, i) => ({ x: tx0 + i * (tw + 4), y: 22, w: tw, h: 13 }));
+      tabRects = TABS.map((_, i) => ({ x: tx0 + i * (tw + 4), y: L.tabsY, w: tw, h: 14 }));
       TABS.forEach((tb, i) => {
         const r = tabRects[i] as Rect;
-        const have = tb.list.filter((d) => data.owned[d.id]).length;
-        drawPanel(ctx, r, i === tabIdx);
-        drawText(
-          ctx,
-          `${tb.label} ${have}/${tb.list.length}`,
-          r.x + r.w / 2,
-          r.y + 9,
-          i === tabIdx ? '#ffd84a' : '#cfcfd8',
-          'center',
-        );
+        const on = i === tabIdx;
+        drawPanel(ctx, r, on || inRect(r, mx, my), on ? UI.gold : null, 'stone');
+        const label = fitText(labels[i] ?? '', r.w - 18);
+        const lw = textWidth(label) + 14;
+        const lx = r.x + Math.floor((r.w - lw) / 2);
+        drawIcon(ctx, tb.icon, lx, r.y + 1);
+        drawText(ctx, label, lx + 14, r.y + 10, on ? UI.gold : UI.soft);
       });
 
-      // Geometry: grid on the left, detail panel on the right, button row at the bottom.
-      const top = 39;
-      const bottom = height - 24;
-      const dw = width >= 400 ? 140 : 132;
-      const detail: Rect = { x: width - 6 - dw, y: top, w: dw, h: bottom - top };
-      const cw = width >= 400 ? 36 : 32;
-      const areaW = detail.x - 4 - 6;
-      const cols = Math.max(1, Math.floor((areaW + GAP) / (cw + GAP)));
-      const rows = Math.max(1, Math.floor((bottom - top + GAP) / (CARD_H + GAP)));
-      const perPage = cols * rows;
-      const pageCount = Math.max(1, Math.ceil(list.length / perPage));
-      const page = Math.min(pages[tabIdx] ?? 0, pageCount - 1);
-      pages[tabIdx] = page;
-      const gx = 6 + Math.floor((areaW - (cols * (cw + GAP) - GAP)) / 2);
-
+      // Card grid, paged.
+      const g = L.grid;
+      lastCols = g.cols;
+      perPage = g.cols * g.rows;
+      const pages = pageCount(list.length, perPage);
+      const index = Math.min(sel[tabIdx] ?? 0, list.length - 1);
+      const page = Math.min(pageOf(index, perPage), pages - 1);
+      const first = page * perPage;
       cardHits = [];
-      list.slice(page * perPage, (page + 1) * perPage).forEach((def, i) => {
+      let hoverDef: CompanionDef | null = null;
+      list.slice(first, first + perPage).forEach((def, k) => {
         const r: Rect = {
-          x: gx + (i % cols) * (cw + GAP),
-          y: top + Math.floor(i / cols) * (CARD_H + GAP),
-          w: cw,
-          h: CARD_H,
+          x: g.x + (k % g.cols) * (g.cw + g.gap),
+          y: g.y + Math.floor(k / g.cols) * (g.ch + g.gap),
+          w: g.cw,
+          h: g.ch,
         };
-        cardHits.push({ r, id: def.id });
-        drawCard(ctx, atlas, t, data, def, r, def.id === selected[tabIdx]);
+        const i = first + k;
+        cardHits.push({ r, i });
+        const hov = inRect(r, mx, my);
+        if (hov) hoverDef = def;
+        drawCard(ctx, data, def, r, i === index, hov, L.named);
       });
 
-      const sel = list.find((d) => d.id === selected[tabIdx]) ?? (list[0] as CompanionDef);
-      drawDetail(ctx, atlas, t, data, sel, detail, message);
+      const sel0 = list[index] ?? (list[0] as CompanionDef);
+      drawDetail(ctx, data, sel0, L.detail, L.tier);
 
       // Buttons: paging on the left, Equip and Back on the right.
       buttons.begin();
-      const by = height - 20;
-      buttons.add(
-        { x: 6, y: by, w: 40, h: 16 },
-        'Prev',
-        () => (pages[tabIdx] = page - 1),
-        page <= 0,
-      );
-      buttons.add(
-        { x: 80, y: by, w: 40, h: 16 },
-        'Next',
-        () => (pages[tabIdx] = page + 1),
-        page >= pageCount - 1,
-      );
-      const owned = !!data.owned[sel.id];
-      const equipped = isEquipped(data, sel);
-      const label = !owned
-        ? 'Locked'
-        : sel.kind === 'hero' && equipped
+      const by = L.buttonsY;
+      const left = g.x;
+      if (pages > 1) {
+        const mid = Math.floor((left + (L.detail.x - 8)) / 2);
+        buttons.add(
+          { x: left, y: by, w: 40, h: 16 },
+          'Prev',
+          () => select((page - 1) * perPage),
+          page <= 0,
+          { key: 'prev' },
+        );
+        buttons.add(
+          { x: L.detail.x - 8 - 40, y: by, w: 40, h: 16 },
+          'Next',
+          () => select((page + 1) * perPage),
+          page >= pages - 1,
+          { key: 'next' },
+        );
+        drawText(ctx, `${page + 1}/${pages}`, mid, by + 11, UI.soft, 'center');
+      }
+      const owned = !!data.owned[sel0.id];
+      const equipped = isEquipped(data, sel0);
+      const eqLabel = !owned
+        ? 'Spawner'
+        : sel0.kind === 'hero' && equipped
           ? 'Equipped'
           : equipped
             ? 'Unequip'
             : 'Equip';
+      const bw = Math.min(78, Math.floor((L.detail.w - 4) / 2));
       buttons.add(
-        { x: width - 6 - 50 - 6 - 72, y: by, w: 72, h: 16 },
-        label,
-        () => toggleEquip(sel),
-        !owned || (sel.kind === 'hero' && equipped),
+        { x: width - 6 - bw * 2 - 4, y: by, w: bw, h: 16 },
+        eqLabel,
+        () => (owned ? toggleEquip(sel0) : toSpawner()),
+        owned && sel0.kind === 'hero' && equipped,
+        {
+          key: 'equip',
+          variant: !owned ? 'gold' : equipped && sel0.kind !== 'hero' ? 'normal' : 'primary',
+          icon: !owned ? 'egg' : undefined,
+        },
       );
-      buttons.add({ x: width - 6 - 50, y: by, w: 50, h: 16 }, 'Back', onBack);
+      buttons.add({ x: width - 6 - bw, y: by, w: bw, h: 16 }, 'Back', onBack, false, {
+        key: 'back',
+      });
       buttons.draw(view);
-      drawText(ctx, `${page + 1}/${pageCount}`, 63, by + 11, '#cfcfd8', 'center');
+
+      // Tooltip for the card under the pointer.
+      const hd = hoverDef as CompanionDef | null;
+      if (hd && !buttons.over(mx, my)) {
+        const have = data.owned[hd.id];
+        const lines = have
+          ? [
+              RARITY_LABEL[hd.rarity],
+              hd.kind === 'hero'
+                ? `${hd.passiveName}`
+                : `Level ${have.level}/${MAX_COMPANION_LEVEL}`,
+            ]
+          : [RARITY_LABEL[hd.rarity], 'Found in the Spawner'];
+        drawTooltip(
+          ctx,
+          lines,
+          mx,
+          my,
+          width,
+          height,
+          RARITY_COLOR[hd.rarity],
+          have ? hd.name : '???',
+        );
+      }
     },
     onMove(x, y) {
+      mx = x;
+      my = y;
       buttons.move(x, y);
     },
     onClick(x, y) {
+      mx = x;
+      my = y;
       if (buttons.click(x, y)) return;
       const tabHit = tabRects.findIndex((r) => inRect(r, x, y));
       if (tabHit >= 0) {
-        if (tabHit !== tabIdx) app.audio.play('click');
         setTab(tabHit);
         return;
       }
-      const hit = cardHits.find((c) => inRect(c.r, x, y));
-      if (hit) {
-        selected[tabIdx] = hit.id;
-        message = '';
+      const chip = chipRects.findIndex((r) => inRect(r, x, y));
+      if (chip >= 0) {
+        section = chip;
         app.audio.play('click');
+        return;
       }
+      const hit = cardHits.find((c) => inRect(c.r, x, y));
+      if (hit) select(hit.i);
     },
     onKey(code) {
-      if (code === 'Escape') onBack();
-      else if (code === 'ArrowLeft') setTab(tabIdx - 1);
-      else if (code === 'ArrowRight') setTab(tabIdx + 1);
+      if (code === 'PageUp') select((pageOf(sel[tabIdx] ?? 0, perPage) - 1) * perPage);
+      else if (code === 'PageDown') select((pageOf(sel[tabIdx] ?? 0, perPage) + 1) * perPage);
+      else if (code === 'Digit1' || code === 'Digit2' || code === 'Digit3')
+        section = Number(code.slice(5)) - 1;
+      else {
+        const ev = keyToNav(code);
+        if (ev === 'ok' && buttons.keyboardActive && buttons.activate()) return;
+        if (ev) nav(ev, lastCols);
+      }
     },
   };
 }

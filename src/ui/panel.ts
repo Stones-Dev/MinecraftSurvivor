@@ -39,7 +39,8 @@ export const UI = {
 
 /** Hash of a pixel to [0, 1). */
 export function noise2(x: number, y: number, seed = 0): number {
-  let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(seed, 1442695041)) | 0;
+  let h =
+    (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(seed, 1442695041)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
@@ -48,8 +49,7 @@ export function noise2(x: number, y: number, seed = 0): number {
 /** Colour `c` (#rrggbb) moved towards white (k > 0) or black (k < 0) by |k| (0..1). */
 export function shade(c: string, k: number): string {
   const n = parseInt(c.slice(1), 16);
-  const f = (v: number): number =>
-    Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k));
+  const f = (v: number): number => Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k));
   const r = f((n >> 16) & 255);
   const g = f((n >> 8) & 255);
   const b = f(n & 255);
@@ -129,7 +129,7 @@ function fillTile(ctx: CanvasRenderingContext2D, name: TileName, r: Rect): void 
 /** Full-screen menu backdrop: dim dirt tiles with a soft vignette (the options-screen look). */
 export function drawBackdrop(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   fillTile(ctx, 'dirt', { x: 0, y: 0, w, h });
-  ctx.fillStyle = 'rgba(10,8,18,0.55)';
+  ctx.fillStyle = 'rgba(10,8,18,0.34)';
   ctx.fillRect(0, 0, w, h);
   const g = ctx.createRadialGradient(
     w / 2,
@@ -232,12 +232,7 @@ export function drawSlot(ctx: CanvasRenderingContext2D, r: Rect, s: SlotStyle = 
 }
 
 /** Progress bar: dark trough, coloured fill with a light top line. */
-export function drawBar(
-  ctx: CanvasRenderingContext2D,
-  r: Rect,
-  frac: number,
-  color: string,
-): void {
+export function drawBar(ctx: CanvasRenderingContext2D, r: Rect, frac: number, color: string): void {
   ctx.fillStyle = '#06060a';
   ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#23232c';
@@ -477,18 +472,26 @@ export function drawButton(
   }
   if (text) drawText(ctx, text, left + iconW + gap, base, textColor);
   if (style.badge) drawBadge(ctx, x + w - 5, y - 3, style.badge);
-  if (style.focused && !disabled) {
-    const pulse = Math.floor((style.tick ?? 0) * 3) % 2 === 0;
-    ctx.fillStyle = pulse ? UI.gold : '#fff3a8';
-    ctx.fillRect(x - 1, y - 1, w + 2, 1);
-    ctx.fillRect(x - 1, y + h, w + 2, 1);
-    ctx.fillRect(x - 1, y, 1, h);
-    ctx.fillRect(x + w, y, 1, h);
-  }
+  if (style.focused && !disabled) drawFocusRing(ctx, r, style.tick ?? 0);
+}
+
+/** 1 px gold ring just outside `r` (keyboard / gamepad focus), pulsing with `tick` seconds. */
+export function drawFocusRing(ctx: CanvasRenderingContext2D, r: Rect, tick = 0): void {
+  const { x, y, w, h } = r;
+  ctx.fillStyle = Math.floor(tick * 3) % 2 === 0 ? UI.gold : '#fff3a8';
+  ctx.fillRect(x - 1, y - 1, w + 2, 1);
+  ctx.fillRect(x - 1, y + h, w + 2, 1);
+  ctx.fillRect(x - 1, y, 1, h);
+  ctx.fillRect(x + w, y, 1, h);
 }
 
 /** Red notification badge centred on (cx, cy + 4): "!" or a short count. */
-export function drawBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, text: string): void {
+export function drawBadge(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  text: string,
+): void {
   const tw = textWidth(text);
   const w = Math.max(9, tw + 5);
   const x = Math.round(cx - w / 2);

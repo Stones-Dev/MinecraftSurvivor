@@ -4,7 +4,7 @@ import { ICON_DATA, ICON_NAMES, ICON_SIZE } from '../src/ui/icons';
 describe('code-drawn icons', () => {
   it('uses a 12 px grid and lists unique names', () => {
     expect(ICON_SIZE).toBe(12);
-    expect(ICON_NAMES.length).toBeGreaterThanOrEqual(62);
+    expect(ICON_NAMES.length).toBeGreaterThanOrEqual(63);
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
   });
 

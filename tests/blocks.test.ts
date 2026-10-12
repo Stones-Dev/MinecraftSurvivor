@@ -120,6 +120,18 @@ describe('block texture library', () => {
     }
   });
 
+  it('liquid frames keep the same look while they move (no frame drops into crust or bank)', () => {
+    for (const set of [liquidSet(LIQUID.LAVA, 0), liquidSet(LIQUID.WATER, BIOME_INDEX.swamp)]) {
+      const means = Array.from({ length: LIQUID_FRAMES }, (_, f) => {
+        const frame = set.subarray(f * TEX_AREA, (f + 1) * TEX_AREA);
+        return frame.reduce((a, c) => a + lum(c), 0) / TEX_AREA;
+      });
+      const lo = Math.min(...means);
+      const hi = Math.max(...means);
+      expect(hi - lo).toBeLessThan(hi * 0.06);
+    }
+  });
+
   it('water animates and draws its shores; swamp water is greener than plains water', () => {
     const set = liquidSet(LIQUID.WATER, BIOME_INDEX.plains);
     const frame = (mask: number, f: number): Uint32Array =>

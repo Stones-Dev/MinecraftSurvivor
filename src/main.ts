@@ -16,6 +16,7 @@ import { cloudConfigured } from './net/config';
 import { bindSaveToAuth, leaderboardFor } from './net/session';
 import type { WeaponId } from './weapons/types';
 import { aboutScreen } from './ui/aboutScreen';
+import { avatarDataUrl } from './ui/avatar';
 import { collectionScreen } from './ui/collectionScreen';
 import { initFont } from './ui/font';
 import { galleryScreen } from './ui/gallery';
@@ -119,7 +120,11 @@ async function boot(): Promise<void> {
     openAccount: async (tab) => {
       const m = await import('./ui/authOverlay');
       await m.openAuthOverlay(auth, {
-        heroes: HEROES.map((h) => ({ id: h.id, name: h.name })),
+        heroes: HEROES.map((h) => ({
+          id: h.id,
+          name: h.name,
+          icon: avatarDataUrl(atlas, h.id) || undefined,
+        })),
         initialTab: tab,
         textScale: store.load().settings.accessibility.textScale,
       });
@@ -138,10 +143,11 @@ async function boot(): Promise<void> {
       touch.setMode(s.accessibility.touchControls);
       audio.refresh();
     },
-    startRun: (loadout?: RunLoadout) =>
+    startRun: (loadout?: RunLoadout) => {
+      const lo = loadout ?? debugLoadout();
       router.reset(
         runScreen(app, {
-          loadout: loadout ?? debugLoadout(),
+          loadout: lo,
           seed: num('seed', Date.now() % 1_000_000_000),
           startTime: params.has('debug') ? num('t', 0) : 0,
           debug: params.has('debug'),
@@ -155,9 +161,11 @@ async function boot(): Promise<void> {
           portal: params.has('debug') && params.has('portal'),
           trader: params.has('debug') && params.has('trader'),
           villager: params.has('debug') && params.has('villager'),
-          biome: params.has('debug') ? biomeParam(params.get('biome')) : undefined,
+          // `?biome=` (debug) wins over the start biome picked in the run setup.
+          biome: (params.has('debug') ? biomeParam(params.get('biome')) : undefined) ?? lo.startBiome,
         }),
-      ),
+      );
+    },
   };
 
   store.onDataReplaced(() => app.applySettings());
@@ -192,7 +200,7 @@ async function boot(): Promise<void> {
   } else if (params.has('run')) {
     app.startRun();
   } else {
-    router.push(titleScreen(router, () => hubScreen(app)));
+    router.push(titleScreen(app, () => hubScreen(app)));
   }
 
   const unlock = (): void => {

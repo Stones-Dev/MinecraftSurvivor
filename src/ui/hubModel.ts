@@ -308,3 +308,229 @@ export function toastSlide(age: number, distance = 10): number {
   const k = Math.max(0, Math.min(1, age / 0.2));
   return Math.round((1 - k * k) * -distance);
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Hub layout (art-resolution rectangles; pure so it can be tested at every size).
+
+export interface UiRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface HubLayout {
+  tier: LayoutTier;
+  margin: number;
+  profile: UiRect;
+  /** Slot for the daily reward banner, under the profile chip. */
+  banner: UiRect;
+  /** Resource pills sit on this baseline-top y and end at `pillsRight`. */
+  pillsY: number;
+  pillsRight: number;
+  play: UiRect;
+  /** Eight secondary buttons, row by row (two columns). */
+  tiles: UiRect[];
+  /** Hero ability card under the hero. */
+  card: UiRect;
+  /** Where the hero's feet stand (screen px) and how wide the hero's stage is. */
+  stage: { x: number; y: number; halfW: number };
+  /** Hero draw scale for the tier (integer). */
+  heroScale: number;
+  /** Logo in the hero's zone under the chip (large tier only). */
+  logo: { cx: number; y: number; block: number } | null;
+  /** Free strip under the button column (records / hints), null when too short. */
+  footer: UiRect | null;
+}
+
+const LOGO_COLS = 59;
+
+export function hubLayout(w: number, h: number): HubLayout {
+  const tier = layoutTier(w, h);
+  const m = 6;
+  const chipW = tier === 'compact' ? 106 : tier === 'normal' ? 128 : 150;
+  const chipH = tier === 'compact' ? 24 : 28;
+  const profile = { x: m, y: m, w: chipW, h: chipH };
+  const banner = { x: m, y: profile.y + profile.h + 3, w: chipW, h: tier === 'compact' ? 14 : 16 };
+  const tileW = tier === 'compact' ? 80 : tier === 'normal' ? 94 : 124;
+  const gap = tier === 'large' ? 5 : 4;
+  const colW = tileW * 2 + gap;
+  const colX = w - m - colW;
+  const pillsY = m;
+  const colY = pillsY + 14 + (tier === 'compact' ? 5 : 7);
+  const playH = tier === 'compact' ? 22 : tier === 'normal' ? 26 : 36;
+  const tileMax = tier === 'compact' ? 18 : tier === 'normal' ? 20 : 30;
+  const rowsGap = tier === 'compact' ? 3 : tier === 'normal' ? 4 : 5;
+  const free = h - m - colY - playH - gap - 3 * rowsGap;
+  const tileH = Math.max(12, Math.min(tileMax, Math.floor(free / 4)));
+  const play = { x: colX, y: colY, w: colW, h: playH };
+  const tiles: UiRect[] = [];
+  for (let i = 0; i < 8; i++) {
+    tiles.push({
+      x: colX + (i % 2) * (tileW + gap),
+      y: play.y + play.h + gap + Math.floor(i / 2) * (tileH + rowsGap),
+      w: tileW,
+      h: tileH,
+    });
+  }
+  const bottom = (tiles[7]?.y ?? 0) + tileH;
+  const footerH = Math.min(tier === 'large' ? 34 : 30, h - m - bottom - 4);
+  const footer = footerH >= 9 ? { x: colX, y: bottom + 4, w: colW, h: footerH } : null;
+  const zoneW = colX - m - 8;
+  const cardH = tier === 'compact' ? 50 : tier === 'normal' ? 68 : 66;
+  const card = { x: m, y: Math.max(m, h - m - cardH), w: zoneW, h: Math.min(cardH, h - 2 * m) };
+  const heroScale = tier === 'large' ? 3 : 2;
+  const stage = { x: m + Math.floor(zoneW / 2), y: card.y - 13, halfW: Math.floor(zoneW / 2) };
+  // The big hub logo only fits in the large tier: in the hero's zone, under the chip and the daily banner.
+  const logoTop = banner.y + banner.h + 6;
+  const block = Math.min(6, Math.floor((zoneW - 10) / LOGO_COLS));
+  const logoH = 7 * block + Math.round(block * 0.45) + 6;
+  const logo =
+    tier === 'large' && block >= 4 && stage.y - 3 * 32 - 10 > logoTop + logoH
+      ? { cx: m + Math.floor(zoneW / 2), y: logoTop, block }
+      : null;
+  return {
+    tier,
+    margin: m,
+    profile,
+    banner,
+    pillsY,
+    pillsRight: w - m,
+    play,
+    tiles,
+    card,
+    stage,
+    heroScale,
+    logo,
+    footer,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// The hero and companions strolling on the hub's grass.
+
+export interface Walker {
+  /** Offset from the stage centre in px. */
+  x: number;
+  dir: 1 | -1;
+  walking: boolean;
+}
+
+/** Slots (px relative to the hero) where the pet and the allies like to stand. */
+export const FOLLOW_SLOTS: readonly number[] = [-30, 32, 58];
+
+/**
+ * The equipped hero strolls back and forth within `range` px of the stage centre now and then; the pet and
+ * allies trot after it and settle beside it. Deterministic for a seed.
+ */
+export class Troupe {
+  readonly hero: Walker = { x: 0, dir: 1, walking: false };
+  readonly followers: Walker[];
+  private target = 0;
+  private wait: number;
+  private readonly rng: Rng;
+
+  constructor(
+    seed: number,
+    private readonly range: number,
+    followers: number,
+  ) {
+    this.rng = new Rng(seed);
+    this.followers = Array.from({ length: followers }, (_, i) => ({
+      x: FOLLOW_SLOTS[i] ?? 40,
+      dir: 1 as 1 | -1,
+      walking: false,
+    }));
+    this.wait = this.rng.range(2.5, 4.5);
+  }
+
+  /** Resize the group (the loadout changed). */
+  setFollowers(n: number): void {
+    while (this.followers.length < n) {
+      this.followers.push({
+        x: this.hero.x + (FOLLOW_SLOTS[this.followers.length] ?? 40),
+        dir: this.hero.dir,
+        walking: false,
+      });
+    }
+    this.followers.length = n;
+  }
+
+  update(dt: number): void {
+    const h = this.hero;
+    if (h.walking) {
+      const d = this.target - h.x;
+      const step = 24 * dt;
+      if (Math.abs(d) <= step) {
+        h.x = this.target;
+        h.walking = false;
+        this.wait = this.rng.range(3, 6.5);
+      } else {
+        h.x += Math.sign(d) * step;
+        h.dir = d > 0 ? 1 : -1;
+      }
+    } else {
+      this.wait -= dt;
+      if (this.wait <= 0) {
+        // A stroll of at least 14 px, kept inside the range (followers need room on both sides).
+        const lo = -this.range;
+        const hi = this.range;
+        let t = this.rng.range(lo, hi);
+        if (Math.abs(t - h.x) < 14) t = h.x > 0 ? lo * 0.6 : hi * 0.6;
+        this.target = Math.max(lo, Math.min(hi, t));
+        h.walking = true;
+      }
+    }
+    this.followers.forEach((f, i) => {
+      const want = h.x + (FOLLOW_SLOTS[i] ?? 40);
+      const d = want - f.x;
+      const step = 32 * dt;
+      if (Math.abs(d) > 4 || (f.walking && Math.abs(d) > 0.5)) {
+        f.x += Math.sign(d) * Math.min(step, Math.abs(d));
+        f.dir = d > 0 ? 1 : -1;
+        f.walking = Math.abs(d) > 0.5;
+      } else {
+        f.walking = false;
+        f.dir = h.dir;
+      }
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Collection layout.
+
+export interface CollectionLayout {
+  tier: LayoutTier;
+  tabsY: number;
+  detail: UiRect;
+  /** Card grid: origin, card size, spacing and how many fit per page. */
+  grid: { x: number; y: number; cw: number; ch: number; gap: number; cols: number; rows: number };
+  /** Cards are wide enough to carry the name under the portrait. */
+  named: boolean;
+  /** Top of the button row. */
+  buttonsY: number;
+}
+
+export function collectionLayout(w: number, h: number): CollectionLayout {
+  const tier = layoutTier(w, h);
+  const m = 6;
+  const top = 42;
+  const bottom = h - 24;
+  const detailW = tier === 'compact' ? 136 : tier === 'normal' ? 172 : 224;
+  const detail = { x: w - m - detailW, y: top, w: detailW, h: Math.max(20, bottom - top) };
+  const [cw, ch, gap] =
+    tier === 'compact' ? [30, 34, 2] : tier === 'normal' ? [38, 46, 3] : [58, 72, 4];
+  const areaW = detail.x - 4 - m;
+  const cols = Math.max(1, Math.floor((areaW + gap) / (cw + gap)));
+  const rows = Math.max(1, Math.floor((bottom - top + gap) / (ch + gap)));
+  const gx = m + Math.max(0, Math.floor((areaW - (cols * (cw + gap) - gap)) / 2));
+  return {
+    tier,
+    tabsY: 24,
+    detail,
+    grid: { x: gx, y: top, cw, ch, gap, cols, rows },
+    named: tier !== 'compact',
+    buttonsY: h - 20,
+  };
+}

@@ -3,9 +3,7 @@ import type { App } from '../app';
 import type { View } from '../core/canvas';
 import type { RunState } from '../game';
 import { ITEMS } from '../data/items';
-import { baseMods } from '../data/upgrades';
-import { runReward } from '../systems/economy';
-import { applyLoadoutMods } from '../systems/meta';
+import { missionPreview } from '../systems/missions';
 import { resolveItemChoice } from '../systems/items';
 import {
   applyCard,
@@ -16,7 +14,19 @@ import {
 } from '../systems/levelup';
 import { cb } from '../core/accessibility';
 import { drawIcon } from './icons';
-import { drawButton, drawPanel, drawText, inRect, type Rect, wrap } from './panel';
+import { formatClock, shortNumber } from './metaWidgets';
+import {
+  drawBar,
+  drawButton,
+  drawPanel,
+  drawText,
+  fitText,
+  inRect,
+  type Rect,
+  UI,
+  wrap,
+} from './panel';
+import { resultsScreen } from './resultsScreen';
 import type { Screen } from './router';
 
 const RARITY_COLOR = { common: '#101014', rare: '#3b78d8', epic: '#a24ad8', legendary: '#e8b923' };
@@ -190,7 +200,8 @@ export function itemChoiceScreen(app: App, run: RunState): Screen {
 }
 
 /** Shown once when the Warden falls: carry on into Endless or finish the run. */
-export function victoryScreen(app: App, run: RunState): Screen {
+/** `persist` is false for debug runs (their results are shown but never saved). */
+export function victoryScreen(app: App, run: RunState, persist = true): Screen {
   app.audio.play('victory');
   let hover = -1;
   let lastView: View | null = null;
@@ -237,7 +248,7 @@ export function victoryScreen(app: App, run: RunState): Screen {
       if (!lastView) return;
       const i = btns(lastView).findIndex((r) => inRect(r, x, y));
       if (i === 0) app.router.pop();
-      if (i === 1) app.router.replace(resultsScreen(app, run));
+      if (i === 1) app.router.replace(resultsScreen(app, run, persist));
     },
     onKey(code) {
       if (code === 'Enter' || code === 'Space') app.router.pop();
@@ -245,43 +256,104 @@ export function victoryScreen(app: App, run: RunState): Screen {
   };
 }
 
-export function pauseScreen(app: App, onQuit: () => void): Screen {
+/**
+ * Pause menu. With the live `run` it also shows the run so far and how today's missions would stand if
+ * the run ended now (the sim is frozen, so this is computed once).
+ */
+export function pauseScreen(app: App, onQuit: () => void, run?: RunState): Screen {
   let hover = -1;
   let lastView: View | null = null;
-  const btns = (view: View): Rect[] => {
+  const info = run ? run.stats.snapshot(run) : null;
+  const missions = info
+    ? missionPreview(app.data(), info)
+        .sort((x, y) => y.projected - y.progress - (x.projected - x.progress))
+        .slice(0, 5)
+    : [];
+  const rowsFor = (view: View): number => Math.min(missions.length, view.height < 220 ? 3 : 5);
+  const layout = (view: View): { panel: Rect; btns: Rect[] } => {
+    const w = Math.min(view.width - 12, 230);
     const cx = Math.floor(view.width / 2);
-    const y = Math.floor(view.height / 2);
-    return [
-      { x: cx - 50, y: y - 8, w: 100, h: 18 },
-      { x: cx - 50, y: y + 16, w: 100, h: 18 },
-    ];
+    const rows = rowsFor(view);
+    const bodyH = (info ? 12 : 0) + (rows > 0 ? 11 + rows * 12 : 0);
+    const h = 18 + bodyH + 2 * 18 + 6 + 8 + 12;
+    const panel = {
+      x: cx - Math.floor(w / 2),
+      y: Math.max(2, Math.floor((view.height - h) / 2)),
+      w,
+      h,
+    };
+    const by = panel.y + h - 12 - 2 * 18 - 6;
+    return {
+      panel,
+      btns: [
+        { x: cx - 50, y: by, w: 100, h: 16 },
+        { x: cx - 50, y: by + 20, w: 100, h: 16 },
+      ],
+    };
   };
   const resume = (): void => app.router.pop();
   return {
     update() {},
     render(view) {
       lastView = view;
-      dim(view, 0.55);
-      drawText(
-        view.ctx,
-        'PAUSED',
-        view.width / 2,
-        Math.floor(view.height / 2) - 22,
-        '#fff',
-        'center',
-      );
-      const [a, b] = btns(view);
+      dim(view, 0.62);
+      const { ctx } = view;
+      const { panel, btns } = layout(view);
+      drawPanel(ctx, panel);
+      drawText(ctx, 'PAUSED', view.width / 2, panel.y + 13, '#fff', 'center');
+      let y = panel.y + 26;
+      if (info && run) {
+        drawText(
+          ctx,
+          fitText(
+            `${formatClock(run.time)}   Kills ${run.kills}   Level ${run.level}`,
+            panel.w - 12,
+          ),
+          view.width / 2,
+          y,
+          UI.soft,
+          'center',
+        );
+        y += 12;
+      }
+      const rows = rowsFor(view);
+      if (rows > 0) {
+        drawText(ctx, "TODAY'S MISSIONS", panel.x + 8, y + 3, UI.gold);
+        y += 11;
+        missions.slice(0, rows).forEach((m, i) => {
+          const ry = y + i * 12;
+          const shown = m.projected;
+          const doneNow = shown >= m.def.target;
+          const num = `${shortNumber(shown)}/${shortNumber(m.def.target)}`;
+          drawText(
+            ctx,
+            fitText(m.def.text, panel.w - 16 - 52),
+            panel.x + 8,
+            ry + 5,
+            doneNow ? UI.green : UI.text,
+          );
+          drawText(ctx, num, panel.x + panel.w - 8, ry + 5, doneNow ? UI.green : UI.soft, 'right');
+          drawBar(
+            ctx,
+            { x: panel.x + 8, y: ry + 7, w: panel.w - 16, h: 3 },
+            shown / m.def.target,
+            doneNow ? UI.green : '#4aa0ff',
+          );
+        });
+      }
+      const [a, b] = btns;
       if (a && b) {
-        drawButton(view.ctx, a, 'Resume (Esc)', hover === 0);
-        drawButton(view.ctx, b, 'Quit to menu', hover === 1);
+        drawButton(ctx, a, 'Resume (Esc)', hover === 0, false, { variant: 'primary' });
+        drawButton(ctx, b, 'Quit to menu', hover === 1);
+        drawText(ctx, 'Quitting forfeits this run', view.width / 2, b.y + 28, UI.faint, 'center');
       }
     },
     onMove(x, y) {
-      if (lastView) hover = btns(lastView).findIndex((r) => inRect(r, x, y));
+      if (lastView) hover = layout(lastView).btns.findIndex((r) => inRect(r, x, y));
     },
     onClick(x, y) {
       if (!lastView) return;
-      const i = btns(lastView).findIndex((r) => inRect(r, x, y));
+      const i = layout(lastView).btns.findIndex((r) => inRect(r, x, y));
       if (i === 0) resume();
       if (i === 1) onQuit();
     },
@@ -291,98 +363,4 @@ export function pauseScreen(app: App, onQuit: () => void): Screen {
   };
 }
 
-/** Results: totals, emeralds earned, records. Saves progress when created. */
-export function resultsScreen(app: App, run: RunState, persist = true): Screen {
-  const data = app.data();
-  // Permanent bonuses only (Looting, Pig): Golden Hour and other timed buffs must not depend on the final second.
-  const meta = baseMods();
-  applyLoadoutMods(run.loadout, meta);
-  const earned = runReward(
-    {
-      timeSec: run.time,
-      kills: run.kills,
-      bosses: run.bossKills,
-      miniBosses: run.miniKills,
-      picked: run.emeraldsPicked,
-    },
-    meta.payoutMult,
-  );
-  const newTime = Math.floor(run.time) > Math.floor(data.records.bestTimeSec);
-  const newKills = run.kills > data.records.bestKills;
-  if (persist) {
-    data.currencies.emeralds += earned;
-    data.records.runs += 1;
-    data.flags.tutorialDone = true;
-    if (run.won) data.records.wins += 1;
-    data.currencies.spawnEggs += run.spawnEggs;
-    data.currencies.rareSpawnEggs += run.rareSpawnEggs;
-    data.records.bestTimeSec = Math.max(data.records.bestTimeSec, Math.floor(run.time));
-    data.records.bestKills = Math.max(data.records.bestKills, run.kills);
-    app.store.save(data);
-  }
-  let hover = false;
-  let lastView: View | null = null;
-  const btn = (view: View): Rect => ({
-    x: Math.floor(view.width / 2) - 50,
-    y: Math.floor(view.height / 2) + 52,
-    w: 100,
-    h: 18,
-  });
-  const m = Math.floor(run.time / 60);
-  const s = Math.floor(run.time % 60);
-  return {
-    update() {},
-    render(view) {
-      lastView = view;
-      const { ctx, width, height } = view;
-      ctx.fillStyle = '#14141c';
-      ctx.fillRect(0, 0, width, height);
-      const panel: Rect = {
-        x: Math.floor(width / 2) - 90,
-        y: Math.floor(height / 2) - 62,
-        w: 180,
-        h: 108,
-      };
-      drawPanel(ctx, panel);
-      drawText(
-        ctx,
-        run.won ? 'NIGHT SURVIVED' : 'YOU DIED',
-        width / 2,
-        panel.y + 16,
-        run.won ? '#7dff9a' : '#ff6b6b',
-        'center',
-      );
-      const rows: [string, string, boolean][] = [
-        ['Time', `${m}:${s.toString().padStart(2, '0')}`, newTime],
-        ['Kills', String(run.kills), newKills],
-        ['Level', String(run.level), false],
-        ['Bosses / mini-bosses', `${run.bossKills} / ${run.miniKills}`, false],
-        ['Spawn Eggs (rare)', `${run.spawnEggs} (${run.rareSpawnEggs})`, false],
-        ['Emeralds earned', `+${earned}`, false],
-      ];
-      rows.forEach(([k, v, record], i) => {
-        drawText(ctx, k, panel.x + 14, panel.y + 36 + i * 14, '#c9c9d4');
-        drawText(ctx, v, panel.x + panel.w - 14, panel.y + 36 + i * 14, '#fff', 'right');
-        if (record)
-          drawText(
-            ctx,
-            'NEW RECORD',
-            panel.x + panel.w / 2,
-            panel.y + 36 + i * 14,
-            '#ffe27a',
-            'center',
-          );
-      });
-      drawButton(ctx, btn(view), 'Back to menu', hover);
-    },
-    onMove(x, y) {
-      if (lastView) hover = inRect(btn(lastView), x, y);
-    },
-    onClick(x, y) {
-      if (lastView && inRect(btn(lastView), x, y)) app.goHub();
-    },
-    onKey(code) {
-      if (code === 'Enter' || code === 'Space') app.goHub();
-    },
-  };
-}
+export { resultsScreen };

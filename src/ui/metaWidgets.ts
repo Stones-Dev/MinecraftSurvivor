@@ -206,3 +206,44 @@ export function drawRewardInline(
   if (reward.rareSpawnEggs) part('star', `+${reward.rareSpawnEggs} rare`, '#c98cff');
   return cx - x;
 }
+
+export type MedalState = 'unlocked' | 'locked' | 'hidden';
+
+/** A round 20x20 medal (gold rim when unlocked, iron when locked); `icon` is drawn in the middle. */
+export function drawMedal(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  state: MedalState,
+  icon: IconName,
+): void {
+  const R = 10;
+  const span = (r: number, rad: number): [number, number] => {
+    const dy = r + 0.5 - R;
+    const half = Math.sqrt(Math.max(0, rad * rad - dy * dy));
+    const w = Math.round(half * 2);
+    return [R - Math.floor(w / 2), w];
+  };
+  const [rim, face, shine] =
+    state === 'unlocked' ? ['#8a5d12', '#f2b630', '#ffe48a'] : ['#101014', '#34343e', '#44444f'];
+  for (let r = 0; r < 2 * R; r++) {
+    const [ox, ow] = span(r, R);
+    ctx.fillStyle = rim;
+    ctx.fillRect(x + ox, y + r, ow, 1);
+    if (r >= 1 && r < 2 * R - 1) {
+      const [ix, iw] = span(r, R - 1.5);
+      ctx.fillStyle = face;
+      ctx.fillRect(x + ix, y + r, iw, 1);
+    }
+  }
+  ctx.fillStyle = shine;
+  ctx.fillRect(x + 6, y + 2, 5, 1);
+  ctx.fillRect(x + 4, y + 3, 2, 1);
+  if (state === 'hidden') {
+    drawText(ctx, '?', x + R, y + R + 3, '#8a8a98', 'center');
+    return;
+  }
+  if (state === 'locked') ctx.globalAlpha = 0.4;
+  drawIcon(ctx, icon, x + R - 6, y + R - 6);
+  ctx.globalAlpha = 1;
+}

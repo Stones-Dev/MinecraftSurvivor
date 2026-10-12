@@ -4,6 +4,7 @@ import { allyById, heroById, petById, type PetDef } from '../data/companions';
 import { kitOf } from '../data/heroKits';
 import type { Mods } from '../data/upgrades';
 import type { SaveData } from '../core/save';
+import type { BiomeId } from '../world/biomes';
 
 export interface LoadoutCompanion {
   id: string;
@@ -22,6 +23,8 @@ export interface RunLoadout {
   leadership: boolean;
   /** Shards (duplicates) collected for the chosen hero: they raise the ability rank (see abilityRank). */
   heroShards?: number;
+  /** Optional start biome picked in the run setup (the hero spawns on dry ground inside it); absent = the usual meadow. */
+  startBiome?: BiomeId;
 }
 
 /** Shards per ability rank, the rank cap and the per-rank bonuses (rank 1 is the base ability). */

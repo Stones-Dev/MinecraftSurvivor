@@ -78,8 +78,13 @@ export class MenuScene {
   private readonly kinds: Kind[];
   private lastW = 0;
   private lastH = 0;
+  /** Strolling mobs wanted and the camera drift amplitude (px); screens set these when they take over. */
+  walkerCount: number;
+  drift: number;
 
   constructor(private readonly opts: SceneOptions) {
+    this.walkerCount = opts.walkers;
+    this.drift = opts.drift;
     this.world = new World(opts.seed);
     this.renderer = new WorldRenderer(this.world);
     this.rng = new Rng(opts.seed ^ 0x5eed);
@@ -125,7 +130,7 @@ export class MenuScene {
 
   /** Camera offset of the slow drift (a gentle sway back and forth). */
   private driftX(): number {
-    return Math.round(this.opts.drift * Math.sin(this.time * 0.05));
+    return Math.round(this.drift * Math.sin(this.time * 0.05));
   }
 
   /**
@@ -153,12 +158,12 @@ export class MenuScene {
     this.baked = true;
 
     // Walkers: refill, recycle the ones that left the screen.
-    if (this.opts.walkers > 0 && this.walkers.length === 0) {
-      for (let i = 0; i < this.opts.walkers; i++) {
-        const k = this.spawn(camX, w, true);
-        if (k) this.walkers.push(k);
-      }
+    while (this.walkers.length < this.walkerCount) {
+      const k = this.spawn(camX, w, this.walkers.length === 0 || this.time < 1);
+      if (!k) break;
+      this.walkers.push(k);
     }
+    if (this.walkers.length > this.walkerCount) this.walkers.length = this.walkerCount;
     this.walkers.forEach((k, i) => {
       if (k.x < camX - 110 || k.x > camX + w + 110) {
         const n = this.spawn(camX, w, false);
@@ -188,7 +193,14 @@ export class MenuScene {
           const key = frameAt(anim, k.t);
           const left = k.kind.enemy ? ENEMIES[k.kind.enemy]?.faceLeft === true : false;
           this.renderer.drawShadow(ctx, k.x, k.y, 1, camX, camY);
-          atlas.draw(ctx, key, k.x - camX, k.y - camY, left ? k.dir > 0 : k.dir < 0, k.kind.scale ?? 1);
+          atlas.draw(
+            ctx,
+            key,
+            k.x - camX,
+            k.y - camY,
+            left ? k.dir > 0 : k.dir < 0,
+            k.kind.scale ?? 1,
+          );
         },
       });
     }
@@ -213,7 +225,12 @@ export class MenuScene {
     // Fireflies.
     for (const f of this.flies) {
       const span = w + 40;
-      const x = (((f.x * span - camX * f.depth * 0.6 + Math.sin(this.time * f.speed + f.phase) * 9) % span) + span) % span - 20;
+      const x =
+        ((((f.x * span - camX * f.depth * 0.6 + Math.sin(this.time * f.speed + f.phase) * 9) %
+          span) +
+          span) %
+          span) -
+        20;
       const y = f.y * h + Math.sin(this.time * f.speed * 1.3 + f.phase * 2) * 7;
       const glow = 0.35 + 0.65 * Math.max(0, Math.sin(this.time * 1.7 * f.speed + f.phase));
       ctx.globalAlpha = 0.22 * glow;
@@ -234,4 +251,16 @@ export class MenuScene {
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, w, h);
   }
+}
+
+let shared: MenuScene | null = null;
+let sharedFor: Atlas | null = null;
+
+/** The one live scene used by the title and the hub, so the world is baked only once. */
+export function sharedMenuScene(atlas: Atlas, biome?: BiomeId): MenuScene {
+  if (!shared || sharedFor !== atlas) {
+    shared = new MenuScene({ atlas, seed: 20261012, biome, walkers: 0, drift: 0 });
+    sharedFor = atlas;
+  }
+  return shared;
 }

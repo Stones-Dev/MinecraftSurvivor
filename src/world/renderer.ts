@@ -190,7 +190,7 @@ export class WorldRenderer {
     const x0 = camX - 24;
     const x1 = camX + w + 24;
     const y0 = camY - 8;
-    const y1 = camY + h + 48;
+    const y1 = camY + h + 64;
     return this.world
       .propsInRect(x0, y0, x1, y1)
       .map((prop) => ({ prop, alpha: 1, biome: prop.biome }));

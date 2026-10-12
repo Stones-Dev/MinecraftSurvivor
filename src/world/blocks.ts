@@ -124,7 +124,7 @@ function field(
 function rankTones(f: Float32Array, props: readonly number[], toneOffset = 0): Uint8Array {
   // Sort (value, index) pairs packed into one float: a typed-array sort with no comparator.
   const keys = new Float64Array(TEX_AREA);
-  for (let i = 0; i < TEX_AREA; i++) keys[i] = Math.floor((f[i] ?? 0) * 1e6) * TEX_AREA + i;
+  for (let i = 0; i < TEX_AREA; i++) keys[i] = Math.floor(((f[i] ?? 0) + 16) * 1e6) * TEX_AREA + i;
   keys.sort();
   const total = props.reduce((s, p) => s + p, 0);
   const out = new Uint8Array(TEX_AREA);
@@ -1171,7 +1171,7 @@ export function liquidSet(liquid: LiquidId, biome: number): Uint32Array {
       0.25,
     );
     const rnd = stream(8004);
-    const crests = Array.from({ length: 6 }, () => ({
+    const crests = Array.from({ length: 5 }, () => ({
       x: Math.floor(rnd() * TEX),
       y: Math.floor(rnd() * TEX),
       p: Math.floor(rnd() * LIQUID_FRAMES),

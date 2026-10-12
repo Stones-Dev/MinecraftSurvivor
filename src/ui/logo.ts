@@ -108,7 +108,12 @@ function paintLogo(b: number): LogoImages {
       g.fillStyle = shade(base, -0.12);
       const n = Math.max(1, Math.floor(b / 3));
       for (let i = 0; i < n; i++) {
-        g.fillRect(x + 1 + Math.floor(noise2(c.cx * 7 + i, c.cy, 3) * (b - 2)), y + 1 + Math.floor(noise2(c.cx, c.cy * 7 + i, 5) * (b - 2)), 1, 1);
+        g.fillRect(
+          x + 1 + Math.floor(noise2(c.cx * 7 + i, c.cy, 3) * (b - 2)),
+          y + 1 + Math.floor(noise2(c.cx, c.cy * 7 + i, 5) * (b - 2)),
+          1,
+          1,
+        );
       }
     }
     const lit = !at(c.cx, c.cy - 1);
@@ -148,7 +153,10 @@ function paintLogo(b: number): LogoImages {
 export function logoSize(b: number): { w: number; h: number } {
   const { cols } = logoCells();
   const depth = Math.max(1, Math.round(b * 0.45));
-  return { w: cols * b + depth + 4, h: LOGO_ROWS * b + depth + 4 + Math.max(2, Math.round(b * 0.5)) };
+  return {
+    w: cols * b + depth + 4,
+    h: LOGO_ROWS * b + depth + 4 + Math.max(2, Math.round(b * 0.5)),
+  };
 }
 
 /**

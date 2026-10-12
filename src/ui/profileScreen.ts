@@ -100,7 +100,7 @@ export function profileScreen(app: App, back: () => void): Screen {
       const tx = x0 + 4 + box + 6;
       const textW = x0 + w - 6 - tx;
       const name =
-        user?.kind === 'guest' || !user ? 'Guest' : user.name || data.profile.name || 'Player';
+        user?.kind === 'guest' || !user ? 'Adventurer' : user.name || data.profile.name || 'Player';
       const badge = accountBadge(user, auth.state, auth.backend !== null);
       const signedInCloud = user?.kind === 'cloud';
       const sync = syncLine(
@@ -159,7 +159,7 @@ export function profileScreen(app: App, back: () => void): Screen {
         const ay = by + Math.floor((ch - 16) / 2);
         buttons.add({ x: bx - 28, y: ay, w: 18, h: 16 }, '<', () => step(-1), ids.length < 2);
         buttons.add({ x: bx + cw + 10, y: ay, w: 18, h: 16 }, '>', () => step(1), ids.length < 2);
-        drawText(ctx, `${at + 1}/${ids.length}`, width / 2, top + 11, '#9a9aa8', 'right');
+        drawText(ctx, `${at + 1}/${ids.length}`, x0 + w - 6, top + 11, '#9a9aa8', 'right');
         const aw = Math.floor((w - 4) / 2);
         buttons.add({ x: x0, y: actY, w: aw, h: 14 }, 'Cancel', () => (mode = 'main'));
         buttons.add({ x: x0 + aw + 4, y: actY, w: aw, h: 14 }, 'Use this avatar', () =>
@@ -171,7 +171,7 @@ export function profileScreen(app: App, back: () => void): Screen {
 
       // ---- Lifetime stats ----
       const st = lifetimeStats(data);
-      const rowH = compact ? 10 : 13;
+      const rowH = compact ? 10 : height >= 230 ? 14 : 13;
       const statsTop = y0 + headH + 4;
       const statsH = rowH * 4 + 6;
       drawPanel(ctx, { x: x0, y: statsTop, w, h: statsH });
@@ -195,7 +195,7 @@ export function profileScreen(app: App, back: () => void): Screen {
 
       // ---- Best run per hero (the three best) ----
       const heroTop = statsTop + statsH + 4;
-      const cardH = Math.min(compact ? 22 : 30, actY - 4 - heroTop);
+      const cardH = Math.min(compact ? 22 : 34, actY - 4 - heroTop);
       const gap = 4;
       const tops = HEROES.filter((h) => (data.stats.perHero[h.id]?.runs ?? 0) > 0)
         .sort(

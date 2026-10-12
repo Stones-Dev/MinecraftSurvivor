@@ -42,3 +42,28 @@ export function drawAvatar(
   atlas.draw(ctx, key, cx, iy + size.h - 4, false, 1);
   ctx.restore();
 }
+
+const iconCache = new Map<string, string>();
+
+/** A hero's head-and-shoulders portrait as a `data:` URL (for the DOM account dialogs); '' without a canvas. */
+export function avatarDataUrl(atlas: Atlas, heroId: string, size = 24): string {
+  const key = `${heroId}:${size}`;
+  const hit = iconCache.get(key);
+  if (hit !== undefined) return hit;
+  let url = '';
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.imageSmoothingEnabled = false;
+      drawAvatar(ctx, atlas, heroId, { x: 0, y: 0, w: size, h: size });
+      url = canvas.toDataURL('image/png');
+    }
+  } catch {
+    // No DOM (tests) or a blocked canvas: the dialog falls back to letters.
+  }
+  iconCache.set(key, url);
+  return url;
+}

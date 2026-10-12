@@ -191,6 +191,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   let lastCamY = 0;
 
   let deathSting = false;
+  let runStarted = false;
 
   // Quality tier: fixed by the setting, or adapted to the measured frame time when set to auto.
   let autoTier: 0 | 1 | 2 = 2;
@@ -230,6 +231,18 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   return {
     enter() {
       window.addEventListener('keydown', onKey);
+      if (!opts.debug && !runStarted) {
+        // Anti-cheat timestamp for the leaderboard; fire and forget, never blocks the run.
+        runStarted = true;
+        try {
+          void app
+            .leaderboard()
+            .runStarted?.()
+            ?.catch(() => undefined);
+        } catch {
+          // Offline / signed out: nothing to record.
+        }
+      }
     },
     exit() {
       window.removeEventListener('keydown', onKey);
@@ -242,7 +255,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       }
       if (run.won && !run.victoryShown) {
         run.victoryShown = true;
-        router.push(victoryScreen(app, run));
+        router.push(victoryScreen(app, run, !opts.debug));
         return;
       }
       if (run.pendingItem !== null) {
@@ -253,14 +266,17 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       run.targetY = lastCamY + app.pointer.y;
       if (input.activePressed()) {
         const v = input.moveVector();
+        const itemBefore = run.item;
+        const cdBefore = run.itemCd;
         useItem(run, v.x, v.y);
+        if (run.itemCd > cdBefore || run.item !== itemBefore) run.stats.itemsUsed++;
       }
       if (input.abilityPressed?.()) {
         const v = input.moveVector();
         castAbility(run, { x: run.targetX, y: run.targetY, moveX: v.x, moveY: v.y });
       }
       if (input.pausePressed() && !run.player.dead) {
-        router.push(pauseScreen(app, () => app.goHub()));
+        router.push(pauseScreen(app, () => app.goHub(), run));
         return;
       }
       run.update(dt, input);

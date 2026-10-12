@@ -297,7 +297,7 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
         const user = app.auth.user();
         const badge = accountBadge(user, app.auth.state, app.auth.backend !== null);
         row(0, 'Player');
-        const shown = user && user.kind !== 'guest' ? user.name : 'Guest';
+        const shown = user && user.kind !== 'guest' ? user.name : 'Adventurer';
         drawText(ctx, fitText(shown, rowW - 100), x0 + 52, base(0), '#fff');
         drawText(ctx, badge.label, x0 + rowW - 5, base(0), badge.color, 'right');
         const sync = syncLine(
@@ -321,15 +321,6 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
           buttons.add(ctl(2, cloudOn ? 54 : 78, 58), cloudOn ? 'Sign in' : 'Local profile', () => {
             void app.openAccount(cloudOn ? 'signin' : 'create');
           });
-        }
-        if (!app.auth.cloudAvailable) {
-          drawText(
-            ctx,
-            fitText('Cloud save disabled; playing locally.', rowW),
-            x0 + 2,
-            rowY(3) + 10,
-            '#9a9aa8',
-          );
         }
       } else {
         row(0, 'Export save', 'minesurvive-save.json');

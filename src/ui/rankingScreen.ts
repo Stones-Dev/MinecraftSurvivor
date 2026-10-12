@@ -211,7 +211,7 @@ export function rankingScreen(app: App, back: () => void): Screen {
       const colHero = colTime - 56;
       drawText(ctx, '#', x0 + 4, headY, '#9a9aa8');
       drawText(ctx, 'Player', x0 + 36, headY, '#9a9aa8');
-      if (wide) drawText(ctx, 'Hero', colHero, headY, '#9a9aa8');
+      if (wide && online) drawText(ctx, 'Hero', colHero, headY, '#9a9aa8');
       drawText(ctx, 'Time', colTime, headY, '#9a9aa8', 'right');
       drawText(ctx, 'Kills', colKills, headY, '#9a9aa8', 'right');
       drawPanel(ctx, { x: x0, y: listTop - 1, w, h: fit * ROW_H + 3 });
@@ -259,13 +259,16 @@ export function rankingScreen(app: App, back: () => void): Screen {
           drawAvatar(
             ctx,
             app.atlas,
-            e.avatar || e.hero,
-            { x: x0 + 20, y: ry + 0, w: ROW_H, h: ROW_H },
+            // Local rows are all the player: show the hero of each best instead.
+            online ? e.avatar || e.hero : e.hero,
+            { x: x0 + 20, y: ry, w: ROW_H, h: ROW_H - 1 },
             0,
           );
           const nameRight = (wide ? colHero : colTime - 32) - 6;
-          drawText(ctx, fitText(e.nick, nameRight - (x0 + 36)), x0 + 36, ry + 8, col);
-          if (wide) drawText(ctx, heroById(e.hero).name, colHero, ry + 8, mine ? col : '#c8c8d0');
+          const who = online ? e.nick : heroById(e.hero).name;
+          drawText(ctx, fitText(who, nameRight - (x0 + 36)), x0 + 36, ry + 8, col);
+          if (wide && online)
+            drawText(ctx, heroById(e.hero).name, colHero, ry + 8, mine ? col : '#c8c8d0');
           drawText(ctx, formatClock(e.timeSec), colTime, ry + 8, col, 'right');
           drawText(ctx, compactNumber(e.kills), colKills, ry + 8, col, 'right');
         }
@@ -284,7 +287,10 @@ export function rankingScreen(app: App, back: () => void): Screen {
           const downR = { x: width - pad - 14, y: backY, w: 14, h: 16 };
           buttons.add(upR, '', () => move(-1), scroll <= 0);
           buttons.add(downR, '', () => move(1), scroll >= span);
-          arrows.push({ r: upR, up: true, off: scroll <= 0 }, { r: downR, up: false, off: scroll >= span });
+          arrows.push(
+            { r: upR, up: true, off: scroll <= 0 },
+            { r: downR, up: false, off: scroll >= span },
+          );
           const own = state.rows.findIndex((e) => e.uid === me);
           if (own >= 0) {
             buttons.add({ x: upR.x - 4 - 52, y: backY, w: 52, h: 16 }, 'Find me', () => {
