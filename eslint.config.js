@@ -10,6 +10,7 @@ export default tseslint.config(
       'assets-work/**',
       'reference/**',
       'public/**',
+      'tools/**',
     ],
   },
   js.configs.recommended,
