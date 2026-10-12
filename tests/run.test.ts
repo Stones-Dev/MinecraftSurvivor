@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { InputSource } from '../src/core/input';
+import { BASE_REGEN, baseMods } from '../src/data/upgrades';
 import { Player } from '../src/entities/player';
 import { RunState } from '../src/game';
 import { applyCard, buildOffer, finishOffer, gainXp } from '../src/systems/levelup';
@@ -40,6 +41,23 @@ describe('player damage', () => {
     p.hurt(50);
     expect(p.dead).toBe(true);
     expect(p.hp).toBe(0);
+  });
+});
+
+describe('base regeneration', () => {
+  it('is the tuned BASE_REGEN for a fresh hero and actually heals while hurt', () => {
+    // Balance constant (docs/BALANCE.md, v1.1 re-tune): the simulator medians depend on it.
+    expect(BASE_REGEN).toBe(0.7);
+    expect(baseMods().regen).toBe(BASE_REGEN);
+    const p = new Player();
+    p.regen = BASE_REGEN;
+    p.hp = 50;
+    p.maxHp = 100;
+    const world = new World(1);
+    const idle = new ScriptedInput();
+    idle.moveVector = () => ({ x: 0, y: 0 });
+    for (let i = 0; i < 600; i++) p.update(1 / 60, idle, world, 'plains', false);
+    expect(p.hp).toBeCloseTo(50 + 10 * BASE_REGEN, 1);
   });
 });
 

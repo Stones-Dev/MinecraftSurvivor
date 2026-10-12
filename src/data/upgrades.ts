@@ -88,6 +88,13 @@ export interface Mods {
   revive: number;
 }
 
+/**
+ * Base HP regenerated per second by every hero (docs/BALANCE.md). 0 made every hit permanent, 0.4 was the
+ * v1.0 value; the v1.1 re-tune raised it to 0.7 so that strong starters reach minute 8-10 in the simulator
+ * (the wall at 5:00-6:00 is accumulated damage, not burst) without moving the sword-only median.
+ */
+export const BASE_REGEN = 0.7;
+
 export function baseMods(): Mods {
   return {
     dmg: 1,
@@ -104,7 +111,7 @@ export function baseMods(): Mods {
     thorns: 0,
     lootMult: 1,
     luck: 0,
-    regen: 0.4,
+    regen: BASE_REGEN,
     armor: 0,
     maxHpBonus: 0,
     dmgTaken: 1,

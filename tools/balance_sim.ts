@@ -1,6 +1,7 @@
 /**
  * Balance simulator (BRIEF section 13). Run with `npm run balance` (Vitest used as a TS runner).
- * Env: BAL_RUNS (seeds per cell, default 8), BAL_WEAPONS=all|sword,bow (per-weapon survival table),
+ * Env: BAL_RUNS (seeds per cell, default 8; every table uses it, 24+ gives a stable median),
+ * BAL_WEAPONS=all|sword,bow (per-weapon survival table), BAL_BIOMES=1 (per start biome table),
  * BAL_CAP (seconds, default 1200). Writes docs/BALANCE_RESULTS.md.
  */
 import { writeFileSync } from 'node:fs';
@@ -27,18 +28,28 @@ function stats(xs: number[]): { mean: number; median: number; p10: number; p90: 
 const mmss = (t: number): string =>
   `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
+/** Standard error of the median of `xs` (normal approximation: 1.2533 sd / sqrt(n)). */
+function medianSe(xs: number[]): number {
+  const n = xs.length;
+  if (n < 2) return 0;
+  const mean = xs.reduce((a, b) => a + b, 0) / n;
+  const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+  return (1.2533 * sd) / Math.sqrt(n);
+}
+
 function row(label: string, rs: BotResult[]): string {
   const t = stats(rs.map((r) => r.time));
+  const se = medianSe(rs.map((r) => r.time));
   const k = stats(rs.map((r) => r.kills));
   const lv = stats(rs.map((r) => r.level));
   const boss = rs.reduce((a, r) => a + r.bossKills, 0) / rs.length;
   const mini = rs.reduce((a, r) => a + r.miniKills, 0) / rs.length;
   const won = (100 * rs.filter((r) => r.won).length) / rs.length;
-  return `| ${label} | ${mmss(t.median)} | ${mmss(t.p10)}–${mmss(t.p90)} | ${k.median.toFixed(0)} | ${lv.median.toFixed(0)} | ${boss.toFixed(1)} | ${mini.toFixed(1)} | ${won.toFixed(0)}% |`;
+  return `| ${label} | ${mmss(t.median)} ±${mmss(se)} | ${mmss(t.mean)} | ${mmss(t.p10)}–${mmss(t.p90)} | ${k.median.toFixed(0)} | ${lv.median.toFixed(0)} | ${boss.toFixed(1)} | ${mini.toFixed(1)} | ${won.toFixed(0)}% |`;
 }
 
 const HEAD =
-  '| Cell | Median time | p10–p90 | Kills | Level | Bosses | Minis | Won |\n|---|---|---|---|---|---|---|---|';
+  '| Cell | Median time (±1 se) | Mean time | p10–p90 | Kills | Level | Bosses | Minis | Won |\n|---|---|---|---|---|---|---|---|---|';
 
 it('balance simulation', { timeout: 3_600_000 }, () => {
   const out: string[] = [
@@ -85,7 +96,7 @@ it('balance simulation', { timeout: 3_600_000 }, () => {
   out.push('', '## Per starting weapon (smart bot)', '', HEAD);
   for (const id of ids) {
     const rs: BotResult[] = [];
-    for (let i = 0; i < Math.max(3, Math.floor(RUNS / 2)); i++) {
+    for (let i = 0; i < RUNS; i++) {
       rs.push(playRun({ seed: 2000 + i, policy: 'smart', start: id, maxTime: CAP }));
     }
     out.push(row(id, rs));
@@ -95,7 +106,7 @@ it('balance simulation', { timeout: 3_600_000 }, () => {
     out.push('', '## Per start biome (smart bot, sword)', '', HEAD);
     for (const biome of OVERWORLD_BIOMES) {
       const rs: BotResult[] = [];
-      for (let i = 0; i < Math.max(4, Math.floor(RUNS / 2)); i++)
+      for (let i = 0; i < RUNS; i++)
         rs.push(playRun({ seed: 3000 + i, policy: 'smart', biome, maxTime: CAP }));
       out.push(row(biome, rs));
     }
