@@ -20,7 +20,7 @@ The sheets are sliced and packed by the tools in `tools/`; the source files stay
 
 ## Font
 
-Pixelify Sans, Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans), licensed under the SIL Open Font License 1.1. Bundled as WOFF2 in `public/fonts/` (via the `@fontsource/pixelify-sans` npm package) together with its licence, `public/fonts/OFL.txt`.
+Tiny5, Copyright 2022-2024 The Tiny5 Project Authors (https://github.com/Gissio/font_tiny5), licensed under the SIL Open Font License 1.1. Bundled as WOFF2 (Latin subset) in `public/fonts/` (via the `@fontsource/tiny5` npm package) together with its licence, `public/fonts/OFL.txt`. The game rasterizes it once into a 1-bit glyph atlas at its native 8 px size.
 
 ## Audio
 

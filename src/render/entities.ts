@@ -14,7 +14,7 @@ import { propStateOf } from '../systems/interact';
 import type { Npc } from '../systems/npcs';
 import type { Prop } from '../world/props';
 import { drawIcon } from '../ui/icons';
-import { UI_FONT } from '../ui/panel';
+import { drawText } from '../ui/panel';
 
 const animCache = new WeakMap<EnemyDef, Record<string, string>>();
 const animOut = { id: '', t: 0 };
@@ -529,26 +529,20 @@ export function drawFx(ctx: CanvasRenderingContext2D, f: Fx, camX: number, camY:
   }
 }
 
-/** All floating texts in one pass: the font is set once instead of once per number. */
+/** All floating texts in one pass; each number is one cached pre-rendered image (see ui/font.ts). */
 export function drawFxTexts(
   ctx: CanvasRenderingContext2D,
   fx: readonly Fx[],
   camX: number,
   camY: number,
 ): void {
-  ctx.font = UI_FONT;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
   for (const f of fx) {
     if (f.kind !== 'text') continue;
     const x = Math.round(f.x - camX);
     const y = Math.round(f.y - camY);
     if (x < -40 || y < -20 || x > ctx.canvas.width + 40 || y > ctx.canvas.height + 20) continue;
     ctx.globalAlpha = Math.min(1, 2 * (1 - f.t / f.life));
-    ctx.fillStyle = '#000';
-    ctx.fillText(f.text, x + 1, y + 1);
-    ctx.fillStyle = f.color;
-    ctx.fillText(f.text, x, y);
+    drawText(ctx, f.text, x, y, f.color, 'center');
   }
   ctx.globalAlpha = 1;
 }

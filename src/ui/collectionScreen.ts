@@ -15,7 +15,7 @@ import {
 import { dupesToReach } from '../systems/gacha';
 import { maxAllySlots } from '../systems/meta';
 import { drawIcon } from './icons';
-import { UI_FONT, drawPanel, drawText, inRect, wrap, type Rect } from './panel';
+import { drawPanel, drawText, fitText, inRect, wrap, type Rect } from './panel';
 import type { Screen } from './router';
 import { Buttons, drawCompanion, drawTitle } from './widgets';
 
@@ -69,15 +69,6 @@ export function drawPortrait(
   drawCompanion(ctx, atlas, def, cx, feetY, t, scale, alpha);
 }
 
-/** Shorten `s` with a trailing '..' so it fits in maxW. */
-export function fitText(ctx: CanvasRenderingContext2D, s: string, maxW: number): string {
-  ctx.font = UI_FONT;
-  if (ctx.measureText(s).width <= maxW) return s;
-  let out = s;
-  while (out.length > 1 && ctx.measureText(`${out}..`).width > maxW) out = out.slice(0, -1);
-  return `${out.trimEnd()}..`;
-}
-
 /** Word-wrap `s` into at most maxLines lines; the last visible line ends in '..' when text is cut. */
 export function clipLines(
   ctx: CanvasRenderingContext2D,
@@ -88,8 +79,7 @@ export function clipLines(
   const lines = wrap(ctx, s, maxW);
   if (lines.length <= maxLines) return lines;
   const cut = lines.slice(0, Math.max(0, maxLines));
-  if (cut.length > 0)
-    cut[cut.length - 1] = fitText(ctx, lines.slice(cut.length - 1).join(' '), maxW);
+  if (cut.length > 0) cut[cut.length - 1] = fitText(lines.slice(cut.length - 1).join(' '), maxW);
   return cut;
 }
 
@@ -142,7 +132,7 @@ function drawCard(
   }
   drawText(
     ctx,
-    fitText(ctx, o ? shortName(def) : '???', r.w - 4),
+    fitText(o ? shortName(def) : '???', r.w - 4),
     r.x + r.w / 2,
     r.y + 45,
     '#fff',

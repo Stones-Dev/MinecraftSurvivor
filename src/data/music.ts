@@ -1,4 +1,6 @@
 /** Procedural music themes (BRIEF section 14). Pure data and a pure step function; core/music.ts plays them. */
+import { BIOMES, type BiomeId } from '../world/biomes';
+
 export type ThemeId =
   'hub' | 'plains' | 'night' | 'dark_forest' | 'snowy_taiga' | 'desert' | 'nether' | 'boss';
 
@@ -320,6 +322,15 @@ export const THEMES: Record<ThemeId, Theme> = {
 };
 
 export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
+
+/**
+ * Music theme of a biome. New biomes reuse the closest existing theme until they get their own
+ * (forest / cherry grove -> plains, swamp / jungle / mushroom fields -> dark forest, badlands -> desert);
+ * the mapping lives in each biome's `theme` field (world/biomes.ts).
+ */
+export function biomeTheme(biome: BiomeId): ThemeId {
+  return BIOMES[biome].theme;
+}
 
 /** MIDI note of a scale degree (may exceed the scale length: wraps into higher octaves). */
 export function degreeToMidi(theme: Theme, degree: number): number {

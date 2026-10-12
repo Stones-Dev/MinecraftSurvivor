@@ -87,3 +87,38 @@ export class KeyboardInput implements InputSource {
     this.pressed.clear();
   }
 }
+
+/** Combines several input sources (keyboard, gamepad, touch): movement is summed and clamped, presses are ORed. */
+export class MergedInput implements InputSource {
+  constructor(private readonly sources: InputSource[]) {}
+
+  moveVector(): { x: number; y: number } {
+    let x = 0;
+    let y = 0;
+    for (const s of this.sources) {
+      const v = s.moveVector();
+      x += v.x;
+      y += v.y;
+    }
+    const len = Math.hypot(x, y);
+    return len > 1 ? { x: x / len, y: y / len } : { x, y };
+  }
+  pausePressed(): boolean {
+    return this.sources.some((s) => s.pausePressed());
+  }
+  confirmPressed(): boolean {
+    return this.sources.some((s) => s.confirmPressed());
+  }
+  cancelPressed(): boolean {
+    return this.sources.some((s) => s.cancelPressed());
+  }
+  activePressed(): boolean {
+    return this.sources.some((s) => s.activePressed());
+  }
+  abilityPressed(): boolean {
+    return this.sources.some((s) => s.abilityPressed?.() === true);
+  }
+  endStep(): void {
+    for (const s of this.sources) s.endStep();
+  }
+}

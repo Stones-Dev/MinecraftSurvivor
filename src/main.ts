@@ -2,13 +2,16 @@ import type { App } from './app';
 import { Atlas } from './core/atlas';
 import { AudioEngine } from './core/audio';
 import { fitCanvas, type View } from './core/canvas';
-import { KeyboardInput } from './core/input';
+import { GamepadInput } from './core/gamepad';
+import { KeyboardInput, MergedInput } from './core/input';
+import { TouchInput } from './core/touch';
 import { Loop } from './core/loop';
 import { LocalSaveStore } from './core/save';
 import { loadoutFromSave, type RunLoadout } from './systems/meta';
 import type { WeaponId } from './weapons/types';
 import { aboutScreen } from './ui/aboutScreen';
 import { collectionScreen } from './ui/collectionScreen';
+import { initFont } from './ui/font';
 import { galleryScreen } from './ui/gallery';
 import { runSetupScreen } from './ui/runSetupScreen';
 import { settingsScreen } from './ui/settingsScreen';
@@ -18,7 +21,13 @@ import { Router } from './ui/router';
 import { runScreen } from './ui/runScreen';
 import { hubScreen, titleScreen } from './ui/screens';
 import { WorldRenderer } from './world/renderer';
+import { type BiomeId, isBiomeId } from './world/biomes';
 import { World } from './world/world';
+
+/** `?biome=<id>` debug start; unknown ids are ignored. */
+function biomeParam(v: string | null): BiomeId | undefined {
+  return v !== null && isBiomeId(v) ? v : undefined;
+}
 
 function safeStorage(): Storage | null {
   try {
@@ -36,9 +45,12 @@ async function boot(): Promise<void> {
     view = fitCanvas(canvas);
   });
 
-  await document.fonts.load('8px "Pixelify Sans"').catch(() => undefined);
+  await initFont();
   const atlas = await Atlas.load(import.meta.env.BASE_URL);
-  const input = new KeyboardInput();
+  const keyboard = new KeyboardInput();
+  const gamepad = new GamepadInput();
+  const touch = new TouchInput();
+  const input = new MergedInput([keyboard, gamepad, touch]);
   const audio = new AudioEngine();
   const router = new Router();
   const store = new LocalSaveStore(safeStorage());
@@ -74,6 +86,7 @@ async function boot(): Promise<void> {
     atlas,
     audio,
     input,
+    touch,
     router,
     store,
     params,
@@ -85,7 +98,7 @@ async function boot(): Promise<void> {
       audio.musicVolume = s.musicVolume;
       audio.sfxVolume = s.sfxVolume;
       audio.muted = s.muted;
-      input.setBindings(s.controls);
+      keyboard.setBindings(s.controls);
       audio.refresh();
     },
     startRun: (loadout?: RunLoadout) =>
@@ -105,6 +118,7 @@ async function boot(): Promise<void> {
           portal: params.has('debug') && params.has('portal'),
           trader: params.has('debug') && params.has('trader'),
           villager: params.has('debug') && params.has('villager'),
+          biome: params.has('debug') ? biomeParam(params.get('biome')) : undefined,
         }),
       ),
   };
@@ -163,6 +177,7 @@ async function boot(): Promise<void> {
     const { x, y } = toArt(e);
     router.top?.onClick?.(x, y);
   });
+  touch.attach(canvas, toArt, () => view);
   canvas.addEventListener('pointermove', (e) => {
     const { x, y } = toArt(e);
     app.pointer.x = x;
@@ -172,6 +187,7 @@ async function boot(): Promise<void> {
 
   new Loop({
     update(dt) {
+      gamepad.poll();
       router.update(dt);
       input.endStep();
     },

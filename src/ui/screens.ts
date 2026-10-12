@@ -1,5 +1,4 @@
 import { Animator } from '../core/animator';
-import type { View } from '../core/canvas';
 import { t } from '../core/i18n';
 import type { App } from '../app';
 import { allyById, heroById, petById } from '../data/companions';
@@ -11,25 +10,13 @@ import { World } from '../world/world';
 import { aboutScreen } from './aboutScreen';
 import { collectionScreen } from './collectionScreen';
 import { drawIcon } from './icons';
-import { drawText } from './panel';
+import { drawText, drawTextScaled } from './panel';
 import { runSetupScreen } from './runSetupScreen';
 import type { Router, Screen } from './router';
 import { settingsScreen } from './settingsScreen';
 import { spawnerScreen } from './spawnerScreen';
 import { upgradesScreen } from './upgradesScreen';
 import { Buttons, drawCompanion } from './widgets';
-
-const FONT = '8px "Pixelify Sans", monospace';
-
-function text(view: View, s: string, x: number, y: number, color = '#fff'): void {
-  const { ctx } = view;
-  ctx.font = FONT;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#000';
-  ctx.fillText(s, x + 1, y + 1);
-  ctx.fillStyle = color;
-  ctx.fillText(s, x, y);
-}
 
 export const SCREEN_NAMES = [
   'run-setup',
@@ -51,7 +38,14 @@ export function emptyScreen(name: string, router: Router, hub: () => Screen): Sc
     render(view) {
       view.ctx.fillStyle = '#1b1b24';
       view.ctx.fillRect(0, 0, view.width, view.height);
-      text(view, `${name} — ${t('screen.empty')}`, view.width / 2, view.height / 2);
+      drawText(
+        view.ctx,
+        `${name} — ${t('screen.empty')}`,
+        view.width / 2,
+        view.height / 2,
+        '#fff',
+        'center',
+      );
     },
     onClick() {
       router.replace(hub());
@@ -65,9 +59,10 @@ export function titleScreen(router: Router, hub: () => Screen): Screen {
     render(view) {
       view.ctx.fillStyle = '#12121a';
       view.ctx.fillRect(0, 0, view.width, view.height);
-      text(view, t('game.title'), view.width / 2, view.height / 2 - 12, '#7ddc6f');
-      text(view, t('game.tagline'), view.width / 2, view.height / 2 + 2, '#ccc');
-      text(view, t('title.start'), view.width / 2, view.height / 2 + 24, '#ffd84a');
+      const { ctx, width, height } = view;
+      drawTextScaled(ctx, t('game.title'), width / 2, height / 2 - 12, '#7ddc6f', 'center', 2);
+      drawText(ctx, t('game.tagline'), width / 2, height / 2 + 2, '#ccc', 'center');
+      drawText(ctx, t('title.start'), width / 2, height / 2 + 24, '#ffd84a', 'center');
     },
     onClick() {
       router.replace(hub());
@@ -134,7 +129,7 @@ export function hubScreen(app: App): Screen {
       glow.addColorStop(1, 'rgba(214,110,70,0.2)');
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, width, height);
-      drawText(ctx, t('game.title'), width / 2, 30, '#7ddc6f', 'center');
+      drawTextScaled(ctx, t('game.title'), width / 2, 30, '#7ddc6f', 'center', 2);
       drawText(ctx, t('game.tagline'), width / 2, 42, '#e8d8c8', 'center');
       // Hero and companions.
       const hx = Math.floor(width * 0.3);

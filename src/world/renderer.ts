@@ -1,8 +1,8 @@
-/** Canvas side of the world: baked chunk images (LRU), biome crossfade, y-sorted prop drawing. */
+/** Canvas side of the world: baked chunk images (LRU) with per-tile biomes, y-sorted prop drawing. */
 import { BIOMES, type BiomeId, type BiomeState } from './biomes';
 import { propSprite, shadowSprite } from './propSprites';
 import type { Prop } from './props';
-import { CHUNK_PX, genTerrain } from './terrain';
+import { CHUNK_PX, CHUNK_TILES, genChunkBiomes, genTerrain } from './terrain';
 import { paintChunk } from './tilePaint';
 import type { World } from './world';
 
@@ -11,6 +11,7 @@ const MAX_BAKES_PER_FRAME = 4;
 
 export interface PropItem {
   prop: Prop;
+  /** Kept for callers that fade props; always 1 now that biomes no longer crossfade. */
   alpha: number;
   biome: BiomeId;
 }
@@ -20,12 +21,15 @@ function rgb(c: readonly [number, number, number]): string {
 }
 
 export class WorldRenderer {
-  private readonly images = new Map<string, HTMLCanvasElement>();
+  private readonly images = new Map<number, HTMLCanvasElement>();
+  private readonly biomeIndexAt: (tx: number, ty: number) => number;
   bakedThisFrame = 0;
   lastBakeMs = 0;
   maxBakeMs = 0;
 
-  constructor(readonly world: World) {}
+  constructor(readonly world: World) {
+    this.biomeIndexAt = (tx, ty) => world.biomeIndexAtTile(tx, ty);
+  }
 
   beginFrame(): void {
     this.bakedThisFrame = 0;
@@ -35,8 +39,9 @@ export class WorldRenderer {
     return this.images.size;
   }
 
-  chunkImage(cx: number, cy: number, biome: BiomeId, force: boolean): HTMLCanvasElement | null {
-    const key = `${cx},${cy},${biome}`;
+  /** Baked image of a chunk (null when this frame's bake budget is spent and `force` is off). */
+  chunkImage(cx: number, cy: number, force: boolean): HTMLCanvasElement | null {
+    const key = (cx + 32768) * 65536 + (cy + 32768);
     const hit = this.images.get(key);
     if (hit) {
       this.images.delete(key);
@@ -46,7 +51,8 @@ export class WorldRenderer {
     if (!force && this.bakedThisFrame >= MAX_BAKES_PER_FRAME) return null;
     const t0 = performance.now();
     const terrain = genTerrain(cx, cy, this.world.seed, this.world.arena);
-    const canvas = paintChunk(cx, cy, terrain, BIOMES[biome], this.world.seed).toCanvas();
+    const biomes = genChunkBiomes(cx, cy, this.biomeIndexAt);
+    const canvas = paintChunk(cx, cy, terrain, biomes, this.world.seed).toCanvas();
     this.lastBakeMs = performance.now() - t0;
     this.maxBakeMs = Math.max(this.maxBakeMs, this.lastBakeMs);
     this.bakedThisFrame++;
@@ -58,14 +64,17 @@ export class WorldRenderer {
     return canvas;
   }
 
-  /** Draw terrain; during a biome crossfade the old palette is drawn first, the new one on top. */
+  /**
+   * Draw the terrain under the camera. Biomes are baked into the chunks, so there is no crossfade;
+   * `_state` is ignored and only kept so older callers still compile.
+   */
   drawGround(
     ctx: CanvasRenderingContext2D,
     camX: number,
     camY: number,
     w: number,
     h: number,
-    state: BiomeState,
+    _state?: BiomeState | null,
     force = false,
   ): void {
     const cx0 = Math.floor(camX / CHUNK_PX);
@@ -76,49 +85,37 @@ export class WorldRenderer {
       for (let cx = cx0; cx <= cx1; cx++) {
         const dx = cx * CHUNK_PX - camX;
         const dy = cy * CHUNK_PX - camY;
-        if (state.previous) {
-          const old = this.chunkImage(cx, cy, state.previous, force);
-          if (old) ctx.drawImage(old, dx, dy);
-        }
-        const img = this.chunkImage(cx, cy, state.current, force);
-        if (!img) {
-          ctx.fillStyle = rgb(BIOMES[state.current].grass[0]);
-          ctx.fillRect(dx, dy, CHUNK_PX, CHUNK_PX);
-        } else if (state.previous) {
-          ctx.globalAlpha = state.fade;
+        const img = this.chunkImage(cx, cy, force);
+        if (img) {
           ctx.drawImage(img, dx, dy);
-          ctx.globalAlpha = 1;
         } else {
-          ctx.drawImage(img, dx, dy);
+          // Not baked yet (budget spent): flat fill in the colour of the chunk's centre biome.
+          const b = this.world.biomeAtTile(
+            cx * CHUNK_TILES + (CHUNK_TILES >> 1),
+            cy * CHUNK_TILES + (CHUNK_TILES >> 1),
+          );
+          ctx.fillStyle = rgb(BIOMES[b].grass[0]);
+          ctx.fillRect(dx, dy, CHUNK_PX, CHUNK_PX);
         }
       }
     }
   }
 
-  /** Props on screen (with margin for tall sprites); crossfades props that differ between biomes. */
-  collectProps(camX: number, camY: number, w: number, h: number, state: BiomeState): PropItem[] {
+  /** Props on screen (with margin for tall sprites), each drawn with the biome it grew in. */
+  collectProps(
+    camX: number,
+    camY: number,
+    w: number,
+    h: number,
+    _state?: BiomeState | null,
+  ): PropItem[] {
     const x0 = camX - 24;
     const x1 = camX + w + 24;
     const y0 = camY - 8;
     const y1 = camY + h + 48;
-    const current = this.world.propsInRect(x0, y0, x1, y1, state.current);
-    if (!state.previous) return current.map((prop) => ({ prop, alpha: 1, biome: state.current }));
-    const previous = this.world.propsInRect(x0, y0, x1, y1, state.previous);
-    const prevById = new Map(previous.map((p) => [p.id, p]));
-    const curIds = new Map(current.map((p) => [p.id, p]));
-    const out: PropItem[] = [];
-    for (const prop of current) {
-      const old = prevById.get(prop.id);
-      const same = old !== undefined && old.kind === prop.kind && old.variant === prop.variant;
-      out.push({ prop, alpha: same ? 1 : state.fade, biome: state.current });
-    }
-    for (const prop of previous) {
-      const cur = curIds.get(prop.id);
-      if (!cur || cur.kind !== prop.kind || cur.variant !== prop.variant) {
-        out.push({ prop, alpha: 1 - state.fade, biome: state.previous });
-      }
-    }
-    return out;
+    return this.world
+      .propsInRect(x0, y0, x1, y1)
+      .map((prop) => ({ prop, alpha: 1, biome: prop.biome }));
   }
 
   drawShadow(

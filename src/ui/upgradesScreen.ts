@@ -4,21 +4,12 @@ import type { View } from '../core/canvas';
 import { HEROES, heroById } from '../data/companions';
 import { ACCOUNT_KEY, META_UPGRADES, upgradeCost } from '../data/metaUpgrades';
 import { drawIcon } from './icons';
-import { UI_FONT, drawPanel, drawText } from './panel';
+import { drawPanel, drawText, fitText, textWidth } from './panel';
 import type { Screen } from './router';
 import { Buttons, drawTitle } from './widgets';
 
 const ROW_H = 22;
 const PIP = 5;
-
-/** Shorten `s` with an ellipsis so it fits in `maxW` art pixels. */
-function fit(ctx: CanvasRenderingContext2D, s: string, maxW: number): string {
-  ctx.font = UI_FONT;
-  if (ctx.measureText(s).width <= maxW) return s;
-  let t = s;
-  while (t.length > 1 && ctx.measureText(`${t}..`).width > maxW) t = t.slice(0, -1);
-  return `${t}..`;
-}
 
 export function upgradesScreen(app: App, onBack: () => void): Screen {
   const buttons = new Buttons();
@@ -68,7 +59,7 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
       drawTitle(view, 'UPGRADES', 'Permanent boosts, paid in Emeralds');
       const em = String(data.currencies.emeralds);
       drawText(ctx, em, width - 8, 20, '#7dff9a', 'right');
-      drawIcon(ctx, 'emerald', width - 8 - ctx.measureText(em).width - 14, 11);
+      drawIcon(ctx, 'emerald', width - 8 - textWidth(em) - 14, 11);
 
       buttons.begin();
       // Hero selector.
@@ -112,7 +103,7 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
         if (!maxed) {
           const c = String(cost);
           drawText(ctx, c, btn.x - 4, r.y + 13, afford ? '#7dff9a' : '#ff8a8a', 'right');
-          const iconX = btn.x - 4 - ctx.measureText(c).width - 14;
+          const iconX = btn.x - 4 - textWidth(c) - 14;
           drawIcon(ctx, 'emerald', iconX, r.y + 4);
           textMax = iconX - 4;
         }
@@ -124,11 +115,11 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
           ctx.fillRect(pipsX + p * PIP, r.y + 5, PIP - 1, 4);
         }
         drawText(ctx, `${rank}/${u.max}`, pipsX - 4, r.y + 9, '#9a9aa8', 'right');
-        drawText(ctx, fit(ctx, u.name, pipsX - 34 - (r.x + 20)), r.x + 20, r.y + 9, '#fff');
+        drawText(ctx, fitText(u.name, pipsX - 34 - (r.x + 20)), r.x + 20, r.y + 9, '#fff');
         const effect = maxed ? `MAX  ${u.text(u.max)}` : u.text(rank + 1);
         drawText(
           ctx,
-          fit(ctx, effect, textMax - (r.x + 20)),
+          fitText(effect, textMax - (r.x + 20)),
           r.x + 20,
           r.y + 17,
           maxed ? '#ffd84a' : '#9fe39f',

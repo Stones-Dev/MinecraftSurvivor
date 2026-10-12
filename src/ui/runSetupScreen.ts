@@ -15,8 +15,8 @@ import {
   type CompanionDef,
 } from '../data/companions';
 import { heroBaseHp, loadoutFromSave, maxAllySlots, type RunLoadout } from '../systems/meta';
-import { buffLine, clipLines, drawPortrait, fitText, shortName } from './collectionScreen';
-import { drawPanel, drawText, type Rect } from './panel';
+import { buffLine, clipLines, drawPortrait, shortName } from './collectionScreen';
+import { drawPanel, drawText, fitText, type Rect } from './panel';
 import type { Screen } from './router';
 import { Buttons, drawTitle } from './widgets';
 
@@ -82,7 +82,7 @@ function drawSlot(
     'right',
   );
   drawPortrait(ctx, atlas, def, r.x + 36, r.y + r.h - 8, t, 34, r.h - 26, 1.5);
-  drawText(ctx, fitText(ctx, shortName(def), tw), tx, r.y + 22);
+  drawText(ctx, fitText(shortName(def), tw), tx, r.y + 22);
   const lines = clipLines(ctx, buffLine(def, level), tw, Math.floor((r.h - 35) / 9) + 1);
   lines.forEach((l, i) => drawText(ctx, l, tx, r.y + 31 + i * 9, '#7dff9a'));
 }

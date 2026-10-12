@@ -1,6 +1,7 @@
 import type { Atlas } from './core/atlas';
 import type { AudioEngine } from './core/audio';
 import type { InputSource } from './core/input';
+import type { TouchInput } from './core/touch';
 import type { SaveData, SaveStore } from './core/save';
 import type { RunLoadout } from './systems/meta';
 import type { Router } from './ui/router';
@@ -10,6 +11,8 @@ export interface App {
   atlas: Atlas;
   audio: AudioEngine;
   input: InputSource;
+  /** Touch controls state (joystick/buttons), drawn over the run screen when enabled. */
+  touch: TouchInput;
   router: Router;
   store: SaveStore;
   params: URLSearchParams;

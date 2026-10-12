@@ -85,7 +85,7 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
     run.pickups.push(new Pickup('emerald', e.x + 4, e.y + 2, 1));
   }
   if (m.healOnKill > 0) run.player.heal(m.healOnKill);
-  if (m.healWater > 0 && run.world.surface(run.player.x, run.player.y, run.biome()) === 'water') {
+  if (m.healWater > 0 && run.world.surface(run.player.x, run.player.y) === 'water') {
     run.player.heal(run.player.maxHp * m.healWater);
   }
   if (run.rng.drops.chance(m.lootMult / 400)) {
@@ -214,7 +214,6 @@ function applyHitStatus(p: Projectile, e: Enemy): void {
 
 export function updateProjectiles(run: RunState, dt: number): void {
   const near: Enemy[] = [];
-  const biome = run.biome();
   const pl = run.player;
   for (const p of run.projectiles) {
     p.px = p.x;
@@ -292,7 +291,7 @@ export function updateProjectiles(run: RunState, dt: number): void {
         }
       }
     } else {
-      if (run.world.overlapsSolid(p.x, p.y, 1, biome)) {
+      if (run.world.overlapsSolid(p.x, p.y, 1)) {
         p.alive = false; // trees and rocks give cover
         if (p.blast > 0) explode(run, p.x, p.y, p.blast, 0, p.dmg, null);
         continue;

@@ -3,7 +3,7 @@ import type { App } from '../app';
 import type { View } from '../core/canvas';
 import { ACTIONS, DEFAULT_BINDINGS, type Action } from '../core/input';
 import type { SaveData } from '../core/save';
-import { UI_FONT, drawButton, drawPanel, drawText, inRect, type Rect } from './panel';
+import { drawButton, drawPanel, drawText, fitText, inRect, type Rect } from './panel';
 import type { Screen } from './router';
 import { Buttons, drawTitle } from './widgets';
 
@@ -23,21 +23,13 @@ const ACTION_LABEL: Record<Action, string> = {
   right: 'Move right',
   pause: 'Pause',
   item: 'Use item',
+  ability: 'Hero ability',
 };
 const QUALITY: Quality[] = ['auto', 'high', 'medium', 'low'];
 /** Seconds the "Really reset?" confirmation stays armed. */
 const RESET_ARM = 3;
 
 const keyName = (code: string): string => code.replace(/^(Key|Digit)/, '');
-
-/** Shorten `s` with an ellipsis so it fits in `maxW` art pixels. */
-function fit(ctx: CanvasRenderingContext2D, s: string, maxW: number): string {
-  ctx.font = UI_FONT;
-  if (ctx.measureText(s).width <= maxW) return s;
-  let t = s;
-  while (t.length > 1 && ctx.measureText(`${t}..`).width > maxW) t = t.slice(0, -1);
-  return `${t}..`;
-}
 
 export function settingsScreen(app: App, onBack: () => void): Screen {
   const buttons = new Buttons();
@@ -220,12 +212,12 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
             capture === a
               ? `${ACTION_LABEL[a]}  press a key...`
               : `${ACTION_LABEL[a]}  ${keys.map(keyName).join(' / ')}`;
-          buttons.add(r, fit(ctx, text, colW - 6), () => {
+          buttons.add(r, fitText(text, colW - 6), () => {
             capture = a;
           });
         });
         buttons.add(
-          { x: Math.floor((width - 110) / 2), y: top + 66, w: 110, h: 16 },
+          { x: Math.floor((width - 110) / 2), y: top + 86, w: 110, h: 16 },
           'Reset controls',
           () => {
             s.controls = {};
@@ -239,7 +231,7 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
             ? `Press a key for "${ACTION_LABEL[capture]}"  (Esc cancels)`
             : 'Click an action, then press its new key.',
           width / 2,
-          top + 98,
+          top + 114,
           capture ? '#ffd84a' : '#9a9aa8',
           'center',
         );

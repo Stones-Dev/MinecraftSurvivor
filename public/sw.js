@@ -1,14 +1,13 @@
 /* MineSurvive service worker: offline after the first load.
  * Install precaches the page and every asset index.html references; everything else is cached as it is
  * fetched (atlas, fonts). Navigations go network-first so a new deploy is picked up, assets cache-first. */
-const VERSION = 'minesurvive-v1';
+const VERSION = 'minesurvive-v2';
 const CORE = [
   './',
   './atlas/atlas.json',
   './atlas/atlas_0.png',
   './manifest.webmanifest',
-  './fonts/PixelifySans-400.woff2',
-  './fonts/PixelifySans-700.woff2',
+  './fonts/Tiny5-400.woff2',
   './icons/icon-192.png',
 ];
 

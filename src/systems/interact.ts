@@ -120,17 +120,14 @@ function hitProp(run: RunState, p: Prop, st: PropState): void {
 export function updateInteract(run: RunState, dt: number): void {
   const p = run.player;
   if (run.offer === null && run.bonusOffers > 0) openNextOffer(run);
-  const biome = run.biome();
-  const b = BIOMES[biome];
+  // Snowfall in the hero's own biome slows them; lava and ice are read where each entity stands.
+  const b = BIOMES[run.biome()];
   p.envMult = b.snow && run.mods.frost <= 0 ? 0.9 : 1;
-  if (
-    run.mods.lavaSpeed > 0 &&
-    (run.rift.active || run.world.surface(p.x, p.y, biome) === 'lava')
-  ) {
+  if (run.mods.lavaSpeed > 0 && (run.rift.active || run.world.surface(p.x, p.y) === 'lava')) {
     p.envMult *= 1 + run.mods.lavaSpeed;
   }
   if (p.dead) return;
-  const props = run.world.propsInRect(p.x - 40, p.y - 40, p.x + 40, p.y + 40, biome);
+  const props = run.world.propsInRect(p.x - 40, p.y - 40, p.x + 40, p.y + 40);
   const hits = run.hitPoints;
   for (const prop of props) {
     const d = Math.hypot(prop.x - p.x, prop.y - p.y);
@@ -217,7 +214,7 @@ export function updateInteract(run: RunState, dt: number): void {
   if (run.hazardT <= 0) {
     run.hazardT = 0.3;
     run.hazards = run.world
-      .propsInRect(p.x - 300, p.y - 220, p.x + 300, p.y + 220, biome)
+      .propsInRect(p.x - 300, p.y - 220, p.x + 300, p.y + 220)
       .filter((q) => q.kind === 'tnt_trap' || q.kind === 'cobweb' || q.kind === 'magma');
   }
   for (const prop of run.hazards) {
@@ -244,11 +241,11 @@ export function updateInteract(run: RunState, dt: number): void {
 
   // Lava burns anyone standing in it.
   run.lavaT -= dt;
-  if (b.lava && run.lavaT <= 0) {
+  if (run.lavaT <= 0) {
     run.lavaT = 0.25;
-    if (run.world.surface(p.x, p.y, biome) === 'lava' && run.item !== 'fire_potion') burnHero(run);
+    if (run.world.surface(p.x, p.y) === 'lava' && run.item !== 'fire_potion') burnHero(run);
     for (const e of run.enemies) {
-      if (!e.dying && !e.def.flying && run.world.surface(e.x, e.y, biome) === 'lava')
+      if (!e.dying && !e.def.flying && run.world.surface(e.x, e.y) === 'lava')
         applyStatus(e, 'burn', 2, 6);
     }
   }

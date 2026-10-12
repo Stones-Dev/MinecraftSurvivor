@@ -26,12 +26,12 @@ import {
 import { drawNight, nightFactor } from '../systems/daynight';
 import { type Npc, spawnTrader, spawnVillager } from '../systems/npcs';
 import type { RunLoadout } from '../systems/meta';
-import type { ThemeId } from '../data/music';
+import { biomeTheme, type ThemeId } from '../data/music';
 import type { Ally, PetState } from '../entities/ally';
 import { castAbility } from '../abilities';
 import { useItem } from '../systems/items';
 import { gainXp } from '../systems/levelup';
-import { BIOMES } from '../world/biomes';
+import { BIOMES, type BiomeId } from '../world/biomes';
 import type { Enemy } from '../entities/enemy';
 import { WorldRenderer, type PropItem } from '../world/renderer';
 import { drawDebug, FrameStats } from './debug';
@@ -64,6 +64,8 @@ export interface RunOptions {
   crowd?: number;
   /** Hero, pet, allies and upgrades chosen in the hub. */
   loadout?: RunLoadout;
+  /** Debug: start at the nearest spot inside this biome instead of the spawn meadow. */
+  biome?: BiomeId;
 }
 
 type Drawable =
@@ -125,7 +127,7 @@ function runTheme(run: RunState): ThemeId {
   if (run.enemies.some((e) => e.boss === 'boss' && !e.dying)) return 'boss';
   if (run.rift.active) return 'nether';
   if (nightFactor(run.time) > 0.55) return 'night';
-  return run.biome() as ThemeId;
+  return biomeTheme(run.biome());
 }
 
 /** The 20-second first-run hints (BRIEF section 5). */
@@ -148,6 +150,7 @@ function drawTutorial(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
 export function runScreen(app: App, opts: RunOptions): Screen {
   const { atlas, input, router } = app;
   const run = new RunState(opts.seed, opts.startTime, opts.loadout);
+  if (opts.biome) run.startInBiome(opts.biome);
   if (opts.weapons) run.weapons = opts.weapons.map((id) => newWeapon(id));
   if (opts.startXp) gainXp(run, opts.startXp);
   if (opts.hp) {
@@ -162,8 +165,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       if (!e) continue;
       const a = (i / opts.crowd) * Math.PI * 2 * 7;
       const r = 50 + ((i * 37) % 220);
-      e.x = Math.cos(a) * r;
-      e.y = Math.sin(a) * r;
+      e.x = run.player.x + Math.cos(a) * r;
+      e.y = run.player.y + Math.sin(a) * r;
       run.enemies.push(e);
     }
   }
@@ -358,13 +361,14 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         height,
         nightFactor(run.time) * (1 - Math.min(0.6, run.mods.nightVision)),
       );
-      drawWeather(ctx, run, width, height, state.current === 'snowy_taiga', run.quality);
+      drawWeather(ctx, run, width, height, BIOMES[state.current].snow, run.quality);
       if (app.data().settings.damageNumbers) drawFxTexts(ctx, run.fx, camX, camY);
       if (run.rift.active) {
         ctx.fillStyle = 'rgba(120,20,0,0.14)';
         ctx.fillRect(0, 0, width, height);
       }
       drawHud(view, run, camX, camY);
+      app.touch.draw(ctx, width, height);
       if (tutorial && run.time < 22) drawTutorial(ctx, width, height, run.time);
 
       if (showDebug) {
@@ -375,7 +379,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
             `chunks ${renderer.cachedChunks} cached, ${renderer.bakedThisFrame} baked`,
             `bake ${renderer.lastBakeMs.toFixed(1)} ms (max ${renderer.maxBakeMs.toFixed(1)})`,
             `props ${propsVisible}  enemies ${run.enemies.length}  proj ${run.projectiles.length}`,
-            `biome ${BIOMES[state.current].name} (fade ${state.fade.toFixed(2)})`,
+            `biome ${BIOMES[state.current].name}`,
             `time ${run.time.toFixed(0)} s  night ${nightFactor(run.time).toFixed(2)}`,
             `pos ${p.x.toFixed(0)}, ${p.y.toFixed(0)}  seed ${opts.seed}`,
           ],

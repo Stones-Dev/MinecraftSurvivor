@@ -50,7 +50,7 @@ const GENERAL: Section[] = [
   },
   {
     head: 'Font',
-    body: 'Pixelify Sans, Copyright 2021 The Pixelify Sans Project Authors, SIL Open Font License 1.1.',
+    body: 'Tiny5, Copyright 2022-2024 The Tiny5 Project Authors, SIL Open Font License 1.1.',
   },
   {
     head: 'Audio',

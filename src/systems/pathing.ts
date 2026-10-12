@@ -1,5 +1,4 @@
 /** BFS distance field around the player (rebuilt every 200 ms) so walkers path around trees and rocks. */
-import type { BiomeId } from '../world/biomes';
 import { TILE_PX } from '../world/terrain';
 import type { World } from '../world/world';
 
@@ -16,14 +15,14 @@ export class Pathing {
   private oy = 0;
   private timer = 0;
 
-  update(dt: number, px: number, py: number, world: World, biome: BiomeId): void {
+  update(dt: number, px: number, py: number, world: World): void {
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = EVERY;
-    this.rebuild(px, py, world, biome);
+    this.rebuild(px, py, world);
   }
 
-  private rebuild(px: number, py: number, world: World, biome: BiomeId): void {
+  private rebuild(px: number, py: number, world: World): void {
     this.ox = Math.floor(px / TILE_PX) - R;
     this.oy = Math.floor(py / TILE_PX) - R;
     this.blocked.fill(0);
@@ -33,7 +32,6 @@ export class Pathing {
       this.oy * TILE_PX,
       (this.ox + SIDE) * TILE_PX,
       (this.oy + SIDE) * TILE_PX,
-      biome,
     );
     for (const p of props) {
       if (!p.solid) continue;

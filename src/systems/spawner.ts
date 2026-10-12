@@ -101,12 +101,11 @@ export function ringPoint(
   radius: number,
 ): { x: number; y: number } | null {
   const p = run.player;
-  const biome = run.biome();
   for (let i = 0; i < 6; i++) {
     const a = angle + i * 0.35 * (i % 2 === 0 ? 1 : -1);
     const x = p.x + Math.cos(a) * SPAWN_RING;
     const y = p.y + Math.sin(a) * SPAN_Y * SPAWN_RING;
-    const r = run.world.collide(x, y, radius, biome);
+    const r = run.world.collide(x, y, radius);
     if (Math.abs(r.x - x) < 3 && Math.abs(r.y - y) < 3) return { x, y };
   }
   return null;

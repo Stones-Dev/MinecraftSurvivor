@@ -71,7 +71,7 @@ export function useItem(run: RunState, dirX: number, dirY: number): void {
       const reach = Math.min(d, 140);
       const tx = d > 0 ? p.x + (dx / d) * reach : p.x + p.facing * 60;
       const ty = d > 0 ? p.y + (dy / d) * reach : p.y;
-      const r = run.world.collide(tx, ty, p.radius, run.biome());
+      const r = run.world.collide(tx, ty, p.radius);
       run.fx.push(makeFx('ring', p.x, p.y - 8, 0.3, { r: 16, color: '#7a5cff' }));
       p.x = r.x;
       p.y = r.y;
@@ -93,7 +93,7 @@ export function updateItems(run: RunState, dt: number): void {
   if (run.dash) {
     const d = run.dash;
     const step = 320 * dt;
-    const r = run.world.collide(p.x + d.dx * step, p.y + d.dy * step, p.radius, run.biome());
+    const r = run.world.collide(p.x + d.dx * step, p.y + d.dy * step, p.radius);
     p.x = r.x;
     p.y = r.y;
     d.t -= dt;

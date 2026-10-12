@@ -1,41 +1,74 @@
 /** Procedural Minecraft-style tile painting into a packed-pixel buffer (no DOM). */
 import { hash2 } from '../core/noise';
 import { pack, PixBuffer } from '../core/pixelart';
-import type { Biome } from './biomes';
-import { CHUNK_PX, CHUNK_TILES, TILE, TILE_PX } from './terrain';
+import { BIOME_IDS, BIOME_INDEX, BIOMES, type BiomeId } from './biomes';
+import { BIOME_BORDER, CHUNK_PX, CHUNK_TILES, TILE, TILE_PX } from './terrain';
 
 /** Per-pixel random bytes, generated once; chunks read it at a seed-derived offset. */
 const NOISE = new Uint8Array(256 * 256);
 for (let y = 0; y < 256; y++)
   for (let x = 0; x < 256; x++) NOISE[y * 256 + x] = Math.floor(hash2(x, y, 12345) * 256);
 
-/** Paint one chunk (256x256 art px) from its bordered terrain array. */
+/** Packed palette of every biome, indexed by BIOME_INDEX: 12 colours each (see PAL_* offsets). */
+const PAL_STRIDE = 12;
+const PAL_GRASS = 0; // base, light, dark
+const PAL_DIRT = 3; // base, light, dark
+const PAL_SAND = 6; // base, dark
+const PAL_WATER = 8; // base, light, dark, foam
+const PALETTES = new Uint32Array(BIOME_IDS.length * PAL_STRIDE);
+const DIRT_THRESHOLD = new Float32Array(BIOME_IDS.length);
+BIOME_IDS.forEach((id, i) => {
+  const b = BIOMES[id];
+  const cols = [...b.grass, ...b.dirt, ...b.sand, ...b.water];
+  cols.forEach((c, k) => (PALETTES[i * PAL_STRIDE + k] = pack(c)));
+  DIRT_THRESHOLD[i] = b.dirtThreshold;
+});
+
+/** How far (art px) the biome lookup of a ground pixel is jittered: the width of a soft border. */
+const BORDER_WARP = 44;
+const BORDER_GRAIN = 12;
+
+/**
+ * Paint one chunk (256x256 art px) from its bordered terrain array and its per-tile biome indices.
+ *
+ * `biomes` is the chunk's biome map with a BIOME_BORDER-tile margin (see genChunkBiomes), or a single
+ * biome for the whole chunk. Ground pixels near a biome border look their biome up at a position warped
+ * by smooth noise plus per-pixel grain, which dithers the two palettes deterministically (no runtime
+ * crossfade). Water, lava and walls always use the tile's own biome so what you see is what you walk on.
+ */
 export function paintChunk(
   cx: number,
   cy: number,
   terrain: Uint8Array,
-  biome: Biome,
+  biomes: Uint8Array | BiomeId,
   seed: number,
 ): PixBuffer {
   const buf = new PixBuffer(CHUNK_PX, CHUNK_PX);
   const ox = Math.floor(hash2(cx, cy, seed + 1) * 256);
   const oy = Math.floor(hash2(cx, cy, seed + 2) * 256);
   const side = CHUNK_TILES + 2;
-  const [gBase, gLight, gDark] = biome.grass.map(pack) as [number, number, number];
-  const [dBase, dLight, dDark] = biome.dirt.map(pack) as [number, number, number];
-  const [sBase, sDark] = biome.sand.map(pack) as [number, number];
-  const [wBase, wLight, wDark, wFoam] = biome.water.map(pack) as [number, number, number, number];
-  // Value-noise lattice (scale 10 px) precomputed for this chunk: same field as valueNoise(X/10, Y/10),
-  // but a handful of hashes per chunk instead of four per pixel.
+  const bSide = CHUNK_TILES + 2 * BIOME_BORDER;
+  const bmap =
+    typeof biomes === 'string' ? new Uint8Array(bSide * bSide).fill(BIOME_INDEX[biomes]) : biomes;
+  const biomeAt = (tx: number, ty: number): number =>
+    bmap[(ty + BIOME_BORDER) * bSide + tx + BIOME_BORDER] ?? 0;
+  // Value-noise lattices (scale 10 px) precomputed for this chunk: same field as valueNoise(X/10, Y/10),
+  // but a handful of hashes per chunk instead of four per pixel. The second and third drive the border warp.
   const L = 10;
   const gx0 = Math.floor((cx * CHUNK_PX) / L);
   const gy0 = Math.floor((cy * CHUNK_PX) / L);
   const gw = Math.floor((cx * CHUNK_PX + CHUNK_PX - 1) / L) - gx0 + 2;
   const gh = Math.floor((cy * CHUNK_PX + CHUNK_PX - 1) / L) - gy0 + 2;
-  const lat = new Float32Array(gw * gh);
-  for (let j = 0; j < gh; j++)
-    for (let i = 0; i < gw; i++) lat[j * gw + i] = hash2(gx0 + i, gy0 + j, seed + 303);
-  const noiseAt = (X: number, Y: number): number => {
+  const lattice = (salt: number): Float32Array => {
+    const lat = new Float32Array(gw * gh);
+    for (let j = 0; j < gh; j++)
+      for (let i = 0; i < gw; i++) lat[j * gw + i] = hash2(gx0 + i, gy0 + j, seed + salt);
+    return lat;
+  };
+  const lat = lattice(303);
+  const latWx = lattice(919);
+  const latWy = lattice(929);
+  const noiseAt = (field: Float32Array, X: number, Y: number): number => {
     const u = X / L;
     const v = Y / L;
     const x0 = Math.floor(u);
@@ -45,18 +78,16 @@ export function paintChunk(
     const sx = fx * fx * (3 - 2 * fx);
     const sy = fy * fy * (3 - 2 * fy);
     const k = (y0 - gy0) * gw + (x0 - gx0);
-    const a = lat[k] ?? 0;
-    const b = lat[k + 1] ?? 0;
-    const c = lat[k + gw] ?? 0;
-    const d = lat[k + gw + 1] ?? 0;
+    const a = field[k] ?? 0;
+    const b = field[k + 1] ?? 0;
+    const c = field[k + gw] ?? 0;
+    const d = field[k + gw + 1] ?? 0;
     return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
   };
-  const raw = (tx: number, ty: number): number => terrain[(ty + 1) * side + tx + 1] ?? TILE.GRASS;
-  // Lava only exists in biomes that allow it; elsewhere the tile is plain ground.
-  const at = (tx: number, ty: number): number => {
-    const t = raw(tx, ty);
-    return t === TILE.LAVA && !biome.lava ? TILE.GRASS : t;
-  };
+  const at = (tx: number, ty: number): number => terrain[(ty + 1) * side + tx + 1] ?? TILE.GRASS;
+  const reach = Math.ceil((BORDER_WARP + BORDER_GRAIN) / 2 / TILE_PX);
+  const minT = -BIOME_BORDER;
+  const maxT = CHUNK_TILES + BIOME_BORDER - 1;
   const wallBase = pack([52, 50, 60]);
   const wallLight = pack([76, 74, 86]);
   const wallDark = pack([38, 36, 44]);
@@ -69,6 +100,25 @@ export function paintChunk(
   for (let ty = 0; ty < CHUNK_TILES; ty++) {
     for (let tx = 0; tx < CHUNK_TILES; tx++) {
       const t = at(tx, ty);
+      const own = biomeAt(tx, ty);
+      const ownPal = own * PAL_STRIDE;
+      // Does any tile within the warp reach belong to another biome? Only those tiles pay for the dither.
+      let mixed = false;
+      for (let dy = -reach; dy <= reach && !mixed; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          const nx = Math.max(minT, Math.min(maxT, tx + dx));
+          const ny = Math.max(minT, Math.min(maxT, ty + dy));
+          if (biomeAt(nx, ny) !== own) {
+            mixed = true;
+            break;
+          }
+        }
+      }
+      const iceWater = BIOMES[BIOME_IDS[own] ?? 'plains'].iceWater;
+      const wBase = PALETTES[ownPal + PAL_WATER] ?? 0;
+      const wLight = PALETTES[ownPal + PAL_WATER + 1] ?? 0;
+      const wDark = PALETTES[ownPal + PAL_WATER + 2] ?? 0;
+      const wFoam = PALETTES[ownPal + PAL_WATER + 3] ?? 0;
       const openL = at(tx - 1, ty) !== TILE.WATER;
       const openR = at(tx + 1, ty) !== TILE.WATER;
       const openU = at(tx, ty - 1) !== TILE.WATER;
@@ -109,7 +159,7 @@ export function paintChunk(
               openU ? ly : 99,
               openD ? TILE_PX - 1 - ly : 99,
             );
-            if (biome.iceWater) {
+            if (iceWater) {
               // Frozen water: pale ice with thin cracks.
               if (dist === 0) c = wFoam;
               else if ((px + py * 2 + ox) % 29 === 0 || (px * 2 - py + oy + 512) % 31 === 0)
@@ -123,15 +173,30 @@ export function paintChunk(
               c = wLight;
             else if (j < 0.05) c = wDark;
             else c = wBase;
-          } else if (t === TILE.SAND) {
-            c = j < 0.2 ? sDark : sBase;
           } else {
-            const n = noiseAt(X, Y);
-            if (n + (j - 0.5) * 0.14 > biome.dirtThreshold) {
-              c = j < 0.1 ? dLight : j < 0.3 ? dDark : dBase;
+            // Ground: the biome is looked up at a warped position near borders (soft, dithered edge).
+            let pal = ownPal;
+            let bi = own;
+            if (mixed) {
+              const wx = px + (noiseAt(latWx, X, Y) - 0.5) * BORDER_WARP + (j - 0.5) * BORDER_GRAIN;
+              const g = (NOISE[(((px + ox + 37) & 255) << 8) | ((py + oy + 59) & 255)] ?? 0) / 256;
+              const wy = py + (noiseAt(latWy, X, Y) - 0.5) * BORDER_WARP + (g - 0.5) * BORDER_GRAIN;
+              const sx = Math.max(minT, Math.min(maxT, Math.floor(wx / TILE_PX)));
+              const sy = Math.max(minT, Math.min(maxT, Math.floor(wy / TILE_PX)));
+              bi = biomeAt(sx, sy);
+              pal = bi * PAL_STRIDE;
+            }
+            if (t === TILE.SAND) {
+              c = (j < 0.2 ? PALETTES[pal + PAL_SAND + 1] : PALETTES[pal + PAL_SAND]) ?? 0;
             } else {
-              const lightP = n > 0.55 ? 0.5 : 0.7;
-              c = j < lightP ? gBase : j < lightP + 0.18 ? gLight : j > 0.93 ? gDark : gBase;
+              const n = noiseAt(lat, X, Y);
+              if (n + (j - 0.5) * 0.14 > (DIRT_THRESHOLD[bi] ?? 1)) {
+                c = PALETTES[pal + PAL_DIRT + (j < 0.1 ? 1 : j < 0.3 ? 2 : 0)] ?? 0;
+              } else {
+                const lightP = n > 0.55 ? 0.5 : 0.7;
+                const k = j < lightP ? 0 : j < lightP + 0.18 ? 1 : j > 0.93 ? 2 : 0;
+                c = PALETTES[pal + PAL_GRASS + k] ?? 0;
+              }
             }
           }
           buf.data[py * CHUNK_PX + px] = c;

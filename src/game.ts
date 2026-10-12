@@ -30,9 +30,14 @@ import { SpawnerState, updateSpawner } from './systems/spawner';
 import { updateWeapons } from './systems/weapons';
 import { MAX_WEAPON_LEVEL, newWeapon } from './weapons';
 import type { WeaponId, WeaponState } from './weapons/types';
-import { biomeAt, biomeState, type BiomeId, type BiomeState } from './world/biomes';
+import { BIOMES, type BiomeId, type BiomeState } from './world/biomes';
 import type { Prop } from './world/props';
-import { World } from './world/world';
+import { findBiomeGround, World } from './world/world';
+
+/** Seconds the hero must stay in a new biome before it counts (border hysteresis). */
+const BIOME_SETTLE = 1;
+/** Minimum seconds between two "Entering <biome>" banners. */
+const BIOME_BANNER_GAP = 8;
 
 export interface Mine {
   x: number;
@@ -232,6 +237,11 @@ export class RunState {
   pet: PetState | null = null;
   /** Whether Steve's free Leather tier at minute 1 has been handed out. */
   private freeLeather = false;
+  /** Biome banner state: the biome last announced (or started in), a candidate and its dwell time. */
+  private shownBiome: BiomeId = 'plains';
+  private biomeCand: BiomeId = 'plains';
+  private biomeCandT = 0;
+  private biomeBannerT = -Infinity;
 
   constructor(
     readonly seed: number,
@@ -310,15 +320,63 @@ export class RunState {
     if (this.events.length < 24) this.events.push(name);
   }
 
+  /** The biome under the hero (spatial biome map; Nether while the rift is active). */
   biome(): BiomeId {
-    return this.rift.active ? 'nether' : biomeAt(this.time);
+    return this.rift.active ? 'nether' : this.world.biomeAtPx(this.player.x, this.player.y);
   }
 
-  /** Biome and crossfade state for rendering (the rift arena has no crossfade). */
+  /** The hero's biome as a render state (no crossfade any more: chunks bake their own biomes). */
   biomeState(): BiomeState {
-    return this.rift.active
-      ? { current: 'nether', previous: null, fade: 1 }
-      : biomeState(this.time);
+    return { current: this.biome(), previous: null, fade: 1 };
+  }
+
+  /**
+   * Debug start (`?biome=<id>`): move the hero (and companions) to the nearest dry ground inside that
+   * biome, found by a deterministic spiral from the origin. Returns false when none is in range.
+   */
+  startInBiome(biome: BiomeId): boolean {
+    if (biome === 'nether') return false;
+    const spot = findBiomeGround(this.overworld, biome);
+    if (!spot) return false;
+    const p = this.player;
+    const dx = spot.x - p.x;
+    const dy = spot.y - p.y;
+    p.x = spot.x;
+    p.y = spot.y;
+    p.snap();
+    for (const a of this.allies) {
+      a.x += dx;
+      a.y += dy;
+      a.prevX = a.prevY = Number.NaN;
+    }
+    if (this.pet) {
+      this.pet.x += dx;
+      this.pet.y += dy;
+      this.pet.prevX = this.pet.prevY = Number.NaN;
+    }
+    this.shownBiome = this.biomeCand = biome;
+    return true;
+  }
+
+  /** "Entering <biome>" banner, with hysteresis so walking along a border does not spam it. */
+  private updateBiomeBanner(dt: number): void {
+    if (this.rift.active) return;
+    const b = this.biome();
+    if (b === this.shownBiome) {
+      this.biomeCandT = 0;
+      return;
+    }
+    if (b !== this.biomeCand) {
+      this.biomeCand = b;
+      this.biomeCandT = 0;
+    }
+    this.biomeCandT += dt;
+    if (this.biomeCandT < BIOME_SETTLE) return;
+    this.shownBiome = b;
+    if (this.time - this.biomeBannerT < BIOME_BANNER_GAP) return;
+    this.biomeBannerT = this.time;
+    const [r, g, bl] = BIOMES[b].grass[1];
+    this.announce(`Entering ${BIOMES[b].name}`, `rgb(${r},${g},${bl})`, 2.5);
   }
 
   /** Called for every rewarded kill (bosses, mini-bosses, banner carriers). */
@@ -403,7 +461,8 @@ export class RunState {
       this.status = 'dead';
       this.deadT += dt;
     }
-    this.pathing.update(dt, p.x, p.y, this.world, this.biome());
+    this.pathing.update(dt, p.x, p.y, this.world);
+    this.updateBiomeBanner(dt);
     if (!p.dead) updateSpawner(this, dt);
 
     this.hash.clear();

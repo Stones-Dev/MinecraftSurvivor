@@ -47,7 +47,7 @@ function step(run: RunState, e: Enemy, vx: number, vy: number, dt: number): void
         ny += (dy / d) * push * 40 * dt;
       }
     }
-    const r = run.world.collide(nx, ny, e.radius, run.biome());
+    const r = run.world.collide(nx, ny, e.radius);
     e.x = r.x;
     e.y = r.y;
   }
@@ -58,7 +58,7 @@ function waterMult(run: RunState, e: Enemy): number {
   if (e.def.flying) return 1;
   // Drowned are at home in water; everyone else is slowed.
   if (e.def.id === 'drowned') return 1;
-  return run.world.speedFactor(e.x, e.y, run.biome()) < 1 ? 0.55 : 1;
+  return run.world.speedFactor(e.x, e.y) < 1 ? 0.55 : 1;
 }
 
 /** Direction to walk towards the player: the BFS route when far, a straight line when close. */
@@ -505,7 +505,7 @@ export function updateEnemies(run: RunState, dt: number): void {
           step(run, e, 0, 0, dt);
           if (e.stateT <= 0) {
             run.fx.push(makeFx('ring', e.x, e.y - 10, 0.3, { r: 14, color: '#b06bff' }));
-            const r = run.world.collide(e.tx, e.ty, e.radius, run.biome());
+            const r = run.world.collide(e.tx, e.ty, e.radius);
             e.x = r.x;
             e.y = r.y;
             run.fx.push(makeFx('ring', e.x, e.y - 10, 0.3, { r: 14, color: '#b06bff' }));

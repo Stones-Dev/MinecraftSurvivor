@@ -1,5 +1,7 @@
 /** Canvas UI primitives: stone-style panels, grey buttons, pixel text (original look, not Minecraft textures). */
-export const UI_FONT = '8px "Pixelify Sans", monospace';
+import { drawGlyphs, textWidth, type TextAlign } from './font';
+
+export { LINE_HEIGHT, textWidth } from './font';
 
 export interface Rect {
   x: number;
@@ -31,6 +33,7 @@ export function drawPanel(
   ctx.fillRect(x + w - 2, y + 1, 1, h - 2);
 }
 
+/** Pixel text with a 1 px black shadow; `y` is the baseline. Glyphs land on whole art pixels. */
 export function drawText(
   ctx: CanvasRenderingContext2D,
   s: string,
@@ -39,31 +42,66 @@ export function drawText(
   color = '#fff',
   align: CanvasTextAlign = 'left',
 ): void {
-  ctx.font = UI_FONT;
-  ctx.textAlign = align;
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = '#000';
-  ctx.fillText(s, Math.round(x) + 1, Math.round(y) + 1);
-  ctx.fillStyle = color;
-  ctx.fillText(s, Math.round(x), Math.round(y));
+  drawGlyphs(ctx, s, x, y, color, align);
 }
 
-/** Greedy word wrap using the UI font. */
-export function wrap(ctx: CanvasRenderingContext2D, s: string, maxW: number): string[] {
-  ctx.font = UI_FONT;
+/** Like `drawText`, `scale` times bigger (integer) for titles; the shadow scales with the glyphs. */
+export function drawTextScaled(
+  ctx: CanvasRenderingContext2D,
+  s: string,
+  x: number,
+  y: number,
+  color = '#fff',
+  align: TextAlign = 'left',
+  scale = 2,
+): void {
+  drawGlyphs(ctx, s, x, y, color, align, scale);
+}
+
+/**
+ * Greedy word wrap (pure): breaks at spaces and at `\n`, and splits a single word wider than
+ * `maxW` across lines. An empty string gives no lines.
+ */
+export function wrapText(s: string, maxW: number, measure: (s: string) => number): string[] {
   const lines: string[] = [];
-  let line = '';
-  for (const word of s.split(' ')) {
-    const trial = line ? `${line} ${word}` : word;
-    if (line && ctx.measureText(trial).width > maxW) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = trial;
+  for (const para of s.split('\n')) {
+    let line = '';
+    for (const word of para.split(' ')) {
+      const trial = line ? `${line} ${word}` : word;
+      if (!line || measure(trial) <= maxW) {
+        line = trial;
+      } else {
+        lines.push(line);
+        line = word;
+      }
+      // A word that cannot fit on a line of its own is cut at the last character that fits.
+      while (measure(line) > maxW && line.length > 1) {
+        let cut = line.length - 1;
+        while (cut > 1 && measure(line.slice(0, cut)) > maxW) cut--;
+        lines.push(line.slice(0, cut));
+        line = line.slice(cut);
+      }
     }
+    if (line || para === '') lines.push(line);
   }
-  if (line) lines.push(line);
-  return lines;
+  return s === '' ? [] : lines;
+}
+
+/** Greedy word wrap using the UI font (`ctx` is unused; kept for existing callers). */
+export function wrap(_ctx: CanvasRenderingContext2D, s: string, maxW: number): string[] {
+  return wrapText(s, maxW, (t) => textWidth(t));
+}
+
+/** `s` unchanged if it fits in `maxW`, else cut and suffixed with "..". */
+export function fitText(
+  s: string,
+  maxW: number,
+  measure: (s: string) => number = (t) => textWidth(t),
+): string {
+  if (measure(s) <= maxW) return s;
+  let t = s;
+  while (t.length > 1 && measure(`${t}..`) > maxW) t = t.slice(0, -1);
+  return `${t.trimEnd()}..`;
 }
 
 export function drawButton(

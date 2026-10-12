@@ -51,12 +51,7 @@ function moveTo(run: RunState, a: Ally, tx: number, ty: number, speed: number, d
     return d;
   }
   const step = Math.min(d, speed * dt);
-  const next = run.world.collide(
-    a.x + (dx / d) * step,
-    a.y + (dy / d) * step,
-    ALLY_RADIUS,
-    run.biome(),
-  );
+  const next = run.world.collide(a.x + (dx / d) * step, a.y + (dy / d) * step, ALLY_RADIUS);
   a.x = next.x;
   a.y = next.y;
   a.dx = dx / d;
