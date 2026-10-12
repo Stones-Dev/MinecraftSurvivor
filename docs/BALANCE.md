@@ -11,10 +11,17 @@ fixed 60 Hz step, with seeded runs (seeds 1000+ for the policy table, 2000+ for 
 table), so results are reproducible.
 
 - **smart**: keeps a weapon-dependent distance (melee weapons close in, ranged ones kite), flees when
-  HP drops below 35%, sidesteps hostile projectiles, avoids creepers, TNT traps and magma, collects
+  HP drops below 35%, sidesteps hostile projectiles, avoids creepers, TNT traps, magma and lava, collects
   gems when safe, uses the equipped item when swarmed, and picks cards by priority
-  (evolution > weapon level > armor/sword tier > passive).
-- **newbie**: reacts late, ignores far gems and picks random cards.
+  (evolution > weapon level > armor/sword tier > passive). It re-plans its direction every 2 steps (30 Hz).
+- **newbie**: reacts late (re-plans every 6 steps, 10 Hz), ignores far gems and picks random cards.
+
+**Sample size matters.** One run's survival time has a standard deviation of about 2 minutes, so the
+median of N seeds is only good to roughly 2.5 / sqrt(N) minutes: +-1:15 at 4 seeds (the old per-weapon
+table), +-0:25 at 48. `BAL_RUNS` now sets the seeds of every table (the per-weapon and biome tables used
+to take half), the generated tables print +-1 standard error and the mean, and the numbers below use 48
+seeds (`BAL_RUNS=48 BAL_BIOMES=1 npm run balance`, about 100 minutes). Do not act on differences under two
+standard errors.
 
 Curves under test (BRIEF section 15): enemy HP = base x (1 + 0.12 x minute), damage = base x (1 + 0.06 x
 minute), `xpToNext = 10 + 8 x level`, trickle `(1.6 + 0.028 t + 0.5 (t/60)^1.6) x 0.24` enemies/s,
@@ -22,21 +29,81 @@ tides every 38-56 s, soft cap 64.
 
 ## Targets and where we are
 
+Current (v1.1 re-tune, 48 seeds per cell, `docs/BALANCE_RESULTS.md`):
+
 | Target (BRIEF section 15) | Result |
 |---|---|
-| New Steve (sword only, random cards) dies around minute 4-6 | newbie median 3:44, smart median 4:16 (policy table); sword as the per-weapon starter 5:44 |
-| A decent build reaches the Wither (10:00) | bow 9:27, crossbow 9:09, blaze rods 8:58, lightning rod 8:22 median; p90 above 10:00 for bow, crossbow, snowball, blaze rods, lava bucket |
-| Bosses are beatable but dangerous | the bot kills 0.3-0.8 bosses per run on strong starters; the 5:00 Raid Captain is the usual wall for weak builds |
+| New Steve (sword only, random cards) dies around minute 4-6 | smart bot 5:41 (policy table) and 5:27 (sword as the per-weapon starter); newbie policy 3:19 (a 150-seed run gives 3:08-3:10, so it sits at the low end of 3:15-4:15, where v1.0 also was: 3:15); smart bot per start biome 5:00-5:54 |
+| A decent build reaches the Wither (10:00) | median bow 10:03, lightning rod 10:10, TNT 9:00, blaze rods 8:40, lava bucket 8:23, crossbow 8:16, harming 8:14; p90 above 10:00 for 12 of the 14 starters (all but sword and axe) |
+| Bosses are beatable but dangerous | the bot kills 0.3-0.6 bosses per run on the strong starters; the 5:00 Raid Captain is the usual wall for weak builds |
+
+History, labelled: the v1.0 table (8 seeds, 4 per weapon) read newbie 3:44, smart sword 4:16, bow 9:27,
+crossbow 9:09, blaze rods 8:58, lightning rod 8:22. Those per-weapon numbers were 4-seed medians. Re-measured
+on the v1.0 commit (42c6948) with 24 seeds, the same bot gives newbie 3:15 (150 seeds), bow 6:28, crossbow
+5:59, blaze rods 6:16, lightning rod 6:30: **v1.0 never reached 8-10 minutes either.** Its table was
+sampling luck, and the "v1.1 regression" measured against it was mostly the same luck (see below).
 
 ## Changes made because of the simulator
 
-1. **Base regeneration 0.4 HP/s.** Without any baseline regen every hit was permanent; a competent
+1. **Base regeneration 0.4 HP/s (v1.0; see item 3 for the current 0.7).** Without any baseline regen every hit was permanent; a competent
    bot spent minutes fleeing at low HP without killing anything (median 4:20, 19 kills). With regen
    the same bot reaches 5:06 and levels up.
 2. **Sword levels buffed** (L1 14 dmg / 0.85 s / 38 reach instead of 10 / 1.0 / 34; L5 32 / 0.6 / 54).
    The starter weapon could not kill a 20 HP zombie before contact; a stationary hero died at 0:23.
-3. Haste and Mending turned out to be the most picked passives for the smart bot, which is the
+3. **Base regeneration raised from 0.4 to 0.7 HP/s (v1.1 re-tune).** After the real v1.1 regression was
+   removed (next section) strong starters still died at 6-7 minutes, as they already did in v1.0, because the
+   wall at minute 5-6 is accumulated damage (30-60 HP per minute taken in minutes 3-5, against 24 HP per
+   minute of regeneration), not a burst. A regen sweep on held-out seeds 7000+ (48 seeds, medians
+   sword / bow / crossbow / blaze rods / lightning rod): 0.4 -> 5:26 / 6:24 / 7:25 / 5:56 / 6:41, 0.6 ->
+   4:59 / 7:34 / 7:42 / 6:25 / 8:11, **0.7 -> 4:58 / 8:53 / 8:42 / 7:23 / 9:17**, 0.8 -> 5:43 / 9:32 / 8:53 /
+   9:13 / 10:04. 0.8 pushes the sword-only median to the top of its band, so 0.7 was taken. Alternatives
+   screened on seeds 2000+: enemy damage slope 0.06 -> 0.04 per minute (about as strong as regen 0.6, but
+   it departs from the BRIEF curve), XP curve 8 + 5 x level (levels up, sword median +0:30), enemy HP slope
+   0.08 (no measurable effect). Regeneration is not part of the BRIEF curves, which is why it was the lever.
+4. Haste and Mending turned out to be the most picked passives for the smart bot, which is the
    intended reading of "efficient and sustainable"; no change.
+
+## v1.1 regression hunt (strong builds died "earlier")
+
+Bisecting 42c6948 (v1.0) against the v1.1 head with the same seeds (2000-2023, 24 per cell). Mean survival
+of bow / crossbow / blaze rods / lightning rod, then the average of the four:
+
+| Commit / switch | bow | crossbow | blaze | lightning | avg |
+|---|---|---|---|---|---|
+| v1.0 (42c6948) | 6:52 | 6:42 | 6:32 | 7:06 | 6:53 |
+| + movement model (4dc932d) | 6:11 | 5:42 | 6:06 | 6:27 | 6:06 |
+| + spatial biome map (c8fd952) | 5:46 | 6:16 | 5:58 | 6:19 | 6:05 |
+| just before rosters (7a4daac~1) | 5:24 | 7:00 | 5:09 | 5:33 | 5:56 |
+| v1.1 head (9672593) | 6:17 | 6:27 | 4:39 | 5:57 | 5:55 |
+
+Switches on the head (48 seeds, same four weapons, average of the means; "base" is the head with the old bot):
+
+| Switch | avg mean | Reading |
+|---|---|---|
+| base (accel 720/1100, bot re-plans at 10 Hz) | 6:15 | |
+| hero accelerates instantly | 6:53 | +0:38 |
+| acceleration x2 | 6:48 | +0:33 |
+| bot re-plans every step / every 2 steps / every 3 steps | 7:03 / 7:15 / 6:47 | +0:48 / +1:00 / +0:32 |
+| bot re-plans every 2 steps and avoids lava | 7:28 | +1:13 |
+| (on that bot) biome `danger` multipliers off | 7:13 | -0:15, noise |
+| (on that bot) 35 new mobs and rosters off (v1.0 mob list) | 7:19 | -0:09, noise |
+| (on that bot) every spawn drawn from the plains pool | 7:43 | +0:15, noise |
+
+**Causes.**
+
+1. The v1.0 per-weapon figures were 4-seed medians (see above), so most of the reported gap was noise.
+2. A real loss of about 0:40 (+-0:20) comes from the movement commit, and it is a bot artifact rather than a
+   game problem: the hero now needs about 0.1 s to reach full speed and 0.07 s to stop, and the bot
+   re-planned only every 6 steps (10 Hz), so its kiting reversals were 0.2 s late. Making the bot decide
+   more often recovers it without touching the movement model; making the movement instant recovers the
+   same amount. The newbie policy keeps its slow 10 Hz reactions on purpose and is unaffected (3:15 on v1.0,
+   3:10 on the head, 150 seeds each).
+3. The v1.1 biomes added lava to the hot biomes; the wandering bot walked into it (3 of 12 blaze-rod runs and
+   1 of 12 bow runs on the head ended standing in lava; burning is deadly in about 20 s). A human steers around lava, so the smart bot now does too
+   (`lavaRepulsion` in `tools/balance/bot.ts`). Water slows hero and mobs alike and was 22-25% of the bot's
+   time in v1.0 and v1.1, so it is not a regression.
+4. Spatial biomes, rosters, the 35 new mobs, the biome `danger` multipliers, the `slow` status, hero kits
+   and the ability integration have no measurable effect on survival (rows above and the bisection table).
 
 ## Known weaknesses of the bot (do not over-tune from these)
 
@@ -45,20 +112,31 @@ tides every 38-56 s, soft cap 64.
   median) by design.
 - The bot never opens chests, mines ore, enters rifts or trades, so real runs are somewhat
   easier than the simulator suggests.
-- Companions and permanent upgrades are not part of the simulator yet; the v1.0 numbers above are the
+- Companions, permanent upgrades and hero abilities are not part of the simulator; the numbers are the
   "fresh save" baseline.
+- The bot wanders in a straight line for hundreds of tiles, so a run crosses most biomes; "start biome"
+  only matters for the first minute or two.
 
 ## Weapon snapshot (smart bot, cap 20 min)
 
-Median survival / kills for every starter, 4 seeds each, is in `docs/BALANCE_RESULTS.md`. Highlights:
-snowball, crossbow and poison scale best into late game (700+ kills), blaze rods, axe and sword are
-the slowest starters. Evolutions need their passive partner and are rarely completed by the bot
-inside ten minutes, which matches the design intent that evolutions are a mid-run payoff.
+Median survival / kills for every starter (48 seeds each) is in `docs/BALANCE_RESULTS.md`. Highlights:
+lightning rod, bow, TNT and lava bucket are the strongest starters (8:23 to 10:10), harming, crossbow,
+lightning rod and poison collect the most kills (500 to 780), trident (4:40), axe (5:05), sword (5:27) and
+shield (5:57) are the slowest. Evolutions need their passive partner and are rarely completed by the bot
+inside ten minutes, which matches the design intent that evolutions are a mid-run payoff. (History: the v1.0
+snapshot had 4 seeds per starter and read snowball, crossbow and poison as the best late-game scalers.)
 
-## Final run of the simulator (v1.0)
+## Final run of the simulator (v1.1 re-tune)
 
-Re-run after the review fixes, hero loadout support and perf changes (8 seeds, cap 20 min): the numbers above are from that run. Re-run `npm run balance` after any change to spawn curves, weapons or enemy stats; the policy table should keep the new-player median between 4 and 6 minutes.
+`BAL_RUNS=48 BAL_BIOMES=1 npm run balance`, cap 20 min, bot with 30 Hz steering and lava avoidance, base
+regeneration 0.7: the tables in `docs/BALANCE_RESULTS.md` and the targets above are from that run. Re-run
+`npm run balance` after any change to spawn curves, weapons, movement or enemy stats; the policy table should
+keep the smart sword median between 4 and 6 minutes and the newbie policy near 3:15-4:15. Use 24+ seeds
+(`BAL_RUNS`) before drawing conclusions.
+
+History (v1.0, 8 seeds, 4 per weapon, old bot): the earlier version of this document quoted newbie 3:44,
+smart 4:16 and the 4-seed weapon medians discussed above.
 
 ## Biome rosters (v1.1)
 
-Biomes now change the spawn pool and apply their `danger` to density and HP (`data/rosters.ts`, see GDD 9.1). `playRun` takes a `biome` option and `BAL_BIOMES=1 npm run balance` adds a "Per start biome (smart bot, sword)" table to `docs/BALANCE_RESULTS.md`. Last run (12 seeds, cap 20 min), sword only, before the rosters then after: newbie 3:01 -> 2:51, smart 4:54 -> 5:00, sword as the per-weapon starter 4:03 -> 5:18. Per start biome the smart median is 4:38 in plains, 3:51 in the forest and 5:21 in the badlands, all within the 4-6 minute target at this sample size. Plains play is bit-identical to before (a test compares the pools).
+Biomes now change the spawn pool and apply their `danger` to density and HP (`data/rosters.ts`, see GDD 9.1). `playRun` takes a `biome` option and `BAL_BIOMES=1 npm run balance` adds a "Per start biome (smart bot, sword)" table to `docs/BALANCE_RESULTS.md`. Plains play is bit-identical to before (a test compares the pools). Current per-start-biome smart medians (48 seeds, sword): plains 5:09, forest 5:20, dark forest 5:24, snowy taiga 5:00, desert 5:07, swamp 5:23, jungle 5:11, badlands 5:07, cherry grove 5:08, mushroom fields 5:54, all inside 3:30-6:00 (+-0:23 to 0:31 each). History (12 seeds, before the v1.1 re-tune): newbie 3:01 -> 2:51 and smart 4:54 -> 5:00 across the roster change, plains 4:38, forest 3:51, badlands 5:21; those differences were inside the noise, as the regression hunt above confirms.
