@@ -18,7 +18,14 @@ export type SfxName =
   | 'victory'
   | 'boss'
   | 'portal'
-  | 'trade';
+  | 'trade'
+  | 'splash'
+  | 'snow'
+  | 'thunder'
+  | 'chest'
+  | 'egg'
+  | 'spin'
+  | 'gameover';
 
 /** Minimum seconds between two plays of the same effect (keeps crowds from clipping). */
 const SPACING: Record<SfxName, number> = {
@@ -39,6 +46,13 @@ const SPACING: Record<SfxName, number> = {
   boss: 1,
   portal: 0.5,
   trade: 0.3,
+  splash: 0.1,
+  snow: 0.08,
+  thunder: 0.15,
+  chest: 0.2,
+  egg: 0.3,
+  spin: 0.03,
+  gameover: 2,
 };
 
 const MAX_VOICES = 18;
@@ -230,6 +244,37 @@ export class AudioEngine {
       case 'portal':
         this.tone(220, 0.6, 'sine', 0.14, 660);
         this.tone(330, 0.6, 'triangle', 0.08, 990, 0.05);
+        break;
+      case 'splash':
+        this.noise(0.22, 0.2, 4500);
+        this.tone(900, 0.12, 'sine', 0.1, 400);
+        break;
+      case 'snow':
+        this.noise(0.1, 0.1, 5500);
+        this.tone(600, 0.06, 'sine', 0.06, 300);
+        break;
+      case 'thunder':
+        this.noise(0.7, 0.4, 1200);
+        this.tone(70, 0.6, 'sawtooth', 0.22, 35);
+        this.tone(1500, 0.05, 'square', 0.15, 200);
+        break;
+      case 'chest':
+        this.tone(220, 0.08, 'square', 0.1, 330);
+        this.tone(330, 0.1, 'square', 0.1, 495, 0.08);
+        this.tone(660, 0.14, 'triangle', 0.1, 880, 0.17);
+        break;
+      case 'egg':
+        this.tone(660, 0.07, 'triangle', 0.12, 990);
+        this.tone(880, 0.07, 'triangle', 0.12, 1320, 0.07);
+        this.tone(1320, 0.12, 'triangle', 0.1, 1760, 0.14);
+        break;
+      case 'spin':
+        this.tone(300 + this.xpStreak * 20, 0.05, 'square', 0.05, 500);
+        break;
+      case 'gameover':
+        [392, 349, 311, 261, 196].forEach((f, i) =>
+          this.tone(f, i === 4 ? 0.9 : 0.22, 'triangle', 0.16, f * 0.98, i * 0.2),
+        );
         break;
       case 'trade':
         this.tone(784, 0.08, 'triangle', 0.12, 784);

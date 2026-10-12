@@ -101,7 +101,7 @@ function reward(run: RunState, p: Prop): void {
       break;
   }
   run.fx.push(makeFx('ring', p.x, p.y - 4, 0.3, { r: 12, color: '#ffe27a' }));
-  run.emit('emerald');
+  run.emit(p.kind === 'chest' || p.kind === 'locked_chest' ? 'chest' : 'emerald');
 }
 
 function breakProp(run: RunState, p: Prop): void {

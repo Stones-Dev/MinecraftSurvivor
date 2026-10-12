@@ -59,7 +59,10 @@ function throwAt(
   potion.lobDur = LOB_DUR;
   potion.tx = target.x;
   potion.ty = target.y - 4;
-  potion.onLand = (rn, proj) => onLand(rn, proj.tx, proj.ty);
+  potion.onLand = (rn, proj) => {
+    rn.emit('splash');
+    onLand(rn, proj.tx, proj.ty);
+  };
   run.projectiles.push(potion);
 }
 

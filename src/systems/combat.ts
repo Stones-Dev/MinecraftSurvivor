@@ -90,6 +90,7 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
   }
   if (run.rng.drops.chance(m.lootMult / 400)) {
     run.spawnEggs++;
+    run.emit('egg');
     run.fx.push(
       makeFx('text', e.x, e.y - 20, 1, { text: 'Spawn Egg!', vy: -14, color: '#7dff9a' }),
     );

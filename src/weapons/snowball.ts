@@ -46,7 +46,7 @@ export const snowball: WeaponDef = {
     const target = nearestEnemy(run, RANGE);
     if (!target || Math.hypot(target.x - p.x, target.y - p.y) > RANGE) return false;
     faceToward(run, target.x);
-    run.emit('swing');
+    run.emit('snow');
     const base = Math.atan2(target.y - 4 - (p.y - 8), target.x - p.x);
     const evolved = w.evolved;
     const n = evolved ? Math.max(BLIZZARD_FANS, countOf(run, s)) : countOf(run, s);

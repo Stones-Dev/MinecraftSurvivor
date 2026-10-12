@@ -94,7 +94,7 @@ export const lightning_rod: WeaponDef = {
   fire(run, w, s) {
     const first = nearestEnemy(run, STRIKE_RANGE);
     if (!first) return false;
-    run.emit('explode');
+    run.emit('thunder');
     const jumps = w.evolved ? EVOLVED_JUMPS : s.count;
     const reach = areaOf(run, s);
     const taken: Enemy[] = [];

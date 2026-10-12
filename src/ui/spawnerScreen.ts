@@ -178,6 +178,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
     update(dt) {
       t += dt;
       if (phase === 'spin') {
+        if (Math.floor(t * 14) !== Math.floor((t - dt) * 14)) app.audio.play('spin');
         spinT -= dt;
         if (spinT <= 0) finishSpin();
       }

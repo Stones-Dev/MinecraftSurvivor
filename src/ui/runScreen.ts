@@ -182,6 +182,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   let lastCamX = 0;
   let lastCamY = 0;
 
+  let deathSting = false;
+
   // Quality tier: fixed by the setting, or adapted to the measured frame time when set to auto.
   let autoTier: 0 | 1 | 2 = 2;
   let slowFrames = 0;
@@ -252,6 +254,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       app.audio.setTheme(run.status === 'dead' ? null : runTheme(run));
       for (const ev of new Set(run.events)) app.audio.play(ev);
       run.events.length = 0;
+      if (run.status === 'dead' && !deathSting) {
+        deathSting = true;
+        app.audio.play('gameover');
+      }
       if (run.status === 'dead' && run.deadT > 1.4)
         router.replace(resultsScreen(app, run, !opts.debug));
     },
