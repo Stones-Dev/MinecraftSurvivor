@@ -27,7 +27,9 @@ export interface SaveData {
     showFps: boolean;
     quality: 'auto' | 'high' | 'medium' | 'low';
     /** Key remaps (action -> KeyboardEvent.code list); empty uses the defaults. */
-    controls: Partial<Record<'up' | 'down' | 'left' | 'right' | 'pause' | 'item', string[]>>;
+    controls: Partial<
+      Record<'up' | 'down' | 'left' | 'right' | 'pause' | 'item' | 'ability', string[]>
+    >;
   };
   flags: { tutorialDone: boolean };
 }

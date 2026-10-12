@@ -6,11 +6,13 @@ export interface InputSource {
   cancelPressed(): boolean;
   /** Use the equipped item (Space). */
   activePressed(): boolean;
+  /** Cast the hero ability (Q / Shift). Optional so simple test inputs need not implement it. */
+  abilityPressed?(): boolean;
   /** Clear one-shot presses; call once per simulation step. */
   endStep(): void;
 }
 
-export type Action = 'up' | 'down' | 'left' | 'right' | 'pause' | 'item';
+export type Action = 'up' | 'down' | 'left' | 'right' | 'pause' | 'item' | 'ability';
 
 export type Bindings = Record<Action, string[]>;
 
@@ -21,9 +23,10 @@ export const DEFAULT_BINDINGS: Bindings = {
   right: ['KeyD', 'ArrowRight'],
   pause: ['Escape', 'KeyP'],
   item: ['Space'],
+  ability: ['KeyQ', 'ShiftLeft'],
 };
 
-export const ACTIONS: Action[] = ['up', 'down', 'left', 'right', 'pause', 'item'];
+export const ACTIONS: Action[] = ['up', 'down', 'left', 'right', 'pause', 'item', 'ability'];
 
 export class KeyboardInput implements InputSource {
   private down = new Set<string>();
@@ -74,6 +77,10 @@ export class KeyboardInput implements InputSource {
 
   activePressed(): boolean {
     return this.bindings.item.some((k) => this.pressed.has(k));
+  }
+
+  abilityPressed(): boolean {
+    return this.bindings.ability.some((k) => this.pressed.has(k));
   }
 
   endStep(): void {

@@ -28,6 +28,7 @@ import { type Npc, spawnTrader, spawnVillager } from '../systems/npcs';
 import type { RunLoadout } from '../systems/meta';
 import type { ThemeId } from '../data/music';
 import type { Ally, PetState } from '../entities/ally';
+import { castAbility } from '../abilities';
 import { useItem } from '../systems/items';
 import { gainXp } from '../systems/levelup';
 import { BIOMES } from '../world/biomes';
@@ -249,6 +250,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       if (input.activePressed()) {
         const v = input.moveVector();
         useItem(run, v.x, v.y);
+      }
+      if (input.abilityPressed?.()) {
+        const v = input.moveVector();
+        castAbility(run, { x: run.targetX, y: run.targetY, moveX: v.x, moveY: v.y });
       }
       if (input.pausePressed() && !run.player.dead) {
         router.push(pauseScreen(app, () => app.goHub()));

@@ -19,7 +19,7 @@ import { type Npc, type RescueMarker, updateNpcs } from './systems/npcs';
 import { Ally, PetState } from './entities/ally';
 import { defaultLoadout, applyLoadoutMods, heroBaseHp, type RunLoadout } from './systems/meta';
 import { spawnCompanions, updateAllies, updatePet } from './systems/allies';
-import { allyById } from './data/companions';
+import { allyById, heroById } from './data/companions';
 import { RiftState, updateRift } from './systems/rift';
 import { updateInteract, type PropState } from './systems/interact';
 import { updateItems } from './systems/items';
@@ -216,6 +216,10 @@ export class RunState {
   private dotAcc = 0;
   /** Base max HP before bonuses (Steve: 100 + 10%). */
   baseMaxHp = 110;
+  /** The hero's active ability (Q) and its cooldown / usage state. */
+  readonly abilityId: string | null;
+  ability = { cd: 0, castCount: 0 };
+
   /** Cards one armor tier costs: 2 for everyone, 1 for Steve (Builder's Grit). */
   armorCardCost(): number {
     return this.loadout.hero === 'steve' ? 1 : 2;
@@ -248,6 +252,7 @@ export class RunState {
     this.world = this.overworld;
     this.time = startTime;
     this.baseMaxHp = heroBaseHp(loadout.hero);
+    this.abilityId = heroById(loadout.hero).ability;
     initDirector(this);
     this.applyLoadoutStart();
     this.recomputeStats();
@@ -417,6 +422,7 @@ export class RunState {
     updateAllies(this, dt);
     updatePet(this, dt);
     this.updateHeroPassives(dt);
+    this.ability.cd = Math.max(0, this.ability.cd - dt);
     if (p.footfall && !p.dead) {
       this.emit('step');
       if (this.quality > 0 && this.world.surface(p.x, p.y, this.biome()) === 'ground') {

@@ -57,6 +57,9 @@ export interface Mods {
   turtleShield: number;
   /** End-of-run Emerald payout multiplier (Looting upgrade, Pig); in-run drops use `lootMult` only. */
   payoutMult: number;
+  /** Hero ability cooldown multiplier (lower is faster) and effect strength multiplier. */
+  abilityCd: number;
+  abilityPower: number;
 }
 
 export function baseMods(): Mods {
@@ -97,6 +100,8 @@ export function baseMods(): Mods {
     healWater: 0,
     turtleShield: 0,
     payoutMult: 1,
+    abilityCd: 1,
+    abilityPower: 1,
   };
 }
 

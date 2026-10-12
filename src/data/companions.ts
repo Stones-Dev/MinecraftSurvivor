@@ -71,6 +71,8 @@ export interface HeroDef extends CompanionBase {
   kind: 'hero';
   /** Atlas hero name (`hero.<name>...`). */
   hero: string;
+  /** Id of this hero's active ability (src/abilities). */
+  ability: string;
   hp: number;
   dmg: number;
   speed: number;
@@ -115,6 +117,7 @@ export const HEROES: HeroDef[] = [
     rarity: 'common',
     sprite: 'hero.steve.none.none',
     hero: 'steve',
+    ability: 'iron_resolve',
     hp: 100,
     dmg: 1,
     speed: 1,
@@ -130,6 +133,7 @@ export const HEROES: HeroDef[] = [
     rarity: 'legendary',
     sprite: 'hero.alex.none.none',
     hero: 'alex',
+    ability: 'arrow_rain',
     hp: 90,
     dmg: 1.05,
     speed: 1.08,
@@ -144,6 +148,7 @@ export const HEROES: HeroDef[] = [
     rarity: 'legendary',
     sprite: 'hero.rana.none.none',
     hero: 'rana',
+    ability: 'frog_leap',
     hp: 85,
     dmg: 1,
     speed: 1.04,

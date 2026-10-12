@@ -1,3 +1,4 @@
+import { abilityById, abilityCooldown } from '../abilities';
 import type { View } from '../core/canvas';
 import { PASSIVES } from '../data/upgrades';
 import { ITEMS } from '../data/items';
@@ -138,6 +139,22 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
   if (run.director.goldenUntil > run.time) {
     drawIcon(ctx, 'star', width - 54, 36);
     drawText(ctx, `${Math.ceil(run.director.goldenUntil - run.time)}s`, width - 40, 45, '#ffd84a');
+  }
+
+  const ab = abilityById(run.abilityId);
+  if (ab) {
+    const x = width - 42;
+    const y = height - 22;
+    slot(ctx, x, y, ab.icon, 0);
+    const total = abilityCooldown(run, ab);
+    if (run.ability.cd > 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      const h = Math.ceil(14 * Math.min(1, run.ability.cd / total));
+      ctx.fillRect(x + 1, y + 15 - h, 14, h);
+      drawText(ctx, String(Math.ceil(run.ability.cd)), x + 8, y + 12, '#fff', 'center');
+    } else {
+      drawText(ctx, 'Q', x + 8, y - 3, '#8ee8ff', 'center');
+    }
   }
 
   if (run.item) {
