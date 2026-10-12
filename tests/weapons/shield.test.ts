@@ -77,10 +77,10 @@ describe('shield', () => {
     expect(run.shield.ready).toBe(false);
     stepSeconds(run, 1.5);
     expect(run.shield.ready).toBe(true);
-    const hpReady = run.player.hp;
     stepSeconds(run, 0.5);
+    const hpBlock = run.player.hp;
     expect(hurtPlayer(run, 20)).toBe(0);
-    expect(run.player.hp).toBe(hpReady);
+    expect(run.player.hp).toBe(hpBlock);
   });
 
   it('returns thorns damage to the attacker that hit the hero', () => {

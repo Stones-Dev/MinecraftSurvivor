@@ -57,7 +57,7 @@ export function baseMods(): Mods {
     thorns: 0,
     lootMult: 1,
     luck: 0,
-    regen: 0,
+    regen: 0.4,
     armor: 0,
     maxHpBonus: 0,
     dmgTaken: 1,

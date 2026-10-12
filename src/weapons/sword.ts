@@ -19,11 +19,11 @@ export const sword: WeaponDef = {
   name: 'Sword',
   icon: 'sword',
   levels: [
-    { dmg: 10, cd: 1.0, area: 34, count: 1, pierce: 99, blurb: 'Sweeps an arc in front of you.' },
-    { dmg: 12, cd: 0.92, area: 37, count: 1, pierce: 99, blurb: '+2 damage, wider arc.' },
-    { dmg: 15, cd: 0.85, area: 40, count: 1, pierce: 99, blurb: '+3 damage, faster swings.' },
-    { dmg: 18, cd: 0.78, area: 44, count: 1, pierce: 99, blurb: '+3 damage, wider arc.' },
-    { dmg: 22, cd: 0.7, area: 50, count: 1, pierce: 99, blurb: '+4 damage, much faster.' },
+    { dmg: 14, cd: 0.85, area: 38, count: 1, pierce: 99, blurb: 'Sweeps an arc in front of you.' },
+    { dmg: 17, cd: 0.8, area: 41, count: 1, pierce: 99, blurb: '+3 damage, wider arc.' },
+    { dmg: 21, cd: 0.74, area: 44, count: 1, pierce: 99, blurb: '+4 damage, faster swings.' },
+    { dmg: 26, cd: 0.68, area: 48, count: 1, pierce: 99, blurb: '+5 damage, wider arc.' },
+    { dmg: 32, cd: 0.6, area: 54, count: 1, pierce: 99, blurb: '+6 damage, much faster.' },
   ],
   evolution: {
     id: 'sweeping_blade',
