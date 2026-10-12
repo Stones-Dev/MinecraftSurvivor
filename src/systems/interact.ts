@@ -100,6 +100,13 @@ function reward(run: RunState, p: Prop): void {
     default:
       break;
   }
+  // Piggy Bank: chests and ores sometimes hold a Spawn Egg.
+  const stash = p.kind === 'chest' || p.kind === 'locked_chest' || p.kind === 'ore';
+  if (stash && run.mods.chestEggs > 0 && run.rng.drops.chance(run.mods.chestEggs)) {
+    run.spawnEggs++;
+    run.emit('egg');
+    text(run, p.x, p.y - 10, 'Spawn Egg!', '#ff9ad0');
+  }
   run.fx.push(makeFx('ring', p.x, p.y - 4, 0.3, { r: 12, color: '#ffe27a' }));
   run.emit(p.kind === 'chest' || p.kind === 'locked_chest' ? 'chest' : 'emerald');
 }
