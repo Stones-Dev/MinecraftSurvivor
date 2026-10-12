@@ -28,6 +28,8 @@ export interface PropPixels {
 }
 
 const OUTLINE: RGB = [24, 28, 20];
+/** Depth in pixels of one voxel row of a tree (top-face height). */
+const TREE_T = 2;
 /** Tone offset meaning "leave this pixel transparent". */
 const HOLE = 99;
 /** Five tones, lightest first. */
@@ -58,6 +60,10 @@ interface Mat {
   jitter?: number;
   /** Takes the snow / moss cap on exposed top faces. */
   capped?: boolean;
+  /** Front faces with blocks above them (no sky light) are one tone darker. */
+  skyShade?: boolean;
+  /** Every voxel face gets a lit top-left rim and a dark bottom-right rim (separate blocks read). */
+  bevel?: boolean;
 }
 
 const EDGE_L = 1;
@@ -83,6 +89,7 @@ function paintFace(
 ): void {
   const base = (top ? 1 : 2) + add;
   for (let j = 0; j < h; j++) {
+    const rowShade = m.bevel ? (j === 0 ? -1 : !top && j === h - 1 ? 1 : 0) : 0;
     for (let i = 0; i < w; i++) {
       const u = u0 + i;
       const v = v0 + j;
@@ -93,7 +100,8 @@ function paintFace(
       const atB = !top && (edges & EDGE_B) !== 0 && j === h - 1;
       const atT = top && (edges & EDGE_T) !== 0 && j === 0;
       if (m.ragged && (atL || atR || atB || atT) && hash2(u, v, seed + 7) < m.ragged) continue;
-      let tone = base + t;
+      let tone = base + t + rowShade;
+      if (m.bevel && !top && i === w - 1 && j > 0) tone += 1;
       if (atL || atT) tone -= 1;
       if (atR || atB) tone += 1;
       tone = tone < 0 ? 0 : tone > 4 ? 4 : tone;
@@ -118,19 +126,21 @@ function drawBox(
   if (f > 0) paintFace(buf, X, Y + t, w, f, m, false, X, Y + t, ALL_EDGES, 0, seed);
 }
 
-/** Leaf texture: clumps of light and dark, scattered see-through dark holes. */
-function leafMat(pal: Pal, seed: number, ragged = 0.28): Mat {
+/** Leaf texture: mid green with scattered dark see-through holes and a few lit flecks. */
+function leafMat(pal: Pal, seed: number, ragged = 0.06): Mat {
   return {
     pal,
     ragged,
-    jitter: 0.3,
+    jitter: 0.14,
     capped: true,
-    tex: (u, v) => {
-      const a = hash2(u >> 1, v >> 1, seed);
+    skyShade: true,
+    bevel: true,
+    tex: (u, v, top) => {
       const b = hash2(u, v, seed + 1);
-      if (b > 0.9) return 2;
-      if (b < 0.07) return -1;
-      return a < 0.2 ? -1 : a > 0.8 ? 1 : 0;
+      if (b > 0.88) return 2;
+      if (b > 0.83) return 1;
+      if (b < (top ? 0.2 : 0.07)) return -1;
+      return 0;
     },
   };
 }
@@ -139,6 +149,7 @@ function leafMat(pal: Pal, seed: number, ragged = 0.28): Mat {
 function logMat(pal: Pal, seed: number): Mat {
   return {
     pal,
+    skyShade: true,
     tex: (u, v, top) => {
       if (top) return (u + v) % 3 === 0 ? 1 : 0;
       const col = hash2(u, 0, seed);
@@ -158,13 +169,14 @@ function birchMat(seed: number): Mat {
   ];
   return {
     pal,
+    skyShade: true,
     tex: (u, v) => (hash2(u, v, seed) < 0.12 ? 1 : 0),
     over: (u, v, top) => {
       if (top) return undefined;
-      // Black horizontal streaks, 1-3 px long.
-      const row = hash2(0, v, seed + 4);
-      if (row < 0.42 && hash2(u >> 1, v, seed + 5) < 0.5) return [44, 42, 40];
-      return undefined;
+      // Black horizontal streaks, 1-3 px long, on every third row.
+      if (v % 3 !== 1) return undefined;
+      const r = hash2(u >> 1, v, seed + 5);
+      return r < 0.45 ? [44, 42, 40] : r < 0.55 ? [120, 118, 112] : undefined;
     },
   };
 }
@@ -225,6 +237,8 @@ function vkey(x: number, y: number, z: number): number {
 /** Sparse voxel model: x right, y up, z towards the viewer. */
 class Vox {
   readonly cells = new Map<number, Mat>();
+  /** `disc` draws square layers with clipped corners instead of round ones. */
+  square = false;
 
   set(x: number, y: number, z: number, m: Mat | null): void {
     if (m) this.cells.set(vkey(x, y, z), m);
@@ -244,14 +258,26 @@ class Vox {
    * Leaf disc of radius r around (cx, cz) (half-integers centre on 2x2 trunks); corners are rounded
    * and rim voxels are dropped with chance `drop` (Minecraft's random leaf corners).
    */
-  disc(cx: number, y: number, cz: number, rx: number, rz: number, m: Mat, drop: number, seed: number) {
+  disc(
+    cx: number,
+    y: number,
+    cz: number,
+    rx: number,
+    rz: number,
+    m: Mat,
+    drop: number,
+    seed: number,
+  ) {
     for (let z = Math.floor(cz - rz); z <= Math.ceil(cz + rz); z++) {
       for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
-        const dx = (x - cx) / (rx + 0.5);
-        const dz = (z - cz) / (rz + 0.5);
-        const d = dx * dx + dz * dz;
+        const dx = Math.abs(x - cx) / (rx + 0.5);
+        const dz = Math.abs(z - cz) / (rz + 0.5);
+        // Square layers with clipped corners (blocky), or round discs.
+        const d = this.square
+          ? Math.max(dx, dz) + (dx > 0.7 && dz > 0.7 ? 0.3 : 0)
+          : dx * dx + dz * dz;
         if (d > 1.02) continue;
-        if (d > 0.55 && hash2(x * 31 + y, z * 17 - y, seed) < drop) continue;
+        if (d > (this.square ? 0.8 : 0.55) && hash2(x * 31 + y, z * 17 - y, seed) < drop) continue;
         if (!this.get(x, y, z)) this.set(x, y, z, m);
       }
     }
@@ -332,7 +358,16 @@ function renderVox(v: Vox, o: VoxOpts): VoxImage {
     }
     if (!v.get(x, y, z + 1)) {
       const B = v.get(x, y - 1, z) ? 0 : EDGE_B;
-      const shadow = v.get(x, y + 1, z + 1) ? 1 : 0;
+      // Overhang in front casts a shadow; anything above (no sky light) darkens a little more.
+      let shadow = v.get(x, y + 1, z + 1) ? 1 : 0;
+      if (!shadow && m.skyShade) {
+        for (let k = y + 1; k <= maxY; k++) {
+          if (v.get(x, k, z)) {
+            shadow = 1;
+            break;
+          }
+        }
+      }
       const v0 = (maxY - y) * f;
       paintFace(buf, X, Y + t, s, f, m, false, X, v0, L | R | B, shadow + jitter, seed);
       if (capped && o.cap) {
@@ -448,13 +483,11 @@ function hangVines(img: VoxImage, v: Vox, leaves: Mat, s: number, f: number, see
 function oakLike(c: Ctx, birch: boolean): Pix {
   const { b, shape } = c;
   const seed = 40 + shape * 7 + (birch ? 100 : 0);
-  const pal = birch
-    ? leafPalFrom(mix(b.leaves[0], [112, 156, 70], 0.55))
-    : leafPal(b);
+  const pal = birch ? leafPalFrom(mix(b.leaves[0], [112, 156, 70], 0.55)) : leafPal(b);
   const leaves = leafMat(pal, seed);
   const log = birch ? birchMat(seed) : logMat(logPal(b), seed);
   const v = new Vox();
-  const h = (birch ? 5 : 4) + (shape % 2);
+  const h = (birch ? 6 : 5) + (shape % 2);
   v.box(0, 0, 0, 0, h, 0, log);
   for (const ly of [h - 2, h - 1]) {
     for (let z = -2; z <= 2; z++) {
@@ -474,7 +507,7 @@ function oakLike(c: Ctx, birch: boolean): Pix {
       }
     }
   }
-  const img = renderVox(v, { s: 5, t: 2, f: 4, ax: 0, az: 0, seed, cap: snowCap(c) });
+  const img = renderVox(v, { s: 5, t: TREE_T, f: 4, ax: 0, az: 0, seed, cap: snowCap(c) });
   return finish(img);
 }
 
@@ -489,25 +522,23 @@ function snowCap(c: Ctx): Mat | undefined {
 function darkOak(c: Ctx): Pix {
   const { b, shape } = c;
   const seed = 240 + shape * 7;
-  const leaves = leafMat(leafPal(b), seed, 0.22);
+  const leaves = leafMat(leafPal(b), seed);
   const log = logMat(logPal(b), seed);
   const v = new Vox();
   const h = 4 + (shape % 2);
+  v.square = true;
   v.box(0, 0, 0, 1, h + 1, 1, log);
-  // Root flare: log stubs on two sides.
-  if (shape !== 1) v.set(-1, 0, 1, log);
-  if (shape !== 2) v.set(2, 0, 0, log);
   v.disc(0.5, h, 0.5, 3.5, 3, leaves, 0.25, seed);
   v.disc(0.5, h + 1, 0.5, 3.5, 3, leaves, 0.45, seed + 1);
   v.disc(0.5, h + 2, 0.5, 2.5, 2, leaves, 0.3, seed + 2);
-  const img = renderVox(v, { s: 4, t: 2, f: 4, ax: 0.5, az: 0.5, seed });
+  const img = renderVox(v, { s: 4, t: TREE_T, f: 4, ax: 0.5, az: 0.5, seed });
   return finish(img);
 }
 
 function spruce(c: Ctx): Pix {
   const { b, shape } = c;
   const seed = 300 + shape * 5;
-  const leaves = leafMat(leafPal(b), seed, 0.18);
+  const leaves = leafMat(leafPal(b), seed);
   const log = logMat(logPal(b), seed);
   const v = new Vox();
   const big = shape >= 2;
@@ -543,14 +574,14 @@ function spruce(c: Ctx): Pix {
     }
   }
   v.set(0, top + 1, 0, leaves);
-  const img = renderVox(v, { s: 4, t: 2, f: 4, ax: 0, az: 0, seed, cap: snowCap(c) });
+  const img = renderVox(v, { s: 4, t: TREE_T, f: 4, ax: 0, az: 0, seed, cap: snowCap(c) });
   return finish(img);
 }
 
 function swampOak(c: Ctx): Pix {
   const { b, shape } = c;
   const seed = 420 + shape * 7;
-  const leaves = leafMat(leafPal(b), seed, 0.2);
+  const leaves = leafMat(leafPal(b), seed);
   const log = logMat(logPal(b), seed);
   const v = new Vox();
   const h = 4 + (shape % 2);
@@ -559,7 +590,7 @@ function swampOak(c: Ctx): Pix {
   v.disc(0, h, 0, 3, 3, leaves, 0.55, seed + 1);
   v.disc(0, h + 1, 0, 2, 2, leaves, 0.4, seed + 2);
   v.disc(0, h + 2, 0, 1, 1, leaves, 0.5, seed + 3);
-  const img = renderVox(v, { s: 4, t: 2, f: 4, ax: 0, az: 0, seed, padBottom: 0 });
+  const img = renderVox(v, { s: 4, t: TREE_T, f: 4, ax: 0, az: 0, seed, padBottom: 0 });
   finish(img);
   hangVines(img, v, leaves, 4, 4, seed);
   return img;
@@ -568,18 +599,16 @@ function swampOak(c: Ctx): Pix {
 function jungleTree(c: Ctx): Pix {
   const { b, shape } = c;
   const seed = 520 + shape * 7;
-  const leaves = leafMat(leafPal(b), seed, 0.22);
+  const leaves = leafMat(leafPal(b), seed);
   const log = logMat(logPal(b), seed);
   const v = new Vox();
   const h = 7 + (shape % 2);
   v.box(0, 0, 0, 1, h + 1, 1, log);
-  v.set(-1, 0, 0, log);
-  v.set(2, 0, 1, log);
   v.disc(0.5, h, 0.5, 3.5, 3, leaves, 0.3, seed);
   v.disc(0.5, h + 1, 0.5, 3.5, 3, leaves, 0.5, seed + 1);
   v.disc(0.5, h + 2, 0.5, 2.5, 2, leaves, 0.35, seed + 2);
   v.disc(0.5, h + 3, 0.5, 1.5, 1, leaves, 0.4, seed + 3);
-  const img = renderVox(v, { s: 4, t: 2, f: 4, ax: 0.5, az: 0.5, seed });
+  const img = renderVox(v, { s: 4, t: TREE_T, f: 4, ax: 0.5, az: 0.5, seed });
   finish(img);
   hangVines(img, v, leaves, 4, 4, seed);
   // Cocoa pods on the trunk.
@@ -606,14 +635,14 @@ function jungleBush(c: Ctx): Pix {
   v.disc(0, 0, 0, 2.2, 2, leaves, 0.4, seed);
   v.disc(0, 1, 0, 1.6, 1.4, leaves, 0.4, seed + 1);
   if (shape >= 2) v.disc(0, 2, 0, 0.8, 0.8, leaves, 0.2, seed + 2);
-  const img = renderVox(v, { s: 4, t: 2, f: 4, ax: 0, az: 0.5, seed });
+  const img = renderVox(v, { s: 4, t: TREE_T, f: 4, ax: 0, az: 0.5, seed });
   return finish(img);
 }
 
 function cherryTree(c: Ctx): Pix {
   const { b, shape } = c;
   const seed = 720 + shape * 7;
-  const leaves = leafMat(leafPal(b), seed, 0.24);
+  const leaves = leafMat(leafPal(b), seed);
   const log = logMat(logPal(b), seed);
   const v = new Vox();
   const dir = shape % 2 === 0 ? 1 : -1;
@@ -631,7 +660,7 @@ function cherryTree(c: Ctx): Pix {
   for (let x = -4; x <= 4; x++) {
     if (Math.abs(x) >= 2 && hash2(x, 4, seed + 4) < 0.35) v.set(x, 4, 1, leaves);
   }
-  const img = renderVox(v, { s: 4, t: 2, f: 4, ax: 0, az: 0, seed, padBottom: 2, padSide: 2 });
+  const img = renderVox(v, { s: 4, t: TREE_T, f: 4, ax: 0, az: 0, seed, padBottom: 2, padSide: 2 });
   finish(img);
   // Falling petals around and below the canopy.
   const petal: RGB[] = [
@@ -639,8 +668,10 @@ function cherryTree(c: Ctx): Pix {
     [236, 150, 190],
   ];
   const top = img.at(0, 4, 2).front;
-  for (let k = 0; k < 11; k++) {
-    const x = Math.floor(hash2(k, shape, seed + 5) * img.buf.w);
+  const x0 = img.at(-3, 4, 0).X;
+  const x1 = img.at(4, 4, 0).X;
+  for (let k = 0; k < 12; k++) {
+    const x = x0 + Math.floor(hash2(k, shape, seed + 5) * (x1 - x0));
     const y = top + Math.floor(hash2(k, shape, seed + 6) * (img.buf.h - top));
     if (img.buf.get(x, y) !== 0) continue;
     put(img.buf, x, y, petal[k % 2] ?? WHITE_WARM);
@@ -664,10 +695,15 @@ function hugeMushroom(c: Ctx): Pix {
       pal: capPal,
       tex: (u, v2) => (hash2(u, v2, seed + 2) < 0.1 ? 1 : 0),
       over: (u, v2) => {
-        const cu = Math.floor((u + 1) / 4);
-        const cv = Math.floor((v2 + 1) / 4);
-        const inSpot = (u + 1) % 4 < 2 && (v2 + 1) % 4 < 2;
-        return inSpot && hash2(cu, cv, seed + 3) < 0.4 ? [244, 238, 228] : undefined;
+        // Irregular white spots: 2x2 blobs on a jittered 5-px grid.
+        const cu = Math.floor(u / 5);
+        const cv = Math.floor(v2 / 4);
+        const ou = Math.floor(hash2(cu, cv, seed + 4) * 3);
+        const ov = Math.floor(hash2(cu, cv, seed + 5) * 2);
+        const lu = u - cu * 5 - ou;
+        const lv = v2 - cv * 4 - ov;
+        const inSpot = lu >= 0 && lu < 2 && lv >= 0 && lv < 2;
+        return inSpot && hash2(cu, cv, seed + 3) < 0.55 ? [244, 238, 228] : undefined;
       },
     };
     const top = 5 + tall;
@@ -697,28 +733,26 @@ function hugeMushroom(c: Ctx): Pix {
       v.set(x, top, z, cap);
     }
   }
-  const img = renderVox(v, { s: 4, t: 2, f: 4, ax: 0, az: 0, seed });
+  const img = renderVox(v, { s: 4, t: TREE_T, f: 4, ax: 0, az: 0, seed });
   return finish(img);
 }
 
 // ---------------------------------------------------------------------------------------------------
 // Rocks
 
-/** Low cluster of blocks: a 4x2 base with a 2-block hump, varied by shape. */
+/** Low mound of blocks: a 4x2 base (one corner dropped) under a 2x1 or 2x2 hump. */
 function rockShape(v: Vox, shape: number, m: (y: number) => Mat, seed: number): void {
   v.box(0, 0, 0, 3, 0, 1, m(0));
-  if (hash2(shape, 1, seed) < 0.5) v.set(0, 0, 0, null);
-  if (hash2(shape, 2, seed) < 0.5) v.set(3, 0, 1, null);
-  const hx = 1 + (shape % 2);
-  v.box(hx - 1, 1, 0, hx, 1, 0, m(1));
-  if (shape >= 2) v.set(hx, 1, 1, m(1));
-  if (shape === 3) v.set(hx - 1, 2, 0, m(2));
+  v.set(hash2(shape, 1, seed) < 0.5 ? 0 : 3, 0, hash2(shape, 2, seed) < 0.5 ? 0 : 1, null);
+  const hx = 1 + (shape === 1 ? 1 : 0);
+  v.box(hx - (shape === 2 ? 1 : 0), 1, 0, hx + 1, 1, shape >= 2 ? 1 : 0, m(1));
+  if (shape === 3) v.set(hx + 1, 0, 2, m(0));
 }
 
 function boulderLike(c: Ctx, mat: Mat, cap?: Mat): Pix {
   const v = new Vox();
   rockShape(v, c.shape, () => mat, 200);
-  const img = renderVox(v, { s: 4, t: 2, f: 4, ax: 1.5, az: 0.5, seed: 200 + c.shape, cap });
+  const img = renderVox(v, { s: 4, t: 3, f: 4, ax: 1.5, az: 0.5, seed: 200 + c.shape, cap });
   return finish(img);
 }
 
@@ -759,19 +793,19 @@ const TERRACOTTA: RGB[] = [
 ];
 
 function terracottaRock(c: Ctx): Pix {
-  const mats = TERRACOTTA.map(
-    (col, i): Mat => ({
-      pal: ramp(col),
-      tex: (u, v) => (hash2(u, v, 900 + i) < 0.1 ? 1 : hash2(u, v, 950 + i) < 0.06 ? -1 : 0),
-    }),
-  );
+  const mats = TERRACOTTA.map((col, i): Mat => ({
+    pal: ramp(col),
+    tex: (u, v) => (hash2(u, v, 900 + i) < 0.1 ? 1 : hash2(u, v, 950 + i) < 0.06 ? -1 : 0),
+  }));
   const pick = (y: number): Mat => mats[(y + c.shape) % mats.length] ?? (mats[0] as Mat);
   const v = new Vox();
-  v.box(0, 0, 0, 2, 0, 1, pick(0));
-  v.box(0, 1, 0, 1 + (c.shape % 2), 1, 1, pick(1));
-  v.box(c.shape % 2, 2, 0, 1 + (c.shape % 2), 2, 0, pick(2));
-  if (c.shape >= 2) v.set(1, 3, 0, pick(3));
-  const img = renderVox(v, { s: 5, t: 2, f: 3, ax: 1, az: 0.5, seed: 240 + c.shape });
+  const o = c.shape % 2;
+  v.box(0, 0, 0, 3, 0, 1, pick(0));
+  v.set(o ? 0 : 3, 0, 0, null);
+  v.box(o, 1, 0, 2 + o, 1, 1, pick(1));
+  v.box(o, 2, 0, 1 + o, 2, c.shape >= 2 ? 1 : 0, pick(2));
+  if (c.shape === 3) v.set(1, 3, 0, pick(3));
+  const img = renderVox(v, { s: 4, t: 2, f: 3, ax: 1.5, az: 0.5, seed: 240 + c.shape });
   return finish(img);
 }
 
@@ -931,7 +965,7 @@ function melon(c: Ctx): Pix {
   return finish({ buf, ox: 6, oy: 11 });
 }
 
-function beacon(_c: Ctx): Pix {
+function beacon(): Pix {
   const buf = new PixBuffer(18, 22);
   const iron: Mat = {
     pal: ramp([210, 212, 218], [232, 234, 238], [170, 172, 180]),
@@ -939,20 +973,21 @@ function beacon(_c: Ctx): Pix {
   };
   drawBox(buf, 1, 13, 16, 4, 4, iron, 61);
   const glass: Mat = {
-    pal: ramp([170, 230, 240], [214, 250, 255], [120, 190, 210]),
+    pal: ramp([176, 214, 222], [214, 240, 246], [130, 168, 180]),
     tex: () => 0,
   };
   drawBox(buf, 4, 2, 10, 4, 9, glass, 62);
-  // Through the glass: obsidian base and the glowing core.
-  fill(buf, 6, 11, 11, 13, [40, 30, 56]);
-  fill(buf, 6, 7, 11, 10, [120, 240, 246]);
-  fill(buf, 6, 7, 8, 8, [236, 255, 255]);
-  fill(buf, 10, 9, 11, 10, [70, 190, 200]);
-  fill(buf, 5, 3, 12, 4, [196, 246, 252]);
+  // Through the glass: obsidian floor and the glowing core.
+  fill(buf, 5, 13, 12, 14, [44, 32, 62]);
+  fill(buf, 6, 8, 11, 12, [110, 236, 244]);
+  fill(buf, 7, 9, 10, 11, [210, 255, 255]);
+  fill(buf, 8, 10, 9, 10, [255, 255, 255]);
+  fill(buf, 11, 9, 11, 12, [60, 176, 196]);
+  fill(buf, 5, 3, 12, 4, [214, 248, 252]);
   return finish({ buf, ox: 9, oy: 19 });
 }
 
-function campfire(_c: Ctx): Pix {
+function campfire(): Pix {
   const buf = new PixBuffer(18, 16);
   const log = logMat(ramp([110, 76, 44], [134, 96, 58], [78, 52, 30]), 71);
   const end: RGB = [196, 160, 100];
@@ -974,7 +1009,7 @@ function campfire(_c: Ctx): Pix {
   return finish({ buf, ox: 9, oy: 13 });
 }
 
-function anvil(_c: Ctx): Pix {
+function anvil(): Pix {
   const buf = new PixBuffer(18, 15);
   const iron: Mat = {
     pal: ramp([92, 92, 102], [120, 120, 132], [64, 64, 72]),
@@ -990,7 +1025,7 @@ function anvil(_c: Ctx): Pix {
   return finish({ buf, ox: 9, oy: 13 });
 }
 
-function enchantTable(_c: Ctx): Pix {
+function enchantTable(): Pix {
   const buf = new PixBuffer(16, 19);
   const obsidian: Mat = {
     pal: ramp([40, 28, 56], [62, 46, 84], [24, 16, 34]),
@@ -1012,16 +1047,16 @@ function enchantTable(_c: Ctx): Pix {
   put(buf, 14, 7, gem);
   put(buf, 2, 10, gem);
   put(buf, 13, 10, gem);
-  // Floating open book.
-  fill(buf, 4, 1, 11, 4, [120, 70, 34]);
-  fill(buf, 5, 1, 7, 3, [244, 238, 220]);
-  fill(buf, 8, 1, 10, 3, [226, 218, 196]);
-  put(buf, 6, 2, [150, 140, 120]);
-  put(buf, 9, 2, [150, 140, 120]);
+  // Floating open book: cover, two pages, dark spine.
+  fill(buf, 3, 2, 12, 4, [120, 70, 34]);
+  fill(buf, 4, 1, 7, 3, [244, 238, 220]);
+  fill(buf, 8, 1, 11, 3, [226, 218, 196]);
+  fill(buf, 4, 3, 7, 3, [214, 206, 184]);
+  fill(buf, 7, 1, 8, 4, [90, 50, 24]);
   return finish({ buf, ox: 8, oy: 16 });
 }
 
-function tnt(_c: Ctx): Pix {
+function tnt(): Pix {
   const buf = new PixBuffer(12, 14);
   const red: Mat = {
     pal: ramp([200, 48, 38], [226, 72, 56], [150, 30, 26]),
@@ -1031,11 +1066,16 @@ function tnt(_c: Ctx): Pix {
   // Top: pale cap with the fuse.
   fill(buf, 2, 2, 9, 4, [214, 200, 186]);
   fill(buf, 5, 2, 6, 3, [70, 60, 50]);
-  // White label band with the letters as dark ticks.
-  fill(buf, 1, 7, 10, 9, [236, 232, 224]);
-  for (const x of [2, 3, 5, 6, 8, 9]) put(buf, x, 8, [40, 36, 34]);
-  put(buf, 2, 7, [40, 36, 34]);
-  put(buf, 9, 7, [40, 36, 34]);
+  // White label band with "TNT" in 3x3 letters.
+  fill(buf, 1, 6, 10, 10, [236, 232, 224]);
+  const ink: RGB = [40, 36, 34];
+  for (const x0 of [1, 7]) {
+    fill(buf, x0, 7, x0 + 2, 7, ink);
+    fill(buf, x0 + 1, 8, x0 + 1, 9, ink);
+  }
+  fill(buf, 4, 7, 4, 9, ink);
+  fill(buf, 6, 7, 6, 9, ink);
+  put(buf, 5, 8, ink);
   return finish({ buf, ox: 6, oy: 11 });
 }
 
@@ -1386,15 +1426,7 @@ const FLOWER_ROWS: Record<string, readonly string[]> = {
     '..lgl..',
     '...g...',
   ],
-  red_mushroom: [
-    '..rrr..',
-    '.rwrrr.',
-    'rrrrwrr',
-    'RRRRRRR',
-    '...s...',
-    '..sss..',
-    '..sSs..',
-  ],
+  red_mushroom: ['..rrr..', '.rwrrr.', 'rrrrwrr', 'RRRRRRR', '...s...', '..sss..', '..sSs..'],
   brown_mushroom: ['.......', '..bbb..', '.bBbbb.', 'bBBBBBb', '...s...', '..sss..', '..sSs..'],
 };
 
@@ -1434,25 +1466,28 @@ function flowerSprite(c: Ctx, style: PropStyle): Pix {
 }
 
 function pinkPetals(c: Ctx): Pix {
-  const buf = new PixBuffer(16, 10);
+  const buf = new PixBuffer(18, 12);
   const pink: RGB[] = [
-    [252, 198, 222],
-    [240, 160, 196],
-    [206, 112, 156],
+    [255, 214, 232],
+    [244, 166, 204],
+    [214, 116, 164],
   ];
   const stem = plantPal(c.b)[3];
-  const n = 4 + (c.shape % 3);
+  const n = 5 + (c.shape % 3);
   for (let k = 0; k < n; k++) {
-    const x = 2 + Math.floor(hash2(k, c.shape, 140) * 11);
-    const y = 2 + Math.floor(hash2(k, c.shape, 141) * 6);
-    put(buf, x, y + 1, stem);
+    const x = 3 + Math.floor(hash2(k, c.shape, 140) * 12);
+    const y = 2 + Math.floor(hash2(k, c.shape, 141) * 7);
+    // Four-petal flower lying flat, lit petals up-left, with a stem tick and a dark petal under it.
+    put(buf, x + 1, y + 2, stem);
     put(buf, x - 1, y, pink[1] ?? WHITE_WARM);
-    put(buf, x + 1, y, pink[1] ?? WHITE_WARM);
+    put(buf, x + 1, y, pink[2] ?? WHITE_WARM);
     put(buf, x, y - 1, pink[0] ?? WHITE_WARM);
-    put(buf, x, y, [250, 230, 140]);
+    put(buf, x - 1, y - 1, pink[0] ?? WHITE_WARM);
     put(buf, x, y + 1, pink[2] ?? WHITE_WARM);
+    put(buf, x + 1, y + 1, pink[2] ?? WHITE_WARM);
+    put(buf, x, y, [252, 232, 150]);
   }
-  return { buf, ox: 8, oy: 7 };
+  return finish({ buf, ox: 9, oy: 8 }, [150, 70, 110]);
 }
 
 // ---------------------------------------------------------------------------------------------------

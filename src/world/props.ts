@@ -298,7 +298,9 @@ export function genProps(
         continue;
       }
       const dry = b.ground === 'sand' || b.ground === 'red_sand';
-      if (roll(P.boulder + b.boulderBonus * (grove > 0.5 ? 1.6 : 0.6))) {
+      // Mushroom fields grow huge mushrooms (boulder kind, 'huge_mushroom' style) where others grow trees.
+      const huge = cell === 'mushroom_fields' ? 0.03 + (grove > 0.6 ? 0.1 : 0) : 0;
+      if (roll(P.boulder + huge + b.boulderBonus * (grove > 0.5 ? 1.6 : 0.6))) {
         out.push(make(id, 'boulder', 0, shape, x, y, cell));
       } else if (roll(P.ore)) {
         const type = v < 0.4 ? 0 : v < 0.65 ? 1 : v < 0.77 ? 2 : v < 0.85 ? 3 : v < 0.93 ? 4 : 5;

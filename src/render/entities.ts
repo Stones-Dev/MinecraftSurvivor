@@ -1,4 +1,5 @@
 /** Drawing of combat entities: enemies, hero, pickups, projectiles, mines, pools, orbiters, effects, telegraphs. */
+import { cb, reduceFlash } from '../core/accessibility';
 import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
 import { heroById, type HeroDef } from '../data/companions';
@@ -108,8 +109,9 @@ export function drawEnemy(
   const { id, t } = enemyAnim(atlas, e);
   if (!atlas.hasAnim(id)) return;
   let key = frameAt(atlas.anim(id), t);
-  const blink = e.state === 'fuse' && Math.floor(e.animT * 8) % 2 === 0;
-  if (e.hurtT > 0 || blink) key += '@flash';
+  // Reduce flashing: no hit flash, and the fuse blink drops from 8 Hz to a slow 2 Hz.
+  const blink = e.state === 'fuse' && Math.floor(e.animT * (reduceFlash() ? 2 : 8)) % 2 === 0;
+  if ((e.hurtT > 0 && !reduceFlash()) || blink) key += '@flash';
   if (e.dying) ctx.globalAlpha = Math.max(0, 1 - e.deathT / 0.6);
   const x = e.rx - camX;
   const y = e.ry - camY;
@@ -306,9 +308,10 @@ export function drawSpriteHero(
     ctx.fillStyle = ARMOR_RING[run.armorTier] ?? '#f2f2f2';
     pixelEllipse(ctx, x, y + 1, 8 * sc, 3 * sc);
   }
-  if (p.iframes > 0 && !p.dead && Math.floor(run.time * 20) % 2 === 0) alpha *= 0.65;
+  if (p.iframes > 0 && !p.dead && (reduceFlash() || Math.floor(run.time * 20) % 2 === 0))
+    alpha *= 0.65;
   ctx.globalAlpha = alpha;
-  if (p.hurtT > 0) atlas.draw(ctx, `${key}@flash`, x, y, flip, sc);
+  if (p.hurtT > 0 && !reduceFlash()) atlas.draw(ctx, `${key}@flash`, x, y, flip, sc);
   else if (def.tint) atlas.drawTinted(ctx, key, x, y, flip, sc, def.tint);
   else atlas.draw(ctx, key, x, y, flip, sc);
   ctx.globalAlpha = 1;
@@ -417,9 +420,10 @@ function drawLayeredHero(
   const t = swinging ? SWING_TIME - p.swingT : run.time * (walking ? 1.5 : 1);
   const anim = atlas.hasAnim(id) ? atlas.anim(id) : atlas.anim(`hero.${name}.none.sword_wood.idle`);
   let key = frameAt(anim, t);
-  if (p.hurtT > 0) key += '@flash';
+  if (p.hurtT > 0 && !reduceFlash()) key += '@flash';
   if (p.dead) ctx.globalAlpha = 0.5;
-  else if (p.iframes > 0 && Math.floor(run.time * 20) % 2 === 0) ctx.globalAlpha = 0.65;
+  else if (p.iframes > 0 && (reduceFlash() || Math.floor(run.time * 20) % 2 === 0))
+    ctx.globalAlpha = 0.65;
   if (walking) {
     // Distance-driven walk cycle: the legs shuffle +1, 0, -1, 0 px and the body rises on the passing step.
     const stage = Math.floor(p.walkPhase) & 3;
@@ -591,7 +595,7 @@ export function drawProjectile(
 }
 
 export function drawMine(ctx: CanvasRenderingContext2D, m: Mine, camX: number, camY: number): void {
-  const flash = m.fuse < 0.5 && Math.floor(m.fuse * 12) % 2 === 0;
+  const flash = m.fuse < 0.5 && Math.floor(m.fuse * (reduceFlash() ? 2 : 12)) % 2 === 0;
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(Math.round(m.x - camX) - 5, Math.round(m.y - camY) - 1, 10, 3);
   drawIcon(ctx, 'tnt', Math.round(m.x - camX) - 6, Math.round(m.y - camY) - 11);
@@ -805,9 +809,9 @@ export function drawTelegraph(
   camY: number,
 ): void {
   const k = t.t / t.dur;
-  const alpha = 0.35 + 0.35 * Math.abs(Math.sin(k * Math.PI * 4));
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = t.friendly ? '#7dd0ff' : '#ff3b3b';
+  // The pulse is a steady 0.6 when flashing is reduced.
+  ctx.globalAlpha = reduceFlash() ? 0.6 : 0.35 + 0.35 * Math.abs(Math.sin(k * Math.PI * 4));
+  ctx.fillStyle = cb(t.friendly ? '#7dd0ff' : '#ff3b3b');
   if (t.kind === 'line') {
     const dx = t.x2 - t.x;
     const dy = t.y2 - t.y;

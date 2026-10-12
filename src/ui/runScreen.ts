@@ -1,4 +1,5 @@
 import type { App } from '../app';
+import { cameraLead, reduceFlash } from '../core/accessibility';
 import { Camera } from '../core/camera';
 import type { View } from '../core/canvas';
 import { makeEnemy } from '../systems/spawner';
@@ -107,7 +108,7 @@ function drawWeather(
       ctx.fillRect(Math.round(x), Math.round(y), i % 3 === 0 ? 2 : 1, i % 3 === 0 ? 2 : 1);
     }
   }
-  if (run.flash > 0) {
+  if (run.flash > 0 && !reduceFlash()) {
     ctx.fillStyle = `rgba(255,255,255,${Math.min(0.7, run.flash * 2).toFixed(2)})`;
     ctx.fillRect(0, 0, w, h);
   }
@@ -292,8 +293,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       const nowMs = performance.now();
       const frameDt = Math.min(0.05, (nowMs - lastRenderMs) / 1000);
       lastRenderMs = nowMs;
-      camera.follow(p.rx, p.ry, width, height, p.vx, p.vy, frameDt);
-      const shake = app.data().settings.screenShake ? run.shake : 0;
+      // Settings: camera look-ahead off = follow the hero exactly; reduce-flashing also stops the shake.
+      const lead = cameraLead();
+      camera.follow(p.rx, p.ry, width, height, lead ? p.vx : 0, lead ? p.vy : 0, frameDt);
+      const shake = app.data().settings.screenShake && !reduceFlash() ? run.shake : 0;
       const camX = camera.x + (shake > 0.5 ? Math.round(Math.sin(run.time * 97) * shake) : 0);
       const camY = camera.y + (shake > 0.5 ? Math.round(Math.cos(run.time * 83) * shake) : 0);
       lastCamX = camX;
@@ -302,7 +305,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         renderer.drawGround(ctx, camX, camY, width, height, state, true);
         prebaked = true;
       }
-      renderer.drawGround(ctx, camX, camY, width, height, state);
+      renderer.drawGround(ctx, camX, camY, width, height, state, false, run.time);
 
       for (const z of run.zones) drawZone(ctx, z, camX, camY, run.time);
       if (run.rescue) drawRescueFlag(ctx, run.rescue, camX, camY, run.time);

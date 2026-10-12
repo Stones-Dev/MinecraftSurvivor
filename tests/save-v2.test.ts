@@ -31,7 +31,7 @@ describe('save v2 migration', () => {
       reduceFlash: false,
       touchControls: 'auto',
     });
-    expect(d.settings.cameraLead).toBe(false);
+    expect(d.settings.cameraLead).toBe(true);
     expect(defaultSave(1000)).toEqual(d); // deterministic
     expect(migrate(JSON.parse(JSON.stringify(d)))).toEqual(d); // fixed point
   });
@@ -118,7 +118,7 @@ describe('save v2 sanitize hardening', () => {
     expect(s.missions.weekly).toEqual([{ id: 'w', progress: 0, claimed: false }]);
     expect(s.dailyReward).toEqual({ lastClaimDay: '2026-10-12', streak: 1 });
     expect(s.cloud).toEqual({ uid: null, rev: 0, lastSyncedAt: 0 });
-    expect(s.settings.cameraLead).toBe(false);
+    expect(s.settings.cameraLead).toBe(true); // junk falls back to the default
     expect(s.settings.accessibility).toEqual({
       colorblind: 'off',
       textScale: 1,

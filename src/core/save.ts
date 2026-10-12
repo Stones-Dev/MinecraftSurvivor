@@ -53,6 +53,11 @@ export interface SaveData {
     bestTimeSec: number;
     bestKills: number;
     perHero: Record<string, HeroStats>;
+    /**
+     * Open-ended lifetime counters (`kills.<enemy>`, `sec.<biome>`, `damageDealt`, `trades`, ...) fed by
+     * src/systems/runStats.ts and read by achievements; unknown keys are kept, values are clamped.
+     */
+    counters: Record<string, number>;
   };
   /** Achievement id -> unlock time (ms). */
   achievements: Record<string, { at: number }>;
@@ -79,7 +84,7 @@ export interface SaveData {
     screenShake: boolean;
     showFps: boolean;
     quality: 'auto' | 'high' | 'medium' | 'low';
-    /** Camera leads slightly in the movement direction. */
+    /** Camera leads slightly in the movement direction (default on; the game always did this before the setting existed). */
     cameraLead: boolean;
     accessibility: {
       colorblind: ColorblindMode;
@@ -153,6 +158,7 @@ export function defaultSave(now = Date.now()): SaveData {
       bestTimeSec: 0,
       bestKills: 0,
       perHero: {},
+      counters: {},
     },
     achievements: {},
     missions: { day: '', weekKey: '', daily: [], weekly: [], rerollsLeft: 0 },
@@ -166,7 +172,7 @@ export function defaultSave(now = Date.now()): SaveData {
       screenShake: true,
       showFps: false,
       quality: 'auto',
-      cameraLead: false,
+      cameraLead: true,
       accessibility: {
         colorblind: 'off',
         textScale: 1,
@@ -334,6 +340,12 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
       };
     }
   }
+  const counters: SaveData['stats']['counters'] = {};
+  if (isRecord(st.counters)) {
+    for (const [k, v] of Object.entries(st.counters).slice(0, 512)) {
+      if (safeId(k)) counters[k] = count(v);
+    }
+  }
   const achievements: SaveData['achievements'] = {};
   if (isRecord(data.achievements)) {
     for (const [id, a] of Object.entries(data.achievements).slice(0, 1000)) {
@@ -395,6 +407,7 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
       bestTimeSec: Math.max(secs(st.bestTimeSec), records.bestTimeSec),
       bestKills: Math.max(count(st.bestKills), records.bestKills),
       perHero,
+      counters,
     },
     achievements,
     missions: {

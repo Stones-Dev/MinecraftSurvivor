@@ -1,4 +1,5 @@
 import { abilityById, abilityCooldown } from '../abilities';
+import { cb, cbAlpha, textScale } from '../core/accessibility';
 import type { View } from '../core/canvas';
 import { PASSIVES } from '../data/upgrades';
 import { ITEMS } from '../data/items';
@@ -7,7 +8,7 @@ import type { RunState } from '../game';
 import { xpToNext } from '../systems/economy';
 import { getMarkers } from '../systems/npcs';
 import { drawIcon } from './icons';
-import { drawText } from './panel';
+import { drawText, drawTextScaled } from './panel';
 
 function clock(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -90,11 +91,21 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
     );
   }
 
-  drawText(ctx, clock(run.time), width / 2, 16, '#fff', 'center');
-  drawIcon(ctx, 'skull', width - 54, 8);
-  drawText(ctx, String(run.kills), width - 40, 17, '#fff');
-  drawIcon(ctx, 'emerald', width - 54, 22);
-  drawText(ctx, String(run.emeraldsPicked), width - 40, 31, '#7dff9a');
+  // Accessibility text scale 2: the timer and the counters are drawn double size (menus stay 1x).
+  const big = textScale() === 2;
+  if (big) {
+    drawTextScaled(ctx, clock(run.time), width / 2, 23, '#fff', 'center', 2);
+    drawIcon(ctx, 'skull', width - 62, 10);
+    drawTextScaled(ctx, String(run.kills), width - 48, 24, '#fff', 'left', 2);
+    drawIcon(ctx, 'emerald', width - 62, 32);
+    drawTextScaled(ctx, String(run.emeraldsPicked), width - 48, 46, '#7dff9a', 'left', 2);
+  } else {
+    drawText(ctx, clock(run.time), width / 2, 16, '#fff', 'center');
+    drawIcon(ctx, 'skull', width - 54, 8);
+    drawText(ctx, String(run.kills), width - 40, 17, '#fff');
+    drawIcon(ctx, 'emerald', width - 54, 22);
+    drawText(ctx, String(run.emeraldsPicked), width - 40, 31, '#7dff9a');
+  }
 
   // Weapon slots (bottom-left) and passive slots above them.
   const y0 = height - 20;
@@ -110,24 +121,24 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
       ctx,
       `Rift ${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, '0')}`,
       width / 2,
-      26,
+      big ? 36 : 26,
       '#ff9a3a',
       'center',
     );
   }
   // Boss bar and announcements under the timer.
   const boss = run.enemies.find((e) => e.boss === 'boss' && !e.dying);
-  let by = run.rift.active ? 32 : 24;
+  let by = (run.rift.active ? 32 : 24) + (big ? 10 : 0);
   if (boss) {
     const w = 160;
     const x = Math.floor((width - w) / 2);
     ctx.fillStyle = '#101014';
     ctx.fillRect(x - 1, by, w + 2, 7);
-    ctx.fillStyle = '#5a1a1a';
+    ctx.fillStyle = cb('#5a1a1a');
     ctx.fillRect(x, by + 1, w, 5);
-    ctx.fillStyle = '#e04040';
+    ctx.fillStyle = cb('#e04040');
     ctx.fillRect(x, by + 1, Math.max(0, Math.floor((w * boss.hp) / boss.maxHp)), 5);
-    drawText(ctx, boss.def.name, width / 2, by + 16, '#ffd0d0', 'center');
+    drawText(ctx, boss.def.name, width / 2, by + 16, cb('#ffd0d0'), 'center');
     by += 20;
   }
   for (const b of run.banners) {
@@ -137,8 +148,15 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
     by += 11;
   }
   if (run.director.goldenUntil > run.time) {
-    drawIcon(ctx, 'star', width - 54, 36);
-    drawText(ctx, `${Math.ceil(run.director.goldenUntil - run.time)}s`, width - 40, 45, '#ffd84a');
+    const sy = big ? 52 : 36;
+    drawIcon(ctx, 'star', width - (big ? 62 : 54), sy);
+    drawText(
+      ctx,
+      `${Math.ceil(run.director.goldenUntil - run.time)}s`,
+      width - (big ? 48 : 40),
+      sy + 9,
+      '#ffd84a',
+    );
   }
 
   const ab = abilityById(run.abilityId);
@@ -184,8 +202,8 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
       height / 2,
       Math.max(width, height) * 0.62,
     );
-    g.addColorStop(0, 'rgba(160,0,0,0)');
-    g.addColorStop(1, `rgba(160,0,0,${pulse.toFixed(2)})`);
+    g.addColorStop(0, cbAlpha('#a00000', 0));
+    g.addColorStop(1, cbAlpha('#a00000', Number(pulse.toFixed(2))));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, width, height);
   }

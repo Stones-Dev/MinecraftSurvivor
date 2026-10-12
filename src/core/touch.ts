@@ -3,6 +3,7 @@
  * ability, the item and pause. Pure pointer logic (testable without a DOM) plus `attach` to hook a canvas.
  * Coordinates are art pixels.
  */
+import { coarsePointer, touchEnabled } from './accessibility';
 import type { InputSource } from './input';
 
 export interface TouchButton {
@@ -21,6 +22,8 @@ export class TouchInput implements InputSource {
   active = false;
   /** Setting: 'auto' shows the controls after the first touch, 'on' always, 'off' never. */
   mode: 'auto' | 'on' | 'off' = 'auto';
+  /** The device's primary pointer is coarse (a phone or tablet): 'auto' shows the controls right away. */
+  coarse = false;
   private stickId: number | null = null;
   private originX = 0;
   private originY = 0;
@@ -41,7 +44,13 @@ export class TouchInput implements InputSource {
   }
 
   get enabled(): boolean {
-    return this.mode === 'on' || (this.mode === 'auto' && this.active);
+    return touchEnabled(this.mode, this.coarse, this.active);
+  }
+
+  /** Apply the Settings > Accessibility choice ('auto' = coarse pointer or first touch). */
+  setMode(mode: 'auto' | 'on' | 'off', coarse = coarsePointer()): void {
+    this.mode = mode;
+    this.coarse = coarse;
   }
 
   /** A pointer went down at (x, y) in art px of a width x height view. Returns true when the touch was taken. */

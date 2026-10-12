@@ -14,6 +14,7 @@ import {
   finishOffer,
   SKIP_EMERALDS,
 } from '../systems/levelup';
+import { cb } from '../core/accessibility';
 import { drawIcon } from './icons';
 import { drawButton, drawPanel, drawText, inRect, type Rect, wrap } from './panel';
 import type { Screen } from './router';
@@ -77,7 +78,7 @@ export function levelupScreen(app: App, run: RunState): Screen {
       );
       run.offer?.forEach((card, i) => {
         const r = cardRect(view, i);
-        drawPanel(ctx, r, hover === i, card.gold ? '#e8b923' : RARITY_COLOR[card.rarity]);
+        drawPanel(ctx, r, hover === i, cb(card.gold ? '#e8b923' : RARITY_COLOR[card.rarity]));
         drawText(ctx, `${i + 1}`, r.x + 6, r.y + 12, '#aaa');
         if (card.isNew) drawText(ctx, 'NEW', r.x + r.w - 6, r.y + 12, '#7dff9a', 'right');
         drawIcon(ctx, card.icon, r.x + r.w / 2 - 18, r.y + 18, 3);

@@ -1,21 +1,44 @@
-/** Settings (BRIEF section 5): Audio / Graphics / Controls / Data sub-tabs. Every change saves and calls applySettings(). */
+/**
+ * Settings (BRIEF section 5): Audio / Graphics / Controls / Access / Account / Data sub-tabs.
+ * Every change saves and calls applySettings(), so it takes effect immediately.
+ */
 import type { App } from '../app';
 import type { View } from '../core/canvas';
 import { ACTIONS, DEFAULT_BINDINGS, type Action } from '../core/input';
-import type { SaveData } from '../core/save';
+import type { ColorblindMode, SaveData, TouchControlsMode } from '../core/save';
+import { accountBadge, syncLine } from './accountInfo';
 import { drawButton, drawPanel, drawText, fitText, inRect, type Rect } from './panel';
+import { profileScreen } from './profileScreen';
 import type { Screen } from './router';
 import { Buttons, drawTitle } from './widgets';
 
-type Tab = 'audio' | 'graphics' | 'controls' | 'data';
+type Tab = 'audio' | 'graphics' | 'controls' | 'access' | 'account' | 'data';
 type Quality = SaveData['settings']['quality'];
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'audio', label: 'Audio' },
   { id: 'graphics', label: 'Graphics' },
   { id: 'controls', label: 'Controls' },
+  { id: 'access', label: 'Access' },
+  { id: 'account', label: 'Account' },
   { id: 'data', label: 'Data' },
 ];
+const COLORBLIND: { id: ColorblindMode; label: string }[] = [
+  { id: 'off', label: 'Off' },
+  { id: 'protanopia', label: 'Protanopia' },
+  { id: 'deuteranopia', label: 'Deuteranopia' },
+  { id: 'tritanopia', label: 'Tritanopia' },
+];
+const TOUCH: { id: TouchControlsMode; label: string }[] = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'on', label: 'On' },
+  { id: 'off', label: 'Off' },
+];
+/** Next entry after `current` in a cyclic list. */
+function cycle<T extends { id: unknown }>(list: T[], current: unknown): T {
+  const i = list.findIndex((e) => e.id === current);
+  return list[(i + 1) % list.length] as T;
+}
 const ACTION_LABEL: Record<Action, string> = {
   up: 'Move up',
   down: 'Move down',
@@ -127,28 +150,34 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
       bars = [];
 
       // Sub-tabs.
-      const rowW = Math.min(width - 12, 300);
+      const rowW = Math.min(width - 12, 330);
       const x0 = Math.floor((width - rowW) / 2);
-      const tw = Math.floor((rowW - 12) / 4);
+      const tgap = 2;
+      const tw = Math.floor((rowW - tgap * (TABS.length - 1)) / TABS.length);
       const tabRects = TABS.map((t, i) => {
-        const r = { x: x0 + i * (tw + 4), y: 28, w: tw, h: 14 };
+        const r = { x: x0 + i * (tw + tgap), y: 28, w: tw, h: 14 };
         buttons.add(r, t.label, () => setTab(t.id));
         return r;
       });
 
-      // Row helpers: a panel per row, label on the left, controls on the right.
-      const top = 50;
-      const rowY = (i: number): number => top + i * 20;
+      // Row helpers: a panel per row, label on the left, controls on the right. The pitch shrinks so
+      // six rows still fit above the Back button on the smallest (320x180) canvas.
+      const top = 48;
+      const pitch = Math.max(16, Math.min(20, Math.floor((height - 26 - top) / 6)));
+      const rowH = pitch - 2;
+      const ctlH = Math.min(14, rowH - 3);
+      const rowY = (i: number): number => top + i * pitch;
+      const base = (i: number): number => rowY(i) + Math.floor(rowH / 2) + 3;
       const row = (i: number, label: string, note?: string): void => {
-        drawPanel(ctx, { x: x0, y: rowY(i), w: rowW, h: 18 });
-        drawText(ctx, label, x0 + 5, rowY(i) + 12);
-        if (note) drawText(ctx, note, x0 + 82, rowY(i) + 12, '#9a9aa8');
+        drawPanel(ctx, { x: x0, y: rowY(i), w: rowW, h: rowH });
+        drawText(ctx, label, x0 + 5, base(i));
+        if (note) drawText(ctx, note, x0 + 92, base(i), '#9a9aa8');
       };
-      const ctl = (i: number, w: number): Rect => ({
-        x: x0 + rowW - w - 2,
-        y: rowY(i) + 2,
+      const ctl = (i: number, w: number, fromRight = 0): Rect => ({
+        x: x0 + rowW - w - 2 - fromRight,
+        y: rowY(i) + Math.floor((rowH - ctlH) / 2),
         w,
-        h: 14,
+        h: ctlH,
       });
       const toggle = (i: number, label: string, on: boolean, flip: () => void): void => {
         row(i, label);
@@ -161,8 +190,8 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
         row(i, label);
         const v = s[key];
         const plus = ctl(i, 14);
-        const bar = { x: plus.x - 4 - 90, y: rowY(i) + 5, w: 90, h: 8 };
-        const minus = { x: bar.x - 4 - 14, y: plus.y, w: 14, h: 14 };
+        const bar = { x: plus.x - 4 - 90, y: rowY(i) + Math.floor((rowH - 8) / 2), w: 90, h: 8 };
+        const minus = { x: bar.x - 4 - 14, y: plus.y, w: 14, h: ctlH };
         buttons.add(minus, '-', () => setVolume(key, v - 0.1), v <= 0);
         buttons.add(plus, '+', () => setVolume(key, v + 0.1), v >= 1);
         ctx.fillStyle = '#101014';
@@ -171,9 +200,9 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
         ctx.fillRect(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2);
         ctx.fillStyle = '#7dff9a';
         ctx.fillRect(bar.x + 1, bar.y + 1, Math.round((bar.w - 2) * v), bar.h - 2);
-        drawText(ctx, `${Math.round(v * 100)}%`, minus.x - 4, rowY(i) + 12, '#cfcfd8', 'right');
+        drawText(ctx, `${Math.round(v * 100)}%`, minus.x - 4, base(i), '#cfcfd8', 'right');
         bars.push({
-          hit: { x: bar.x - 2, y: plus.y, w: bar.w + 4, h: 14 },
+          hit: { x: bar.x - 2, y: plus.y, w: bar.w + 4, h: ctlH },
           set: (frac) => {
             setVolume(key, frac);
             app.audio.play('click');
@@ -194,16 +223,17 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
         });
         toggle(1, 'Damage numbers', s.damageNumbers, () => (s.damageNumbers = !s.damageNumbers));
         toggle(2, 'Screen shake', s.screenShake, () => (s.screenShake = !s.screenShake));
-        toggle(3, 'FPS counter', s.showFps, () => (s.showFps = !s.showFps));
-        row(4, 'Fullscreen');
-        buttons.add(ctl(4, 60), document.fullscreenElement ? 'Exit' : 'Enter', toggleFullscreen);
+        toggle(3, 'Camera lookahead', s.cameraLead, () => (s.cameraLead = !s.cameraLead));
+        toggle(4, 'FPS counter', s.showFps, () => (s.showFps = !s.showFps));
+        row(5, 'Fullscreen');
+        buttons.add(ctl(5, 60), document.fullscreenElement ? 'Exit' : 'Enter', toggleFullscreen);
       } else if (tab === 'controls') {
         const gap = 6;
         const colW = Math.floor((rowW - gap) / 2);
         ACTIONS.forEach((a, i) => {
           const r = {
             x: x0 + (i % 2) * (colW + gap),
-            y: top + Math.floor(i / 2) * 20,
+            y: top + Math.floor(i / 2) * 18,
             w: colW,
             h: 16,
           };
@@ -217,7 +247,7 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
           });
         });
         buttons.add(
-          { x: Math.floor((width - 110) / 2), y: top + 86, w: 110, h: 16 },
+          { x: Math.floor((width - 110) / 2), y: top + 76, w: 110, h: 16 },
           'Reset controls',
           () => {
             s.controls = {};
@@ -231,10 +261,76 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
             ? `Press a key for "${ACTION_LABEL[capture]}"  (Esc cancels)`
             : 'Click an action, then press its new key.',
           width / 2,
-          top + 114,
+          top + 100,
           capture ? '#ffd84a' : '#9a9aa8',
           'center',
         );
+      } else if (tab === 'access') {
+        const a = s.accessibility;
+        row(0, 'Colour-blind mode');
+        const cbCur =
+          COLORBLIND.find((c) => c.id === a.colorblind) ??
+          (COLORBLIND[0] as (typeof COLORBLIND)[number]);
+        buttons.add(ctl(0, 84), cbCur.label, () => {
+          a.colorblind = cycle(COLORBLIND, a.colorblind).id;
+          commit();
+        });
+        row(1, 'Text size');
+        buttons.add(ctl(1, 60), a.textScale === 2 ? 'Large' : 'Normal', () => {
+          a.textScale = a.textScale === 2 ? 1 : 2;
+          commit();
+        });
+        toggle(2, 'Reduce flashing', a.reduceFlash, () => (a.reduceFlash = !a.reduceFlash));
+        row(3, 'Touch controls');
+        const tCur =
+          TOUCH.find((c) => c.id === a.touchControls) ?? (TOUCH[0] as (typeof TOUCH)[number]);
+        buttons.add(ctl(3, 60), tCur.label, () => {
+          a.touchControls = cycle(TOUCH, a.touchControls).id;
+          commit();
+        });
+        const hint =
+          a.colorblind !== 'off'
+            ? 'Danger and rarity colours are adjusted.'
+            : 'Large text applies to the in-run HUD and account dialogs.';
+        drawText(ctx, fitText(hint, rowW), x0 + 2, rowY(4) + 10, '#9a9aa8');
+      } else if (tab === 'account') {
+        const user = app.auth.user();
+        const badge = accountBadge(user, app.auth.state, app.auth.backend !== null);
+        row(0, 'Player');
+        const shown = user && user.kind !== 'guest' ? user.name : 'Guest';
+        drawText(ctx, fitText(shown, rowW - 100), x0 + 52, base(0), '#fff');
+        drawText(ctx, badge.label, x0 + rowW - 5, base(0), badge.color, 'right');
+        const sync = syncLine(
+          app.cloud.status,
+          app.auth.cloudAvailable,
+          user?.kind === 'cloud',
+          app.cloud.lastSyncedAt,
+        );
+        row(1, 'Save');
+        drawText(ctx, fitText(sync.text, rowW - 46), x0 + 38, base(1), sync.color);
+        row(2, 'Account');
+        buttons.add(ctl(2, 54), 'Profile', () =>
+          app.router.push(profileScreen(app, () => app.router.pop())),
+        );
+        if (user?.kind === 'cloud') {
+          buttons.add(ctl(2, 54, 58), 'Sign out', () => {
+            void app.auth.signOut();
+          });
+        } else {
+          const cloudOn = app.auth.cloudAvailable;
+          buttons.add(ctl(2, cloudOn ? 54 : 78, 58), cloudOn ? 'Sign in' : 'Local profile', () => {
+            void app.openAccount(cloudOn ? 'signin' : 'create');
+          });
+        }
+        if (!app.auth.cloudAvailable) {
+          drawText(
+            ctx,
+            fitText('Cloud save disabled; playing locally.', rowW),
+            x0 + 2,
+            rowY(3) + 10,
+            '#9a9aa8',
+          );
+        }
       } else {
         row(0, 'Export save', 'minesurvive-save.json');
         buttons.add(ctl(0, 80), 'Export', exportSave);
@@ -247,7 +343,7 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
             ctx,
             message,
             width / 2,
-            rowY(3) + 12,
+            rowY(3) + 10,
             messageOk ? '#7dff9a' : '#ff8a8a',
             'center',
           );

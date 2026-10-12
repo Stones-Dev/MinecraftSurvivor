@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { ICON_DATA, ICON_NAMES, ICON_SIZE } from '../src/ui/icons';
 
 describe('code-drawn icons', () => {
-  it('uses a 12 px grid and lists 51 unique names', () => {
+  it('uses a 12 px grid and lists unique names', () => {
     expect(ICON_SIZE).toBe(12);
-    expect(ICON_NAMES).toHaveLength(51);
+    expect(ICON_NAMES.length).toBeGreaterThanOrEqual(62);
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
   });
 

@@ -42,6 +42,7 @@ export function damageEnemy(
     dmg -= absorbed;
     if (dmg <= 0) return;
   }
+  run.stats.damageDealt += Math.min(dmg, Math.max(0, e.hp));
   e.hp -= dmg;
   if (!quiet) {
     e.hurtT = 0.1;
@@ -194,6 +195,7 @@ export function hurtPlayer(run: RunState, raw: number, attacker: Enemy | null = 
   }
   const dealt = run.player.hurt(incoming);
   if (dealt <= 0) return 0;
+  run.stats.damageTaken += dealt;
   run.emit('hurt');
   run.shake = Math.max(run.shake, 3);
   run.fx.push(

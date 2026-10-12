@@ -80,54 +80,63 @@ function toward(c: RGB, d: RGB, t: number): RGB {
 // ---------------------------------------------------------------------------------------------------
 // Tileable building blocks
 
-/** Value noise on a lattice of `cell` px that wraps every 16 px (so the texture tiles seamlessly). */
-function periodic(x: number, y: number, cell: number, seed: number): number {
-  const n = TEX / cell;
-  const gx = x / cell;
-  const gy = y / cell;
-  const x0 = Math.floor(gx);
-  const y0 = Math.floor(gy);
-  const fx = gx - x0;
-  const fy = gy - y0;
-  const sx = fx * fx * (3 - 2 * fx);
-  const sy = fy * fy * (3 - 2 * fy);
-  const w = (i: number): number => ((i % n) + n) % n;
-  const a = hash2(w(x0), w(y0), seed);
-  const b = hash2(w(x0 + 1), w(y0), seed);
-  const c = hash2(w(x0), w(y0 + 1), seed);
-  const d = hash2(w(x0 + 1), w(y0 + 1), seed);
-  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
-}
-
-/** Clustered field: weighted periodic octaves plus a little white noise (the 1 px grain). */
-function field(seed: number, octaves: readonly (readonly [number, number])[], white: number) {
+/**
+ * Clustered field: weighted octaves of value noise on lattices of `cell` px that wrap every 16 px
+ * (so the texture tiles seamlessly), plus a little white noise (the 1 px grain).
+ */
+function field(
+  seed: number,
+  octaves: readonly (readonly [number, number])[],
+  white: number,
+): Float32Array {
   const f = new Float32Array(TEX_AREA);
-  for (let y = 0; y < TEX; y++) {
-    for (let x = 0; x < TEX; x++) {
-      let v = 0;
-      octaves.forEach(([cell, w], k) => (v += periodic(x, y, cell, seed + k * 101) * w));
-      f[y * TEX + x] = v + hash2(x, y, seed + 977) * white;
+  for (let i = 0; i < TEX_AREA; i++) f[i] = hash2(i & 15, i >> 4, seed + 977) * white;
+  octaves.forEach(([cell, w], k) => {
+    const n = TEX / cell;
+    const lat = new Float32Array(n * n);
+    for (let j = 0; j < n * n; j++) lat[j] = hash2(j % n, Math.floor(j / n), seed + k * 101);
+    for (let y = 0; y < TEX; y++) {
+      const gy = y / cell;
+      const y0 = Math.floor(gy);
+      const fy = gy - y0;
+      const sy = fy * fy * (3 - 2 * fy);
+      const r0 = y0 * n;
+      const r1 = ((y0 + 1) % n) * n;
+      for (let x = 0; x < TEX; x++) {
+        const gx = x / cell;
+        const x0 = Math.floor(gx);
+        const fx = gx - x0;
+        const sx = fx * fx * (3 - 2 * fx);
+        const x1 = (x0 + 1) % n;
+        const a = lat[r0 + x0] ?? 0;
+        const b = lat[r0 + x1] ?? 0;
+        const c = lat[r1 + x0] ?? 0;
+        const d = lat[r1 + x1] ?? 0;
+        const v = a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+        f[y * TEX + x] = (f[y * TEX + x] ?? 0) + v * w;
+      }
     }
-  }
+  });
   return f;
 }
 
 /** Rank quantisation: the lowest `props[0]` share of the field gets tone 0, and so on. */
 function rankTones(f: Float32Array, props: readonly number[], toneOffset = 0): Uint8Array {
-  const order = Array.from({ length: TEX_AREA }, (_, i) => i).sort(
-    (a, b) => (f[a] ?? 0) - (f[b] ?? 0),
-  );
+  // Sort (value, index) pairs packed into one float: a typed-array sort with no comparator.
+  const keys = new Float64Array(TEX_AREA);
+  for (let i = 0; i < TEX_AREA; i++) keys[i] = Math.floor((f[i] ?? 0) * 1e6) * TEX_AREA + i;
+  keys.sort();
   const total = props.reduce((s, p) => s + p, 0);
   const out = new Uint8Array(TEX_AREA);
   let tone = 0;
   let acc = (props[0] ?? 0) / total;
-  order.forEach((idx, rank) => {
+  for (let rank = 0; rank < TEX_AREA; rank++) {
     while (rank >= acc * TEX_AREA && tone < props.length - 1) {
       tone++;
       acc += (props[tone] ?? 0) / total;
     }
-    out[idx] = tone + toneOffset;
-  });
+    out[(keys[rank] ?? 0) % TEX_AREA] = tone + toneOffset;
+  }
   return out;
 }
 
@@ -257,10 +266,10 @@ function grassTones(seed: number): Uint8Array {
     field(
       seed,
       [
-        [4, 0.5],
-        [2, 0.35],
+        [4, 0.3],
+        [2, 0.4],
       ],
-      0.5,
+      0.6,
     ),
     GRASS_PROPS,
   );
@@ -280,10 +289,10 @@ const DIRT_PAL: readonly RGB[] = [
 ];
 
 const SNOW_PAL: readonly RGB[] = [
-  [206, 220, 232],
-  [224, 234, 241],
-  [237, 244, 248],
-  [249, 253, 254],
+  [210, 222, 236],
+  [228, 237, 245],
+  [240, 246, 250],
+  [250, 253, 255],
 ];
 
 const COBBLE_PAL: readonly RGB[] = [
@@ -301,7 +310,11 @@ function cobbleTones(seed: number): Uint8Array {
   const pts: [number, number, number][] = [];
   for (let gy = 0; gy < 3; gy++) {
     for (let gx = 0; gx < 3; gx++) {
-      pts.push([(gx + 0.15 + rnd() * 0.7) * (16 / 3), (gy + 0.15 + rnd() * 0.7) * (16 / 3), 2 + Math.floor(rnd() * 3)]);
+      pts.push([
+        (gx + 0.15 + rnd() * 0.7) * (16 / 3),
+        (gy + 0.15 + rnd() * 0.7) * (16 / 3),
+        2 + Math.floor(rnd() * 3),
+      ]);
     }
   }
   const cell = new Int8Array(TEX_AREA);
@@ -449,22 +462,22 @@ const RECIPES: readonly Recipe[] = [
         field(
           s,
           [
-            [4, 0.45],
+            [4, 0.5],
             [2, 0.35],
           ],
-          0.5,
+          0.3,
         ),
         [0.07, 0.17, 0.28, 0.27, 0.15, 0.06],
       );
       speckles(t, stream(s), 7, 6, 3);
       const pal: RGB[] = [
-        [84, 72, 82],
-        [99, 86, 96],
-        [112, 99, 108],
-        [124, 111, 120],
-        [140, 125, 135],
-        [160, 142, 156],
-        [186, 160, 182],
+        [88, 72, 88],
+        [102, 85, 102],
+        [114, 97, 113],
+        [126, 108, 124],
+        [141, 122, 139],
+        [160, 140, 160],
+        [190, 164, 190],
       ];
       return { tones: t, palette: pal.map(opaque) };
     },
@@ -489,12 +502,12 @@ const RECIPES: readonly Recipe[] = [
       );
       speckles(t, stream(s), 3, 5, 2);
       const pal: RGB[] = [
-        [48, 42, 40],
-        [58, 51, 48],
-        [67, 59, 55],
-        [76, 68, 62],
-        [88, 79, 72],
-        [112, 104, 96],
+        [62, 52, 44],
+        [72, 61, 51],
+        [81, 69, 58],
+        [90, 77, 64],
+        [102, 88, 73],
+        [124, 112, 98],
       ];
       return { tones: t, palette: pal.map(opaque) };
     },
@@ -577,8 +590,20 @@ const RECIPES: readonly Recipe[] = [
     framed: false,
     build: (v) => {
       const s = 10000 + v;
-      const t = rankTones(field(s, [[2, 0.3]], 0.8), [0.1, 0.28, 0.44, 0.18]);
-      return { tones: t, palette: [184, 193, 200, 208].map(grey) };
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.3],
+            [2, 0.3],
+          ],
+          0.6,
+        ),
+        [0.08, 0.26, 0.44, 0.22],
+      );
+      speckles(t, stream(s), 5, 0, 2);
+      speckles(t, stream(s + 1), 4, 4, 1);
+      return { tones: t, palette: [176, 190, 200, 210, 222].map(grey) };
     },
   },
   {
@@ -592,12 +617,12 @@ const RECIPES: readonly Recipe[] = [
         field(
           s,
           [
-            [4, 0.4],
+            [4, 0.5],
             [2, 0.3],
           ],
-          0.5,
+          0.3,
         ),
-        [0.04, 0.14, 0.32, 0.5],
+        [0.03, 0.12, 0.3, 0.55],
       );
       return { tones: t, palette: SNOW_PAL.map(opaque) };
     },
@@ -613,29 +638,43 @@ const RECIPES: readonly Recipe[] = [
         field(
           s,
           [
-            [4, 0.4],
+            [4, 0.5],
             [2, 0.3],
           ],
-          0.5,
+          0.3,
         ),
-        [0.04, 0.14, 0.32, 0.5],
+        [0.03, 0.12, 0.3, 0.55],
       );
-      // Grass tufts poking through the snow layer, with a little blue shadow under each.
-      const rnd = stream(s);
-      const tufts = 3 + Math.floor(rnd() * 3);
-      for (let k = 0; k < tufts; k++) {
-        const x = Math.floor(rnd() * TEX);
-        const y = Math.floor(rnd() * TEX);
-        const wide = rnd() < 0.5;
-        put(t, x, y, 5);
-        put(t, x + 1, y, 4);
-        if (wide) put(t, x - 1, y + 1, 4);
-        put(t, x, y + 1, 4);
-        put(t, x + 1, y + 1, 5);
-        put(t, x, y + 2, 0);
-        put(t, x + 1, y + 2, 0);
+      // Patches of grass poking through a thin snow layer, with a soft blue shadow under the snow edge.
+      const g = field(
+        s + 7,
+        [
+          [8, 0.35],
+          [4, 0.5],
+          [2, 0.15],
+        ],
+        0.08,
+      );
+      // Keep the clumps off the block edges: neighbouring blocks are other variants, so a clump cut
+      // by the edge would show a seam; snow meets snow instead.
+      for (let y = 0; y < TEX; y++) {
+        for (let x = 0; x < TEX; x++) {
+          const d = Math.min(x, y, 15 - x, 15 - y);
+          g[y * TEX + x] = (g[y * TEX + x] ?? 0) * Math.min(1, 0.68 + d * 0.11);
+        }
       }
-      return { tones: t, palette: [...SNOW_PAL.map(opaque), grey(150), grey(186)] };
+      const cut = [...g].sort((x, y) => x - y)[Math.floor(TEX_AREA * 0.7)] ?? 1;
+      const grassy = (x: number, y: number): boolean => (g[wrap(y) * TEX + wrap(x)] ?? 0) > cut;
+      const gt = grassTones(s + 13);
+      for (let y = 0; y < TEX; y++) {
+        for (let x = 0; x < TEX; x++) {
+          if (grassy(x, y)) {
+            const k = gt[y * TEX + x] ?? 0;
+            put(t, x, y, k >= 4 ? 5 : k >= 2 ? 4 : 6);
+          } else if (y > 0 && grassy(x, y - 1)) put(t, x, y, 0);
+        }
+      }
+      return { tones: t, palette: [...SNOW_PAL.map(opaque), grey(168), grey(204), grey(138)] };
     },
   },
   {
@@ -874,7 +913,7 @@ const RECIPES: readonly Recipe[] = [
       );
       // A few four-petal blossoms.
       const rnd = stream(s);
-      const n = 2 + Math.floor(rnd() * 3);
+      const n = 1 + Math.floor(rnd() * 3);
       for (let k = 0; k < n; k++) {
         const x = Math.floor(rnd() * TEX);
         const y = Math.floor(rnd() * TEX);
@@ -887,11 +926,13 @@ const RECIPES: readonly Recipe[] = [
       }
       const pal = [
         ...[130, 150, 170, 190, 212].map(grey),
-        ...([
-          [200, 108, 150],
-          [236, 156, 192],
-          [250, 204, 224],
-        ] as RGB[]).map(opaque),
+        ...(
+          [
+            [200, 108, 150],
+            [236, 156, 192],
+            [250, 204, 224],
+          ] as RGB[]
+        ).map(opaque),
       ];
       return { tones: t, palette: pal };
     },
@@ -905,10 +946,9 @@ const RECIPES: readonly Recipe[] = [
 function orientInto(src: Uint32Array, dst: Uint32Array, off: number, o: number): void {
   for (let y = 0; y < TEX; y++) {
     for (let x = 0; x < TEX; x++) {
-      let sx = o & 1 ? 15 - x : x;
-      let sy = o & 2 ? 15 - y : y;
-      if (o & 4) [sx, sy] = [sy, sx];
-      dst[off + y * TEX + x] = src[sy * TEX + sx] ?? 0;
+      const ax = o & 1 ? 15 - x : x;
+      const ay = o & 2 ? 15 - y : y;
+      dst[off + y * TEX + x] = (o & 4 ? src[ax * TEX + ay] : src[ay * TEX + ax]) ?? 0;
     }
   }
 }
@@ -1038,8 +1078,8 @@ const LIQUIDS: (Uint32Array | undefined)[] = [];
 
 const LAVA_PAL: readonly RGB[] = [
   [72, 18, 8],
-  [124, 34, 10],
-  [176, 58, 14],
+  [150, 44, 12],
+  [192, 70, 16],
   [212, 90, 20],
   [236, 126, 30],
   [250, 164, 42],
@@ -1091,14 +1131,14 @@ export function liquidSet(liquid: LiquidId, biome: number): Uint32Array {
       const m = new Float32Array(TEX_AREA);
       for (let k = 0; k < TEX_AREA; k++)
         m[k] = (c[k] ?? 0) * 0.8 + ((a[k] ?? 0) * Math.cos(th) + (b[k] ?? 0) * Math.sin(th)) * 0.7;
-      frames.push(rankTones(m, [0.08, 0.14, 0.3, 0.24, 0.14, 0.07, 0.03], 1));
+      frames.push(rankTones(m, [0.03, 0.1, 0.3, 0.27, 0.17, 0.09, 0.04], 1));
     }
   } else {
     const id = BIOME_IDS[biome] ?? 'plains';
     const w = WATER_TINT[id];
     palette = [
-      scale(w, 0.8),
-      scale(w, 0.9),
+      scale(w, 0.86),
+      scale(w, 0.93),
       w,
       scale(w, 1.08),
       toward(scale(w, 1.18), [255, 255, 255], 0.12),

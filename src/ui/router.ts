@@ -8,6 +8,8 @@ export interface Screen {
   onClick?(x: number, y: number): void;
   onMove?(x: number, y: number): void;
   onKey?(code: string): void;
+  /** Mouse wheel / trackpad scroll (`dy` > 0 = down), for scrollable lists. */
+  onWheel?(dy: number): void;
 }
 
 /** Screen stack: push for overlays (pause, level-up), replace for flow changes. */

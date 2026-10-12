@@ -61,27 +61,27 @@ const B_NETHER = BIOME_INDEX.nether;
 function groundMaterial(b: number, P: number, R: number, Q: number, wet: boolean): MaterialId {
   switch (b) {
     case B_PLAINS:
-      if (R > 0.83) return MAT.GRAVEL;
-      if (P > 0.74) return Q > 0.5 ? MAT.COARSE_DIRT : MAT.DIRT;
+      if (R > 0.88) return MAT.GRAVEL;
+      if (P > 0.75) return Q > 0.5 ? MAT.COARSE_DIRT : MAT.DIRT;
       return MAT.GRASS;
     case B_FOREST:
-      if (R > 0.82) return MAT.MOSSY_COBBLE;
+      if (R > 0.87) return MAT.MOSSY_COBBLE;
       if (P > 0.7) return Q > 0.5 ? MAT.PODZOL : MAT.COARSE_DIRT;
       return MAT.GRASS;
     case B_DARK:
-      if (R > 0.81) return MAT.MOSSY_COBBLE;
+      if (R > 0.86) return MAT.MOSSY_COBBLE;
       if (P > 0.62) return Q > 0.4 ? MAT.PODZOL : MAT.COARSE_DIRT;
       return MAT.GRASS;
     case B_JUNGLE:
-      if (R > 0.82) return MAT.MOSSY_COBBLE;
+      if (R > 0.87) return MAT.MOSSY_COBBLE;
       if (P > 0.68) return Q > 0.45 ? MAT.PODZOL : MAT.COARSE_DIRT;
       return MAT.GRASS;
     case B_CHERRY:
       if (P > 0.78) return MAT.DIRT;
-      if (Q > 0.6) return MAT.PETALS;
+      if (Q > 0.66) return MAT.PETALS;
       return MAT.GRASS;
     case B_TAIGA:
-      if (R > 0.83) return Q > 0.5 ? MAT.STONE : MAT.GRAVEL;
+      if (R > 0.88) return Q > 0.5 ? MAT.STONE : MAT.GRAVEL;
       if (P > 0.64) return MAT.SNOWY_GRASS;
       return MAT.SNOW;
     case B_DESERT:
@@ -90,10 +90,10 @@ function groundMaterial(b: number, P: number, R: number, Q: number, wet: boolean
       return MAT.SAND;
     case B_BADLANDS:
       if (P > 0.58) return MAT.TERRACOTTA;
-      if (R > 0.84) return MAT.COARSE_DIRT;
+      if (R > 0.88) return MAT.COARSE_DIRT;
       return MAT.RED_SAND;
     case B_SWAMP:
-      if (wet || P > 0.56) return MAT.MUD;
+      if (wet || P > 0.62) return MAT.MUD;
       return MAT.GRASS;
     case B_MUSHROOM:
       if (P > 0.76) return MAT.DIRT;
@@ -127,6 +127,11 @@ function grassTinted(m: MaterialId): boolean {
   return m === MAT.GRASS || m === MAT.PETALS || m === MAT.SNOWY_GRASS;
 }
 
+/** Materials whose brightness jitter is halved (bright, flat blocks show it the most). */
+const SOFT_JITTER = new Uint8Array(32);
+for (const m of [MAT.SNOW, MAT.SNOWY_GRASS, MAT.SAND, MAT.PACKED_ICE, MAT.SANDSTONE])
+  SOFT_JITTER[m] = 1;
+
 // Per-tile scratch (reused by every bake: no allocation per tile).
 const ROWF = new Float32Array(TEX);
 const COLF = new Float32Array(TEX);
@@ -154,31 +159,37 @@ function blit(
   src: number,
   jf: number,
 ): void {
-  const tr = TINT[0] ?? 1;
-  const tg = TINT[1] ?? 1;
-  const tb = TINT[2] ?? 1;
+  // Fixed point (8.8): the factors only change per row and column.
+  const tr = (TINT[0] as number) * 256;
+  const tg = (TINT[1] as number) * 256;
+  const tb = (TINT[2] as number) * 256;
+  const tj = jf * 256;
   for (let ly = 0; ly < TEX; ly++) {
-    const rf = ROWF[ly] ?? 1;
+    const rf = ROWF[ly] as number;
     const s = src + ly * TEX;
     const d = dst + ly * stride;
     for (let lx = 0; lx < TEX; lx++) {
-      const c = tex[s + lx] ?? 0;
-      const f = rf * (COLF[lx] ?? 1);
+      const c = tex[s + lx] as number;
+      const f = rf * (COLF[lx] as number);
       let r: number;
       let g: number;
       let b: number;
       if (c >>> 24 === TINT_ALPHA) {
-        r = (c & 255) * tr * f;
-        g = ((c >>> 8) & 255) * tg * f;
-        b = ((c >>> 16) & 255) * tb * f;
+        r = ((c & 255) * ((tr * f) | 0)) >> 8;
+        g = (((c >>> 8) & 255) * ((tg * f) | 0)) >> 8;
+        b = (((c >>> 16) & 255) * ((tb * f) | 0)) >> 8;
       } else {
-        const k = jf * f;
-        r = (c & 255) * k;
-        g = ((c >>> 8) & 255) * k;
-        b = ((c >>> 16) & 255) * k;
+        const k = (tj * f) | 0;
+        r = ((c & 255) * k) >> 8;
+        g = (((c >>> 8) & 255) * k) >> 8;
+        b = (((c >>> 16) & 255) * k) >> 8;
       }
       out[d + lx] =
-        0xff000000 | ((b > 255 ? 255 : b) << 16) | ((g > 255 ? 255 : g) << 8) | (r > 255 ? 255 : r);
+        (0xff000000 |
+          ((b > 255 ? 255 : b) << 16) |
+          ((g > 255 ? 255 : g) << 8) |
+          (r > 255 ? 255 : r)) >>>
+        0;
     }
   }
 }
@@ -187,7 +198,7 @@ function copyTile(out: Uint32Array, stride: number, dst: number, tex: Uint32Arra
   for (let ly = 0; ly < TEX; ly++) {
     const s = src + ly * TEX;
     const d = dst + ly * stride;
-    for (let lx = 0; lx < TEX; lx++) out[d + lx] = tex[s + lx] ?? 0;
+    for (let lx = 0; lx < TEX; lx++) out[d + lx] = tex[s + lx] as number;
   }
 }
 
@@ -201,8 +212,8 @@ function setTint(mat: MaterialId, r: number, g: number, b: number, jf: number): 
 
 /** Terracotta band colour of a world tile: wavy horizontal stripes 1-3 tiles tall. */
 function bandColor(Tx: number, Ty: number, seed: number): readonly [number, number, number] {
-  const wy = Ty + Math.round((valueNoise(Tx * 0.07, 3.5, seed + 551) - 0.5) * 6);
-  const row = Math.floor(wy / 2);
+  const wy = Ty + Math.round((valueNoise(Tx * 0.11, 3.5, seed + 551) - 0.5) * 7);
+  const row = Math.floor(wy * 0.6);
   const k = Math.floor(hash2(row, 0, seed + 557) * TERRACOTTA_BANDS.length);
   return TERRACOTTA_BANDS[k] ?? [162, 84, 38];
 }
@@ -280,7 +291,6 @@ export function paintChunk(
 
       ROWF.fill(1);
       COLF.fill(1);
-      const jf = 1 + (((hi & 255) / 255) - 0.5) * 0.06;
       const n = at(tx, ty - 1);
       const s = at(tx, ty + 1);
       const w = at(tx - 1, ty);
@@ -321,7 +331,7 @@ export function paintChunk(
           const wet = n === TILE.WATER || s === TILE.WATER || w === TILE.WATER || e === TILE.WATER;
           mat = groundMaterial(bi, P, R, Q, wet);
           // Snow thins out into snowy grass along the taiga's border.
-          if (mat === MAT.SNOW && !uniform && (hi >>> 28) < 8) {
+          if (mat === MAT.SNOW && !uniform && hi >>> 28 < 8) {
             for (let k = -2; k <= 2 && mat === MAT.SNOW; k++)
               if (biomeAt(tx + k, ty) !== B_TAIGA || biomeAt(tx, ty + k) !== B_TAIGA)
                 mat = MAT.SNOWY_GRASS;
@@ -339,6 +349,8 @@ export function paintChunk(
         else if (e === TILE.WATER || e === TILE.LAVA) shadeEdge(COLF, 15, -1, LOW_SHADE);
       }
 
+      // Per-tile brightness jitter (+-3%, +-1.5% on near-white blocks where it shows more).
+      const jf = 1 + ((hi & 255) / 255 - 0.5) * (SOFT_JITTER[mat] === 1 ? 0.03 : 0.06);
       if (grassTinted(mat)) {
         let r: number;
         let g: number;

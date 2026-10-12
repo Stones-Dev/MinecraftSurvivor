@@ -695,6 +695,74 @@ function watchNickname(auth: AuthService, f: Field): void {
 }
 
 /**
+ * Change the public nickname of a cloud account (unique, checked live) or the name of the local
+ * profile. Resolves with the updated session user, or null when dismissed (or for a guest, who has
+ * no name to change: use `openAuthOverlay` to create a profile).
+ */
+export function openNameEditor(
+  auth: AuthService,
+  opts: { textScale?: 1 | 2 } = {},
+): Promise<SessionUser | null> {
+  const cur = auth.user();
+  return new Promise((resolve) => {
+    if (!cur || cur.kind === 'guest') return resolve(null);
+    const cloud = cur.kind === 'cloud';
+    let done = false;
+    const finish = (u: SessionUser | null): void => {
+      if (done) return;
+      done = true;
+      shell.close();
+      resolve(u);
+    };
+    const shell = modal(cloud ? 'Change nickname' : 'Change name', true, opts.textScale ?? 1, () =>
+      finish(null),
+    );
+    const err = el('p', { class: 'msa-error', role: 'alert' });
+    const name = field(cloud ? 'Nickname (public, unique)' : 'Name', {
+      type: 'text',
+      maxlength: '16',
+      value: cur.name,
+      spellcheck: 'false',
+      autocapitalize: 'off',
+    });
+    if (cloud) watchNickname(auth, name);
+    const save = el('button', { class: 'msa-btn', type: 'submit' }, 'Save');
+    const cancel = el('button', { class: 'msa-btn alt', type: 'button' }, 'Cancel');
+    cancel.addEventListener('click', () => finish(null));
+    const form = el('form', { novalidate: true }, name.wrap, save, cancel, err);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      const value = name.input.value.trim();
+      if (value === cur.name) return finish(cur);
+      if (!cloud) {
+        const bad = validateLocalName(value);
+        setHint(name, bad ?? '', bad ? 'bad' : '');
+        if (bad) return;
+        try {
+          return finish(auth.createLocalProfile(value, cur.avatar));
+        } catch (ex) {
+          err.textContent = errorText(ex);
+          return;
+        }
+      }
+      const bad = nicknameError(value);
+      if (bad) return setHint(name, friendlyMessage(bad), 'bad');
+      void busy(shell.dialog, save, () => auth.setNickname(value))
+        .then(finish)
+        .catch((ex: unknown) => {
+          err.textContent = errorText(ex);
+          if (ex instanceof CloudError && ex.code === 'nickname-taken')
+            setHint(name, errorText(ex), 'bad');
+        });
+    });
+    shell.dialog.append(form);
+    name.input.focus();
+    name.input.select();
+  });
+}
+
+/**
  * Ask which copy to keep when the device and cloud saves both changed (or, on the first sign-in,
  * whether to bring guest progress into the account). Not dismissible: a choice is required.
  */

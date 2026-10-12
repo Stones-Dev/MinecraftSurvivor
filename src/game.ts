@@ -27,6 +27,7 @@ import { RiftState, updateRift } from './systems/rift';
 import { updateInteract, type PropState } from './systems/interact';
 import { updateItems } from './systems/items';
 import { xpToNext } from './systems/economy';
+import { RunStats } from './systems/runStats';
 import { gainXp, type Card } from './systems/levelup';
 import { Pathing } from './systems/pathing';
 import { SpawnerState, updateSpawner } from './systems/spawner';
@@ -124,6 +125,8 @@ export class RunState {
   readonly overworld: World;
   readonly arenaWorld: World;
   readonly rift = new RiftState();
+  /** Per-run statistics for results, missions and achievements (systems/runStats.ts). */
+  readonly stats = new RunStats();
   npcs: Npc[] = [];
   rescue: RescueMarker | null = null;
   readonly player = new Player();
@@ -392,6 +395,7 @@ export class RunState {
 
   /** Called for every rewarded kill (bosses, mini-bosses, banner carriers). */
   onKill(e: Enemy): void {
+    this.stats.kill(e.def.id, this.biome());
     onEnemyKilled(this, e);
   }
 
@@ -481,6 +485,7 @@ export class RunState {
     }
     this.pathing.update(dt, p.x, p.y, this.world);
     this.updateBiomeBanner(dt);
+    if (!p.dead) this.stats.tick(this, dt);
     if (!p.dead) updateSpawner(this, dt);
 
     this.hash.clear();

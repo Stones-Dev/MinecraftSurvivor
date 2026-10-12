@@ -1,6 +1,7 @@
 import type { App } from './app';
 import { Atlas } from './core/atlas';
 import { AudioEngine } from './core/audio';
+import { applyAccessibility } from './core/accessibility';
 import { fitCanvas, type View } from './core/canvas';
 import { GamepadInput } from './core/gamepad';
 import { KeyboardInput, MergedInput } from './core/input';
@@ -24,7 +25,13 @@ import { spawnerScreen } from './ui/spawnerScreen';
 import { upgradesScreen } from './ui/upgradesScreen';
 import { Router } from './ui/router';
 import { runScreen } from './ui/runScreen';
+import { profileScreen } from './ui/profileScreen';
+import { rankingScreen } from './ui/rankingScreen';
 import { hubScreen, titleScreen } from './ui/screens';
+import { achievementsScreen } from './ui/achievementsScreen';
+import { createMetaWatcher } from './ui/metaWatch';
+import { missionsScreen } from './ui/missionsScreen';
+import { drawToasts } from './ui/toast';
 import { WorldRenderer } from './world/renderer';
 import { type BiomeId, isBiomeId } from './world/biomes';
 import { World } from './world/world';
@@ -127,6 +134,8 @@ async function boot(): Promise<void> {
       audio.sfxVolume = s.sfxVolume;
       audio.muted = s.muted;
       keyboard.setBindings(s.controls);
+      applyAccessibility(s);
+      touch.setMode(s.accessibility.touchControls);
       audio.refresh();
     },
     startRun: (loadout?: RunLoadout) =>
@@ -175,6 +184,10 @@ async function boot(): Promise<void> {
     else if (which === 'upgrades') router.push(upgradesScreen(app, back));
     else if (which === 'settings') router.push(settingsScreen(app, back));
     else if (which === 'about') router.push(aboutScreen(app, back));
+    else if (which === 'profile') router.push(profileScreen(app, back));
+    else if (which === 'ranking') router.push(rankingScreen(app, back));
+    else if (which === 'missions') router.push(missionsScreen(app, back));
+    else if (which === 'achievements') router.push(achievementsScreen(app, back));
     else if (which === 'setup') router.push(runSetupScreen(app, (l) => app.startRun(l), back));
   } else if (params.has('run')) {
     app.startRun();
@@ -207,6 +220,15 @@ async function boot(): Promise<void> {
     const { x, y } = toArt(e);
     router.top?.onClick?.(x, y);
   });
+  canvas.addEventListener(
+    'wheel',
+    (e) => {
+      if (!router.top?.onWheel) return;
+      e.preventDefault();
+      router.top.onWheel(e.deltaY);
+    },
+    { passive: false },
+  );
   touch.attach(canvas, toArt, () => view);
   canvas.addEventListener('pointermove', (e) => {
     const { x, y } = toArt(e);
@@ -215,15 +237,18 @@ async function boot(): Promise<void> {
     router.top?.onMove?.(x, y);
   });
 
+  const metaWatch = createMetaWatcher(app);
   new Loop({
     update(dt) {
       gamepad.poll();
       router.update(dt);
+      metaWatch(dt);
       input.endStep();
     },
     render(alpha) {
       view.ctx.imageSmoothingEnabled = false;
       router.render(view, alpha);
+      drawToasts(view, performance.now());
     },
   }).start();
 }

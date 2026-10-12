@@ -118,7 +118,7 @@ export function hubScreen(app: App): Screen {
         baked = true;
       }
       world.beginFrame();
-      world.drawGround(ctx, camX, camY, width, height, state);
+      world.drawGround(ctx, camX, camY, width, height, state, false, time);
       for (const item of world.collectProps(camX, camY, width, height, state)) {
         if (Math.abs(item.prop.x) > 14 || Math.abs(item.prop.y) > 8)
           world.drawProp(ctx, item, camX, camY);

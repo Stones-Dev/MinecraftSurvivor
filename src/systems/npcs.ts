@@ -134,6 +134,7 @@ export function updateNpcs(run: RunState, dt: number): void {
               makeFx('text', n.x, n.y - 30, 1.2, { text: 'Trade!', vy: -14, color: '#7dff9a' }),
             );
             run.emit('trade');
+            run.stats.trades++;
             n.state = 'flee';
           } else if (n.t > 1) {
             n.t = 0;
@@ -184,6 +185,7 @@ export function updateNpcs(run: RunState, dt: number): void {
             }),
           );
           run.emit('levelup');
+          run.stats.rescues++;
           n.state = 'flee';
           run.rescue = null;
         }
