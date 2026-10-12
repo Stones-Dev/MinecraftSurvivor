@@ -23,6 +23,8 @@ export interface SaveData {
     screenShake: boolean;
     showFps: boolean;
     quality: 'auto' | 'high' | 'medium' | 'low';
+    /** Key remaps (action -> KeyboardEvent.code list); empty uses the defaults. */
+    controls: Partial<Record<'up' | 'down' | 'left' | 'right' | 'pause' | 'item', string[]>>;
   };
   flags: { tutorialDone: boolean };
 }
@@ -57,6 +59,7 @@ export function defaultSave(now = Date.now()): SaveData {
       screenShake: true,
       showFps: false,
       quality: 'auto',
+      controls: {},
     },
     flags: { tutorialDone: false },
   };

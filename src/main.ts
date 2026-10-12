@@ -5,6 +5,7 @@ import { fitCanvas, type View } from './core/canvas';
 import { KeyboardInput } from './core/input';
 import { Loop } from './core/loop';
 import { LocalSaveStore } from './core/save';
+import { loadoutFromSave, type RunLoadout } from './systems/meta';
 import type { WeaponId } from './weapons/types';
 import { galleryScreen } from './ui/gallery';
 import { Router } from './ui/router';
@@ -41,6 +42,26 @@ async function boot(): Promise<void> {
     return params.has(key) && Number.isFinite(v) ? v : fallback;
   };
 
+  /** `?hero=alex&pet=cat&ally=wolf,horse&lv=3` overrides the equipped loadout (reviews and tests). */
+  const debugLoadout = (): RunLoadout => {
+    const base = loadoutFromSave(store.load());
+    if (!params.has('hero') && !params.has('pet') && !params.has('ally')) return base;
+    const lv = num('lv', 3);
+    const petId = params.get('pet');
+    return {
+      ...base,
+      hero: params.get('hero') ?? base.hero,
+      pet: petId ? { id: petId, level: lv } : base.pet,
+      allies: params.has('ally')
+        ? (params.get('ally') ?? '')
+            .split(',')
+            .filter(Boolean)
+            .map((id) => ({ id, level: lv }))
+        : base.allies,
+      kennel: num('kennel', base.kennel),
+    };
+  };
+
   const app: App = {
     atlas,
     audio,
@@ -50,10 +71,18 @@ async function boot(): Promise<void> {
     params,
     pointer: { x: 0, y: 0 },
     data: () => store.load(),
-    goHub: () => router.reset(hubScreen(atlas, () => app.startRun())),
-    startRun: () =>
+    goHub: () => router.reset(hubScreen(app)),
+    applySettings: () => {
+      const s = store.load().settings;
+      audio.musicVolume = s.musicVolume;
+      audio.sfxVolume = s.sfxVolume;
+      audio.muted = s.muted;
+      input.setBindings(s.controls);
+    },
+    startRun: (loadout?: RunLoadout) =>
       router.reset(
         runScreen(app, {
+          loadout: loadout ?? debugLoadout(),
           seed: num('seed', Date.now() % 1_000_000_000),
           startTime: num('t', 0),
           debug: params.has('debug'),
@@ -67,19 +96,17 @@ async function boot(): Promise<void> {
       ),
   };
 
+  app.applySettings();
   if (params.has('gallery')) {
     router.push(galleryScreen(new WorldRenderer(new World(num('seed', 1337))), num('gallery', 0)));
   } else if (params.has('run')) {
     app.startRun();
   } else {
-    router.push(titleScreen(router, () => hubScreen(atlas, () => app.startRun())));
+    router.push(titleScreen(router, () => hubScreen(app)));
   }
 
   const unlock = (): void => {
-    const s = store.load().settings;
-    audio.musicVolume = s.musicVolume;
-    audio.sfxVolume = s.sfxVolume;
-    audio.muted = s.muted;
+    app.applySettings();
     audio.unlock();
   };
   window.addEventListener('pointerdown', unlock);

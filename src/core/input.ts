@@ -10,9 +10,36 @@ export interface InputSource {
   endStep(): void;
 }
 
+export type Action = 'up' | 'down' | 'left' | 'right' | 'pause' | 'item';
+
+export type Bindings = Record<Action, string[]>;
+
+export const DEFAULT_BINDINGS: Bindings = {
+  up: ['KeyW', 'ArrowUp'],
+  down: ['KeyS', 'ArrowDown'],
+  left: ['KeyA', 'ArrowLeft'],
+  right: ['KeyD', 'ArrowRight'],
+  pause: ['Escape', 'KeyP'],
+  item: ['Space'],
+};
+
+export const ACTIONS: Action[] = ['up', 'down', 'left', 'right', 'pause', 'item'];
+
 export class KeyboardInput implements InputSource {
   private down = new Set<string>();
   private pressed = new Set<string>();
+  bindings: Bindings = structuredClone(DEFAULT_BINDINGS);
+
+  /** Replace the key map (from Settings > Controls); missing actions keep their defaults. */
+  setBindings(b: Partial<Bindings>): void {
+    const next = structuredClone(DEFAULT_BINDINGS);
+    for (const a of ACTIONS) {
+      const keys = b[a];
+      if (Array.isArray(keys) && keys.length > 0)
+        next[a] = keys.filter((k) => typeof k === 'string');
+    }
+    this.bindings = next;
+  }
 
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
@@ -26,14 +53,15 @@ export class KeyboardInput implements InputSource {
   moveVector(): { x: number; y: number } {
     const axis = (neg: string[], pos: string[]): number =>
       (pos.some((k) => this.down.has(k)) ? 1 : 0) - (neg.some((k) => this.down.has(k)) ? 1 : 0);
-    const x = axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
-    const y = axis(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']);
+    const b = this.bindings;
+    const x = axis(b.left, b.right);
+    const y = axis(b.up, b.down);
     const len = Math.hypot(x, y);
     return len > 0 ? { x: x / len, y: y / len } : { x: 0, y: 0 };
   }
 
   pausePressed(): boolean {
-    return this.pressed.has('Escape') || this.pressed.has('KeyP');
+    return this.bindings.pause.some((k) => this.pressed.has(k));
   }
 
   confirmPressed(): boolean {
@@ -45,7 +73,7 @@ export class KeyboardInput implements InputSource {
   }
 
   activePressed(): boolean {
-    return this.pressed.has('Space');
+    return this.bindings.item.some((k) => this.pressed.has(k));
   }
 
   endStep(): void {

@@ -39,6 +39,22 @@ export interface Mods {
   frost: number;
   nightVision: number;
   haste: number;
+  /** Cat: extra creeper fuse seconds and the fraction of explosion damage removed. */
+  fuseBonus: number;
+  explosionResist: number;
+  /** Bee: chance that a hit also poisons. */
+  poisonChance: number;
+  /** Frog: extra XP multiplier from slimes. */
+  slimeXp: number;
+  /** Fox: extra chance that a kill drops an Emerald. */
+  emeraldDrop: number;
+  /** Strider: lava does not hurt and it speeds the hero up. */
+  lavaImmune: boolean;
+  lavaSpeed: number;
+  /** Axolotl: fraction of max HP healed per kill while standing in water. */
+  healWater: number;
+  /** Turtle: shield HP that refills when standing still. */
+  turtleShield: number;
 }
 
 export function baseMods(): Mods {
@@ -69,6 +85,15 @@ export function baseMods(): Mods {
     frost: 0,
     nightVision: 0,
     haste: 0,
+    fuseBonus: 0,
+    explosionResist: 0,
+    poisonChance: 0,
+    slimeXp: 0,
+    emeraldDrop: 0,
+    lavaImmune: false,
+    lavaSpeed: 0,
+    healWater: 0,
+    turtleShield: 0,
   };
 }
 

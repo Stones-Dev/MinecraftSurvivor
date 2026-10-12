@@ -2,6 +2,7 @@
 import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
 import { ARMOR_IDS, SWORD_IDS } from '../data/tiers';
+import type { Ally, PetState } from '../entities/ally';
 import type { Enemy } from '../entities/enemy';
 import type { Fx } from '../entities/fx';
 import type { Pickup } from '../entities/pickup';
@@ -591,4 +592,73 @@ export function drawPropExtra(
     ctx.fillStyle = `rgba(160,245,255,${(0.25 + 0.15 * Math.sin(run.time * 4)).toFixed(2)})`;
     ctx.fillRect(x - 2, y - 80, 4, 62);
   }
+}
+
+/** Pick the animation id for a companion sprite prefix, trying the usual action names in order. */
+function companionAnim(atlas: Atlas, sprite: string, moving: boolean): string | null {
+  const order = moving
+    ? ['walk', 'flying', 'jump', 'swim', 'idle']
+    : ['idle', 'walk', 'flying', 'jump', 'swim'];
+  for (const a of order) if (atlas.hasAnim(`${sprite}.${a}`)) return `${sprite}.${a}`;
+  return null;
+}
+
+/** An ally: fades when downed, flashes when hurt, villagers use their 4-direction walk rows. */
+export function drawAlly(
+  ctx: CanvasRenderingContext2D,
+  atlas: Atlas,
+  a: Ally,
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const id = companionAnim(atlas, a.def.sprite, a.moving);
+  if (!id) return;
+  const anim = atlas.anim(id);
+  const x = a.x - camX;
+  const y = a.y - camY + 4;
+  if (a.downed) ctx.globalAlpha = 0.35 + 0.1 * Math.sin(time * 6);
+  if (a.def.sprite.startsWith('npc.') && id.endsWith('.walk')) {
+    const f = Math.floor(time * 6) % 4;
+    const vertical = Math.abs(a.dy) > Math.abs(a.dx);
+    const base = vertical ? (a.dy > 0 ? 0 : 4) : 8;
+    const key = anim.frames[base + (a.moving ? f : 0)] ?? anim.frames[0];
+    if (key) atlas.draw(ctx, key, x, y, !vertical && a.dx > 0);
+  } else {
+    atlas.draw(
+      ctx,
+      frameAt(anim, time + a.slot),
+      x,
+      y,
+      a.facing < 0 && !a.def.sprite.startsWith('pet.'),
+    );
+  }
+  ctx.globalAlpha = 1;
+  if (!a.downed && a.hp < a.maxHp) {
+    const w = 14;
+    ctx.fillStyle = '#101014';
+    ctx.fillRect(Math.round(x - w / 2) - 1, Math.round(y) - 22, w + 2, 4);
+    ctx.fillStyle = '#4ac04a';
+    ctx.fillRect(Math.round(x - w / 2), Math.round(y) - 21, Math.round((w * a.hp) / a.maxHp), 2);
+  }
+  if (a.hurtT > 0) {
+    ctx.fillStyle = 'rgba(255,60,60,0.25)';
+    ctx.fillRect(Math.round(x) - 6, Math.round(y) - 14, 12, 14);
+  }
+}
+
+/** The pet: flies/hops/walks after the hero, mirrored by its facing. */
+export function drawPet(
+  ctx: CanvasRenderingContext2D,
+  atlas: Atlas,
+  p: PetState,
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const id = companionAnim(atlas, p.def.sprite, p.moving);
+  if (!id) return;
+  const flying = id.endsWith('.flying') || p.def.id === 'parrot' || p.def.id === 'bee';
+  const bob = flying ? Math.sin(time * 5 + p.t) * 2 - 6 : 0;
+  atlas.draw(ctx, frameAt(atlas.anim(id), time), p.x - camX, p.y - camY + 4 + bob, p.facing < 0);
 }

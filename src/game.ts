@@ -16,6 +16,10 @@ import { updateMines, updateOrbiters, updateProjectiles, updateZones } from './s
 import { updateEnemies } from './systems/enemyAI';
 import { DirectorState, initDirector, onEnemyKilled, updateDirector } from './systems/director';
 import { type Npc, type RescueMarker, updateNpcs } from './systems/npcs';
+import { Ally, PetState } from './entities/ally';
+import { defaultLoadout, applyLoadoutMods, heroBaseHp, type RunLoadout } from './systems/meta';
+import { spawnCompanions, updateAllies, updatePet } from './systems/allies';
+import { allyById } from './data/companions';
 import { RiftState, updateRift } from './systems/rift';
 import { updateInteract, type PropState } from './systems/interact';
 import { updateItems } from './systems/items';
@@ -24,7 +28,7 @@ import { gainXp, type Card } from './systems/levelup';
 import { Pathing } from './systems/pathing';
 import { SpawnerState, updateSpawner } from './systems/spawner';
 import { updateWeapons } from './systems/weapons';
-import { newWeapon } from './weapons';
+import { MAX_WEAPON_LEVEL, newWeapon } from './weapons';
 import type { WeaponId, WeaponState } from './weapons/types';
 import { biomeState, type BiomeId, type BiomeState } from './world/biomes';
 import { World } from './world/world';
@@ -195,10 +199,18 @@ export class RunState {
   private dotAcc = 0;
   /** Base max HP before bonuses (Steve: 100 + 10%). */
   baseMaxHp = 110;
+  /** Seconds the hero has stood still (Turtle shield). */
+  stillT = 0;
+  /** Hostile-free companions: allies (fight, can be downed) and the pet. */
+  allies: Ally[] = [];
+  pet: PetState | null = null;
+  /** Whether Steve's free Leather tier at minute 1 has been handed out. */
+  private freeLeather = false;
 
   constructor(
     readonly seed: number,
     startTime = 0,
+    readonly loadout: RunLoadout = defaultLoadout(),
   ) {
     const root = new Rng(seed);
     this.rng = {
@@ -213,9 +225,39 @@ export class RunState {
     this.arenaWorld = new World(seed ^ 0x51ed27, { r: 22 });
     this.world = this.overworld;
     this.time = startTime;
+    this.baseMaxHp = heroBaseHp(loadout.hero);
     initDirector(this);
+    this.applyLoadoutStart();
     this.recomputeStats();
     this.player.hp = this.player.maxHp;
+    spawnCompanions(this, loadout);
+  }
+
+  /** One-time run-start effects of the hero, allies and permanent upgrades. */
+  private applyLoadoutStart(): void {
+    const l = this.loadout;
+    this.rerolls = 1 + (l.upgrades['reroll'] ?? 0);
+    if (l.hero === 'alex') {
+      const bow = newWeapon('bow');
+      bow.level = 2;
+      this.weapons.push(bow);
+    }
+    if ((l.upgrades['repertoire'] ?? 0) > 0) {
+      const pool = ['tnt', 'crossbow', 'snowball', 'trident', 'axe'] as const;
+      const id = this.rng.drops.pick(pool);
+      if (!this.weapons.some((w) => w.id === id)) this.weapons.push(newWeapon(id));
+    }
+    for (const a of l.allies) {
+      const role = allyById(a.id)?.role;
+      if (role === 'weaponsmith') this.swordTier = Math.max(this.swordTier, 2);
+      else if (role === 'armorer') this.armorTier = Math.max(this.armorTier, 2);
+      else if (role === 'librarian') this.offerSize = 4;
+      else if (role === 'fletcher') {
+        const bow = this.weapons.find((w) => w.id === 'bow');
+        if (bow) bow.level = Math.min(MAX_WEAPON_LEVEL, bow.level + 1);
+        else this.weapons.push(newWeapon('bow'));
+      }
+    }
   }
 
   xpNeeded(): number {
@@ -295,6 +337,7 @@ export class RunState {
       this.swordCd = sword.cd;
       this.swordArea = sword.area;
     }
+    applyLoadoutMods(this.loadout, m);
     m.cd = Math.max(0.35, m.cd);
     m.dmgTaken = Math.max(0.2, m.dmgTaken);
     this.mods = m;
@@ -347,6 +390,9 @@ export class RunState {
     updateInteract(this, dt);
     updateDirector(this, dt);
     updateNpcs(this, dt);
+    updateAllies(this, dt);
+    updatePet(this, dt);
+    this.updateHeroPassives(dt);
     this.buffTick -= dt;
     if (this.buffTick <= 0) {
       this.buffTick = 0.5;
@@ -362,6 +408,28 @@ export class RunState {
     if (due.length > 0) {
       this.scheduled = this.scheduled.filter((s) => s.t > 0);
       for (const s of due) s.fn();
+    }
+  }
+
+  /** Steve's free Leather tier at minute 1 and the Turtle's shield that refills while standing still. */
+  private updateHeroPassives(dt: number): void {
+    const p = this.player;
+    if (this.loadout.hero === 'steve' && !this.freeLeather && this.time >= 60) {
+      this.freeLeather = true;
+      if (this.armorTier === 0) {
+        this.armorTier = 1;
+        this.recomputeStats();
+        this.announce("Builder's Grit: free Leather armor", '#c8a06a', 3);
+      }
+    }
+    if (this.mods.turtleShield > 0 && !p.dead) {
+      this.stillT = p.moving ? 0 : this.stillT + dt;
+      if (this.stillT >= 2 && this.absorb < this.mods.turtleShield) {
+        this.absorb = Math.min(
+          this.mods.turtleShield,
+          this.absorb + this.mods.turtleShield * 0.5 * dt,
+        );
+      }
     }
   }
 

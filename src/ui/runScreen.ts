@@ -12,6 +12,8 @@ import {
   drawFxText,
   drawHero,
   drawNpc,
+  drawAlly,
+  drawPet,
   drawPortal,
   drawPropExtra,
   drawRescueFlag,
@@ -22,6 +24,8 @@ import {
 } from '../render/entities';
 import { drawNight, nightFactor } from '../systems/daynight';
 import { type Npc, spawnTrader, spawnVillager } from '../systems/npcs';
+import type { RunLoadout } from '../systems/meta';
+import type { Ally, PetState } from '../entities/ally';
 import { useItem } from '../systems/items';
 import { gainXp } from '../systems/levelup';
 import { BIOMES } from '../world/biomes';
@@ -52,12 +56,16 @@ export interface RunOptions {
   portal?: boolean;
   trader?: boolean;
   villager?: boolean;
+  /** Hero, pet, allies and upgrades chosen in the hub. */
+  loadout?: RunLoadout;
 }
 
 type Drawable =
   | { y: number; kind: 'prop'; item: PropItem }
   | { y: number; kind: 'enemy'; enemy: Enemy }
   | { y: number; kind: 'npc'; npc: Npc }
+  | { y: number; kind: 'ally'; ally: Ally }
+  | { y: number; kind: 'pet'; pet: PetState }
   | { y: number; kind: 'hero' };
 
 /** Rain, snow, lightning flash and the Warden's darkness (screen-space, drawn over the world). */
@@ -104,7 +112,7 @@ function drawWeather(
 
 export function runScreen(app: App, opts: RunOptions): Screen {
   const { atlas, input, router } = app;
-  const run = new RunState(opts.seed, opts.startTime);
+  const run = new RunState(opts.seed, opts.startTime, opts.loadout);
   if (opts.weapons) run.weapons = opts.weapons.map((id) => newWeapon(id));
   if (opts.startXp) gainXp(run, opts.startXp);
   if (opts.hp) {
@@ -214,6 +222,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       const drawables: Drawable[] = items.map((item) => ({ y: item.prop.y, kind: 'prop', item }));
       for (const enemy of run.enemies) drawables.push({ y: enemy.y, kind: 'enemy', enemy });
       for (const npc of run.npcs) drawables.push({ y: npc.y, kind: 'npc', npc });
+      for (const ally of run.allies) drawables.push({ y: ally.y, kind: 'ally', ally });
+      if (run.pet) drawables.push({ y: run.pet.y, kind: 'pet', pet: run.pet });
       drawables.push({ y: p.y, kind: 'hero' });
       drawables.sort((a, b) => a.y - b.y);
       for (const d of drawables) {
@@ -221,6 +231,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
           renderer.drawProp(ctx, d.item, camX, camY);
           drawPropExtra(ctx, run, d.item.prop, camX, camY);
         } else if (d.kind === 'npc') drawNpc(ctx, atlas, d.npc, camX, camY, run.time);
+        else if (d.kind === 'ally') drawAlly(ctx, atlas, d.ally, camX, camY, run.time);
+        else if (d.kind === 'pet') drawPet(ctx, atlas, d.pet, camX, camY, run.time);
         else if (d.kind === 'enemy') drawEnemy(ctx, atlas, d.enemy, camX, camY);
         else drawHero(ctx, atlas, run, camX, camY);
       }

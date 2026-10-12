@@ -2,6 +2,7 @@ import type { Atlas } from './core/atlas';
 import type { AudioEngine } from './core/audio';
 import type { InputSource } from './core/input';
 import type { SaveData, SaveStore } from './core/save';
+import type { RunLoadout } from './systems/meta';
 import type { Router } from './ui/router';
 
 /** Everything screens need; built once in main.ts. */
@@ -16,5 +17,8 @@ export interface App {
   pointer: { x: number; y: number };
   data(): SaveData;
   goHub(): void;
-  startRun(): void;
+  /** Start a run with the given loadout (defaults to the equipped one in the save). */
+  startRun(loadout?: RunLoadout): void;
+  /** Push audio volumes and key bindings from the save to the engines (call after Settings changes). */
+  applySettings(): void;
 }
