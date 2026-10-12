@@ -2,9 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { degreeToMidi, midiToFreq, stepEvents, THEME_IDS, THEMES } from '../src/data/music';
 
 describe('music themes', () => {
-  it('has the eight themes of BRIEF section 14 with well-formed patterns', () => {
-    expect(THEME_IDS.sort()).toEqual(
-      ['boss', 'dark_forest', 'desert', 'hub', 'nether', 'night', 'plains', 'snowy_taiga'].sort(),
+  it('has the themes of BRIEF section 14 plus one per biome, with well-formed patterns', () => {
+    expect([...THEME_IDS].sort()).toEqual(
+      [
+        'badlands',
+        'boss',
+        'cherry',
+        'dark_forest',
+        'desert',
+        'hub',
+        'jungle',
+        'mushroom',
+        'nether',
+        'night',
+        'plains',
+        'snowy_taiga',
+        'swamp',
+      ].sort(),
     );
     for (const id of THEME_IDS) {
       const t = THEMES[id];

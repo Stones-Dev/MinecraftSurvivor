@@ -36,10 +36,26 @@ export const ROSTERS: Readonly<Partial<Record<BiomeId, BiomeRoster>>> = {
     from: { witch: 3, pillager: 5, vindicator: 5, evoker: 7 },
   },
   snowy_taiga: {
-    mult: { zombie: 0.45, skeleton: 0.5, spider: 0.25, creeper: 0.5, slime_big: 0, cave_spider: 0.5, drowned: 0.4 },
+    mult: {
+      zombie: 0.45,
+      skeleton: 0.5,
+      spider: 0.25,
+      creeper: 0.5,
+      slime_big: 0,
+      cave_spider: 0.5,
+      drowned: 0.4,
+    },
   },
   desert: {
-    mult: { zombie: 0.3, skeleton: 0.8, spider: 0.4, cave_spider: 0.6, slime_big: 0, drowned: 0, witch: 0.7 },
+    mult: {
+      zombie: 0.3,
+      skeleton: 0.8,
+      spider: 0.4,
+      cave_spider: 0.6,
+      slime_big: 0,
+      drowned: 0,
+      witch: 0.7,
+    },
   },
   badlands: {
     mult: {

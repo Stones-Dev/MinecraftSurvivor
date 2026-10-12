@@ -6,6 +6,7 @@
 import { writeFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { WEAPON_IDS } from '../src/weapons';
+import { OVERWORLD_BIOMES } from '../src/world/biomes';
 import { type BotResult, type Policy, playRun } from './balance/bot';
 
 const RUNS = Number(process.env['BAL_RUNS'] ?? 8);
@@ -88,6 +89,16 @@ it('balance simulation', { timeout: 3_600_000 }, () => {
       rs.push(playRun({ seed: 2000 + i, policy: 'smart', start: id, maxTime: CAP }));
     }
     out.push(row(id, rs));
+  }
+  // Optional: where the run starts changes the roster and the danger multipliers (BAL_BIOMES=1).
+  if (process.env['BAL_BIOMES']) {
+    out.push('', '## Per start biome (smart bot, sword)', '', HEAD);
+    for (const biome of OVERWORLD_BIOMES) {
+      const rs: BotResult[] = [];
+      for (let i = 0; i < Math.max(4, Math.floor(RUNS / 2)); i++)
+        rs.push(playRun({ seed: 3000 + i, policy: 'smart', biome, maxTime: CAP }));
+      out.push(row(biome, rs));
+    }
   }
   writeFileSync('docs/BALANCE_RESULTS.md', out.join('\n') + '\n');
   console.log(out.join('\n'));

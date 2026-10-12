@@ -17,8 +17,8 @@ import type { World } from '../world/world';
 /** Tiles per explored cell side, and the cell size in world pixels. */
 export const CELL_TILES = 8;
 export const CELL_PX = CELL_TILES * 16;
-/** Reveal radius around the hero, in cells (about 1.5 screens). */
-export const REVEAL_RADIUS = 3;
+/** Reveal radius around the hero, in cells (about two screens across). */
+export const REVEAL_RADIUS = 4;
 /** Window size in cells (square) and pixels per cell on the minimap. */
 export const WINDOW_CELLS = 20;
 export const PX_PER_CELL = 2;

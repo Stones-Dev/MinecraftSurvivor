@@ -19,13 +19,13 @@ export const AMBIENT_SLOTS = [28, 56, 96] as const;
 /** Fraction of the pool a kind may occupy (a thin dust haze versus a snowstorm). */
 export const AMBIENT_DENSITY: Readonly<Record<AmbientKind, number>> = {
   snow: 0.85,
-  petals: 0.45,
-  fireflies: 0.3,
-  dust: 0.5,
-  spores: 0.4,
-  leaves: 0.22,
-  pollen: 0.35,
-  embers: 0.5,
+  petals: 0.7,
+  fireflies: 0.35,
+  dust: 0.65,
+  spores: 0.6,
+  leaves: 0.3,
+  pollen: 0.5,
+  embers: 0.75,
 };
 
 /** Night level above which forests and swamps light up with fireflies. */
@@ -65,14 +65,14 @@ export function pickAmbient(biome: BiomeId, night: number, r: number): AmbientKi
 // --- colours -----------------------------------------------------------------------------------
 
 const rgb = (c: readonly number[]): string => `rgb(${c[0] ?? 0},${c[1] ?? 0},${c[2] ?? 0})`;
-const lighten = (c: readonly number[], k: number): string =>
-  rgb([0, 1, 2].map((i) => Math.min(255, Math.round((c[i] ?? 0) + (255 - (c[i] ?? 0)) * k))));
 
 const PALETTE: Record<string, readonly string[]> = {
-  snow: ['#ffffff', '#ecf4ff', '#d8e8ff'],
+  snow: ['#f4f8ff', '#cfe0ff', '#a9c4f0'],
   petals: ['#ffb7d5', '#ff9ec4', '#ffd0e4', '#f58ab8'],
   fireflies: ['#e8ff7a', '#b6ff5a', '#fff3a0'],
-  spores: ['#c58bff', '#ff8bd0', '#8be0ff'],
+  spores: ['#d9a8ff', '#ff9ee0', '#9ee8ff'],
+  dustDesert: ['#fff1c4', '#d6bb78', '#f2dfa0'],
+  dustBadlands: ['#f0c090', '#c4683c', '#e8a070'],
   swampSpores: ['#9fd05a', '#b8e070', '#7fb04a'],
   pollen: ['#fff6a0', '#e6ff9a', '#ffd860'],
   embers: ['#ff9a2a', '#ffd24a', '#ff5a1a'],
@@ -82,7 +82,7 @@ const PALETTE: Record<string, readonly string[]> = {
 function biomeColours(kind: AmbientKind, biome: BiomeId): readonly string[] {
   const b = BIOMES[biome];
   if (kind === 'leaves') return [rgb(b.leaves[0]), rgb(b.leaves[1]), rgb(b.leaves[2])];
-  if (kind === 'dust') return [lighten(b.sand[0], 0.1), rgb(b.sand[0]), lighten(b.sand[1], 0.25)];
+  if (kind === 'dust') return PALETTE[biome === 'badlands' ? 'dustBadlands' : 'dustDesert'] ?? [];
   if (kind === 'spores' && biome === 'swamp') return PALETTE['swampSpores'] ?? [];
   return PALETTE[kind] ?? ['#fff'];
 }
@@ -209,7 +209,7 @@ export class AmbientField {
         s.life = r.range(4, 8);
         s.vx = r.range(-3, 3);
         s.vy = r.range(-9, -3);
-        s.size = r.next() < 0.35 ? 2 : 1;
+        s.size = r.next() < 0.5 ? 2 : 1;
         if (!anywhere) s.y = h + 4;
         break;
       case 'pollen':
@@ -218,11 +218,12 @@ export class AmbientField {
         s.vy = r.range(-3, 3);
         break;
       case 'embers':
-        s.life = r.range(1.6, 3);
+        s.life = r.range(2.5, 4.5);
         s.vx = r.range(-6, 6);
         s.vy = r.range(-30, -14);
-        s.size = r.next() < 0.35 ? 2 : 1;
-        if (!anywhere) s.y = h + 4;
+        s.size = r.next() < 0.6 ? 2 : 1;
+        // Half of them are already glowing in the air, the rest lift off from the bottom edge.
+        if (!anywhere && r.next() < 0.5) s.y = h + 4;
         break;
     }
   }
@@ -360,23 +361,24 @@ export class AmbientField {
           ctx.fillRect(x, y, s.size, s.size);
           break;
         case 'dust':
-          ctx.globalAlpha = alpha * 0.32;
+          ctx.globalAlpha = alpha * 0.6;
           ctx.fillRect(x, y, 3, 1);
           break;
         case 'embers': {
           const flick = reduceFlash ? 1 : 0.6 + 0.4 * Math.sin((s.age + s.phase) * 18);
+          ctx.globalAlpha = alpha * flick * 0.2;
+          ctx.fillRect(x - 1, y - 1, s.size + 2, s.size + 2);
           ctx.globalAlpha = alpha * flick;
           ctx.fillRect(x, y, s.size, s.size);
           break;
         }
-        case 'spores': {
-          ctx.globalAlpha = alpha * 0.7;
-          ctx.fillRect(x, y, s.size, s.size);
-          break;
-        }
+        case 'spores':
         case 'pollen':
-          ctx.globalAlpha = alpha * 0.6;
-          ctx.fillRect(x, y, 1, 1);
+          // A faint halo under a bright core: they glow a little.
+          ctx.globalAlpha = alpha * 0.18;
+          ctx.fillRect(x - 1, y - 1, s.size + 2, s.size + 2);
+          ctx.globalAlpha = alpha * 0.85;
+          ctx.fillRect(x, y, s.size, s.size);
           break;
         default:
           // petals and leaves: a 2x2 flake that flips to 2x1 as it tumbles.

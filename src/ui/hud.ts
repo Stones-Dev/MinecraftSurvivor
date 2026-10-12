@@ -90,6 +90,10 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
       20,
     );
   }
+  // Biome mob effects the hero should notice: husk hunger (no regeneration) and frost slowness.
+  const statusX = 4 + 10 * 11 + 3;
+  if (p.hungerT > 0) drawText(ctx, 'Hunger', statusX, 28, '#c9b458');
+  if (p.slowT > 0) drawText(ctx, 'Slow', statusX + (p.hungerT > 0 ? 40 : 0), 28, '#8fc4ff');
 
   // Accessibility text scale 2: the timer and the counters are drawn double size (menus stay 1x).
   const big = textScale() === 2;

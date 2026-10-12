@@ -20,6 +20,7 @@ import { avatarDataUrl } from './ui/avatar';
 import { collectionScreen } from './ui/collectionScreen';
 import { initFont } from './ui/font';
 import { galleryScreen } from './ui/gallery';
+import { mobGalleryScreen } from './ui/mobGallery';
 import { runSetupScreen } from './ui/runSetupScreen';
 import { settingsScreen } from './ui/settingsScreen';
 import { spawnerScreen } from './ui/spawnerScreen';
@@ -163,7 +164,8 @@ async function boot(): Promise<void> {
           trader: params.has('debug') && params.has('trader'),
           villager: params.has('debug') && params.has('villager'),
           // `?biome=` (debug) wins over the start biome picked in the run setup.
-          biome: (params.has('debug') ? biomeParam(params.get('biome')) : undefined) ?? lo.startBiome,
+          biome:
+            (params.has('debug') ? biomeParam(params.get('biome')) : undefined) ?? lo.startBiome,
         }),
       );
     },
@@ -183,6 +185,8 @@ async function boot(): Promise<void> {
   }
   if (params.has('gallery')) {
     router.push(galleryScreen(new WorldRenderer(new World(num('seed', 1337))), num('gallery', 0)));
+  } else if (params.has('mobs')) {
+    router.push(mobGalleryScreen(atlas, params.get('mobs') || 'new'));
   } else if (params.has('screen')) {
     // Review helper: `?screen=collection|spawner|upgrades|settings|setup` opens a hub screen directly.
     const back = (): void => app.goHub();

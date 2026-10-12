@@ -1,5 +1,5 @@
 import type { App } from '../app';
-import { cameraLead, reduceFlash } from '../core/accessibility';
+import { cameraLead, reduceFlash, textScale } from '../core/accessibility';
 import { Camera } from '../core/camera';
 import type { View } from '../core/canvas';
 import { makeEnemy } from '../systems/spawner';
@@ -27,7 +27,8 @@ import {
 import { drawNight, nightFactor } from '../systems/daynight';
 import { type Npc, spawnTrader, spawnVillager } from '../systems/npcs';
 import type { RunLoadout } from '../systems/meta';
-import { biomeTheme, type ThemeId } from '../data/music';
+import { MusicDirector } from '../data/music';
+import { pickEnemyId, spawnPool } from '../data/rosters';
 import type { Ally, PetState } from '../entities/ally';
 import { castAbility } from '../abilities';
 import { useItem } from '../systems/items';
@@ -35,8 +36,10 @@ import { gainXp } from '../systems/levelup';
 import { BIOMES, type BiomeId } from '../world/biomes';
 import type { Enemy } from '../entities/enemy';
 import { WorldRenderer, type PropItem } from '../world/renderer';
+import { AmbientField } from '../render/ambient';
 import { drawDebug, FrameStats } from './debug';
 import { drawHud } from './hud';
+import { Minimap } from './minimap';
 import { drawPanel, drawText } from './panel';
 import {
   itemChoiceScreen,
@@ -123,14 +126,6 @@ function drawWeather(
   }
 }
 
-/** Which music theme fits the moment: boss fight, Nether rift, night, or the current biome. */
-function runTheme(run: RunState): ThemeId {
-  if (run.enemies.some((e) => e.boss === 'boss' && !e.dying)) return 'boss';
-  if (run.rift.active) return 'nether';
-  if (nightFactor(run.time) > 0.55) return 'night';
-  return biomeTheme(run.biome());
-}
-
 /** The 20-second first-run hints (BRIEF section 5). */
 function drawTutorial(ctx: CanvasRenderingContext2D, w: number, h: number, t: number): void {
   const steps = [
@@ -160,9 +155,20 @@ export function runScreen(app: App, opts: RunOptions): Screen {
     run.player.hp = run.player.maxHp;
   }
   if (opts.crowd) {
-    const ids = ['zombie', 'skeleton', 'spider', 'husk', 'slime_big', 'zombie'];
+    // The crowd is drawn from the roster of the biome the run starts in (`?biome=` shows each one's mobs):
+    // half from the whole weighted pool, half from the mobs that only live in that biome.
+    const night = nightFactor(run.time) > 0.6;
+    const minute = Math.max(run.time / 60, 6);
+    const generic = Math.max(run.time / 60, 3);
+    const own = spawnPool(run.biome(), minute, night, true).filter((e) =>
+      e.def.biomes?.includes(run.biome()),
+    );
     for (let i = 0; i < opts.crowd; i++) {
-      const e = makeEnemy(run, ids[i % ids.length] ?? 'zombie', 0, 0, false);
+      const id =
+        i % 2 === 1 && own.length > 0
+          ? (own[Math.floor(i / 2) % own.length]?.def.id ?? 'zombie')
+          : pickEnemyId(run.biome(), generic, night, true, (i * 0.618) % 1);
+      const e = makeEnemy(run, id, 0, 0, false);
       if (!e) continue;
       const a = (i / opts.crowd) * Math.PI * 2 * 7;
       const r = 50 + ((i * 37) % 220);
@@ -192,6 +198,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
 
   let deathSting = false;
   let runStarted = false;
+  // Biome music with hysteresis, the corner minimap (M) and the ambient specks.
+  const musicDir = new MusicDirector();
+  const minimap = new Minimap();
+  const ambient = new AmbientField(opts.seed);
 
   // Quality tier: fixed by the setting, or adapted to the measured frame time when set to auto.
   let autoTier: 0 | 1 | 2 = 2;
@@ -225,6 +235,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
     if (e.code === 'F3') {
       e.preventDefault();
       showDebug = !showDebug;
+    } else if (e.code === 'KeyM' && !e.repeat) {
+      minimap.toggle();
     }
   };
 
@@ -281,7 +293,16 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       }
       run.update(dt, input);
       simRan = true;
-      app.audio.setTheme(run.status === 'dead' ? null : runTheme(run));
+      app.audio.setTheme(
+        run.status === 'dead'
+          ? null
+          : musicDir.update(dt, {
+              boss: run.enemies.some((e) => e.boss === 'boss' && !e.dying),
+              rift: run.rift.active,
+              night: nightFactor(run.time),
+              biome: run.biome(),
+            }),
+      );
       for (const ev of new Set(run.events)) app.audio.play(ev);
       run.events.length = 0;
       if (run.status === 'dead' && !deathSting) {
@@ -380,13 +401,25 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         height,
         nightFactor(run.time) * (1 - Math.min(0.6, run.mods.nightVision)),
       );
-      drawWeather(ctx, run, width, height, BIOMES[state.current].snow, run.quality);
+      drawWeather(ctx, run, width, height, false, run.quality);
+      ambient.update(
+        frameDt,
+        state.current,
+        nightFactor(run.time),
+        camX,
+        camY,
+        width,
+        height,
+        run.quality,
+      );
+      ambient.draw(ctx, reduceFlash());
       if (app.data().settings.damageNumbers) drawFxTexts(ctx, run.fx, camX, camY);
       if (run.rift.active) {
         ctx.fillStyle = 'rgba(120,20,0,0.14)';
         ctx.fillRect(0, 0, width, height);
       }
       drawHud(view, run, camX, camY);
+      minimap.draw(ctx, run, width, textScale() === 2 ? 74 : 56, app.touch.enabled, run.time);
       app.touch.draw(ctx, width, height);
       if (tutorial && run.time < 22) drawTutorial(ctx, width, height, run.time);
 

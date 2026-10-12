@@ -6,6 +6,7 @@
  *  - `smart`: kites away from enemies/projectiles, collects gems, takes evolutions > weapon levels > tiers > passives.
  *  - `newbie`: reacts late, ignores far gems and picks random cards.
  */
+import type { BiomeId } from '../../src/world/biomes';
 import type { InputSource } from '../../src/core/input';
 import { Rng } from '../../src/core/rng';
 import { RunState } from '../../src/game';
@@ -164,6 +165,8 @@ export interface PlayOptions {
   seed: number;
   policy: Policy;
   start?: WeaponId;
+  /** Start (and wander from) the nearest dry ground of this biome instead of the spawn meadow. */
+  biome?: BiomeId;
   /** Seconds of game time to simulate at most. */
   maxTime?: number;
   /** Called once per simulated second (debugging). */
@@ -174,6 +177,7 @@ export function playRun(opts: PlayOptions): BotResult {
   const start = opts.start ?? 'sword';
   const policy = opts.policy;
   const run = new RunState(opts.seed, 0);
+  if (opts.biome) run.startInBiome(opts.biome);
   run.weapons = [newWeapon(start)];
   const input = new BotInput();
   const rng = new Rng(opts.seed ^ 0x9e3779b9);

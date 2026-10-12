@@ -247,7 +247,7 @@ add({
   xp: 2,
   archetype: 'chaser',
   weight: 8,
-  biomes: ['desert'],
+  biomes: ['desert', 'badlands'],
   contactStatus: { kind: 'hunger', dur: 6, dps: 0 },
 });
 add({
@@ -1108,8 +1108,8 @@ add({
   radius: 6,
   xp: 2,
   archetype: 'chaser',
-  fromMinute: 3,
-  weight: 3,
+  fromMinute: 2,
+  weight: 4,
   pack: 2,
   height: 18,
   biomes: ['forest', 'dark_forest'],
@@ -1431,6 +1431,25 @@ const FACES_LEFT = [
   'zombie_piglin',
   'piglin_brute',
   'raid_captain',
+  // Zombies and the biome mobs: checked in the `?mobs=` gallery (walking left must face left).
+  'zombie',
+  'jungle_zombie',
+  'frozen_zombie',
+  'lobber_zombie',
+  'bouldering_zombie',
+  'mossy_skeleton',
+  'spider_brown',
+  'icy_spider',
+  'web_spider',
+  'bone_spider',
+  'angry_wolf',
+  'angry_brown_wolf',
+  'skeleton_wolf',
+  'killer_bunny',
+  'zombie_rabbit',
+  'horned_mossy_sheep',
+  'red_mountaineer',
+  ...Object.keys(E).filter((id) => id.startsWith('chomper_')),
 ];
 for (const id of FACES_LEFT) {
   const def = ENEMIES[id];

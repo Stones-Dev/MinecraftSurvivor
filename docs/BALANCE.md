@@ -58,3 +58,7 @@ inside ten minutes, which matches the design intent that evolutions are a mid-ru
 ## Final run of the simulator (v1.0)
 
 Re-run after the review fixes, hero loadout support and perf changes (8 seeds, cap 20 min): the numbers above are from that run. Re-run `npm run balance` after any change to spawn curves, weapons or enemy stats; the policy table should keep the new-player median between 4 and 6 minutes.
+
+## Biome rosters (v1.1)
+
+Biomes now change the spawn pool and apply their `danger` to density and HP (`data/rosters.ts`, see GDD 9.1). `playRun` takes a `biome` option and `BAL_BIOMES=1 npm run balance` adds a "Per start biome (smart bot, sword)" table to `docs/BALANCE_RESULTS.md`. Last run (12 seeds, cap 20 min), sword only, before the rosters then after: newbie 3:01 -> 2:51, smart 4:54 -> 5:00, sword as the per-weapon starter 4:03 -> 5:18. Per start biome the smart median is 4:38 in plains, 3:51 in the forest and 5:21 in the badlands, all within the 4-6 minute target at this sample size. Plains play is bit-identical to before (a test compares the pools).

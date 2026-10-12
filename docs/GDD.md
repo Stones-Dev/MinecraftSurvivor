@@ -51,7 +51,7 @@ Hero sprite = `hero.<name>.<armorTier>.<swordTier>.<anim>`. Armor tier and sword
 
 - **Length:** 15:00 to the final boss; killing it = *Night Survived* (run won). After that, **Endless** continues with escalating difficulty until death (local records: best time, best kills).
 - **Day/night cycle:** 5 min period (3 min day, 2 min night). Night = darker vignette, torches/lava glow, spawn rate ×1.4, phantoms possible, better drops. Second night (10:00–12:00) overlaps the Wither.
-- **Biomes** (Overworld) rotate every 4 min with a 2.5 s palette crossfade, each with its own music variation and props: **Plains** (0–4) → **Dark Forest** (4–8) → **Snowy Taiga** (8–12) → **Desert** (12–15+) → repeat with mixed biomes in Endless. v1.1: Jungle, Swamp, Mushroom Fields, Nether/End as full biomes.
+- **Biomes** (Overworld) are regions of the map, not a timer (v1.1): 10 overworld biomes from a climate noise map (Plains around the spawn, then Forest, Dark Forest, Snowy Taiga, Desert, Badlands, Swamp, Jungle, Cherry Grove, Mushroom Fields), plus the Nether rift arena. Each has its own enemy roster (9.1), ambient particles (snow, petals, dust, leaves, pollen, spores, embers, fireflies at night in forests and swamps), music theme and props. The "Entering <biome>" banner and the music follow the hero with hysteresis at borders.
 - **Enemy tides** every ~45 s; soft cap 64 on screen (quality setting can lower to 40); beyond the cap, newcomers are **Elites** (×1.6 HP/XP, ×1.25 dmg, small crown icon). Enemies left far behind despawn and re-spawn ahead of the player.
 - **Bosses** at **5:00 Ravager** (Raid Captain, charge + stomp), **10:00 Wither** (flying, 3 heads: fan of wither skulls, blue skull homing, summons wither skeletons; enrages <50% HP with a dash) and **15:00 Warden** (final: blind, telegraphed sonic boom beam, ground shock rings, "darkness" pulses that shrink the view). Bosses drop a **Rare Spawn Egg** and an item. Tides drop to 25% during a boss; boss theme plays.
 - **Mini-bosses** (random, 1–2 per run from minute 2, between bosses): Vindicator captain, Piglin Brute, Elder Guardian (in water), Charged Creeper.
@@ -143,7 +143,7 @@ Desired v1.0 roster (adapt to the sheets at Checkpoint 0). Each run draws a cast
 | Creeper | 2+ | *Kamikaze*: approaches, 1 s hiss + flash, explodes (hurts enemies too) |
 | Slime | 2+ | splits into 2 smaller on death (max depth 2) |
 | Cave Spider | 3+ | poison on hit |
-| Husk (Desert) / Stray (Snow) | biome | zombie/skeleton variants: Husk hunger (−regen), Stray slowing arrows |
+| Husk (Desert, Badlands) / Stray (Snow) | biome | zombie/skeleton variants: Husk hunger (−regen, "Hunger" tag in the HUD), Stray slowing arrows. More biome mobs: see 9.1 |
 | Drowned | near water | trident throw, fast in water |
 | Enderman | 4+ | teleports near you with telegraph, hits hard, flees on hit |
 | Witch | 4+ | throws potions: poison/slow pools; heals allies |
@@ -163,6 +163,24 @@ Desired v1.0 roster (adapt to the sheets at Checkpoint 0). Each run draws a cast
 | Shulker | 13+ | static, homing bullets that levitate (slow you) |
 | Ravager · Wither · Warden | bosses | §7 |
 | Elder Guardian · Piglin Brute · Vindicator Captain · Charged Creeper | mini-bosses | — |
+
+### 9.1 Biome rosters (v1.1)
+
+The biome under the hero (spatial biome map, `RunState.biome()`) reweights the spawn pool; the data lives in `data/rosters.ts` (pure functions, tested). A mob with a `biomes` filter only spawns there; generic mobs are scaled per biome (`mult`) and some arrive earlier (`from`). **Plains is untouched** (same pool and curve as before, so the start stays gentle). Each biome's `danger` scales spawn density (trickle and tides) and HP (60% of the distance from 1): Plains 1.0, Cherry Grove 0.9, Mushroom Fields 0.6, Forest/Taiga/Desert 1.05, Swamp/Jungle 1.1, Dark Forest/Badlands 1.15.
+
+| Biome | Cast (on top of the reweighted generic mobs) |
+|---|---|
+| Forest | wolf packs (min 2), forest chompers; fewer witches |
+| Dark Forest | Webspinner (cobweb: slow on hit), Jack o Lantern turret (fireballs, min 5), wolf packs; witches from min 3, pillagers/vindicators from min 5, evokers from min 7; no slimes |
+| Snowy Taiga | Stray (slowing arrows), Frozen Zombie and Frost Spider (slow on hit), Frost Creeper, wolf packs, Iceologer (frost pools, min 5) |
+| Desert | Husk (hunger), Dune Spider, Bone Hound packs (min 3); almost no slimes or drowned |
+| Badlands | Husk, Rockback Zombie (20% shield), Bone Spider (ranged, min 3), Miner (min 4), Dune Spider, Bone Hounds |
+| Swamp | Lobber Zombie (poison pools), Mossy Skeleton, Swamp Witch (heals allies, min 3), Zombie Rabbit; slimes x3 from min 1, Drowned x2.5 from min 2 near water |
+| Jungle | Jungle Zombie, Tropical Slimes (split twice), Mossy Skeleton, Quill Vine turret (slowing spit, min 4); double cave spiders from min 2 |
+| Cherry Grove | Killer Bunny (leaper), Pink Slimes; everything else softer |
+| Mushroom Fields | Mossy Ram (telegraphed charge), Pink Slimes; regular hostiles at 20% |
+
+**Chompers** are the tiny 14x13 biters of the sheets' "Great Hunger" family, one skin per ground type, in every overworld biome but Plains.
 
 Enemy AI archetypes to implement generically: `chaser`, `ranged-kiter`, `charger` (telegraphed), `kamikaze`, `splitter`, `summoner`, `healer`, `shielder`, `teleporter`, `flyer-diver`, `turret`, plus boss patterns. Telegraphs are drawn on the ground (red outline shapes) ≥ 0.6 s before damage.
 
@@ -251,7 +269,7 @@ Vitality (+HP), Strength (+dmg), Stride (+speed), Reflexes (+cooldown), Chainmai
 
 - **No emojis anywhere.** All icons are code-drawn pixel art (hearts, emeralds, spawn eggs, XP orb, weapon icons, enchant book, potion bottles, armor/sword tier icons, boss skull, arrows).
 - Panels: dark stone / oak-plank style frames with 2-px bevels, Minecraft-ish grey buttons with the hover highlight, but original (don't copy GUI textures). Tooltips on hover for every card and stat.
-- HUD: HP bar (hearts style) top-left, XP bar full-width top with level, timer centre, kill counter, Emeralds/Eggs, weapon/passive slots bottom-left with levels, armor & sword tier icons next to the hero portrait, boss HP bar when a boss is alive, pet/ally portraits with ally HP, no minimap (screen-edge arrows for portal/Charged/lost villager instead).
+- HUD: HP bar (hearts style) top-left, XP bar full-width top with level, timer centre, kill counter, Emeralds/Eggs, weapon/passive slots bottom-left with levels, armor & sword tier icons next to the hero portrait, boss HP bar when a boss is alive, pet/ally portraits with ally HP, screen-edge arrows for portal/Charged/lost villager, and a corner **minimap** (toggle `M`, hidden while touch controls are up): fog of war revealed around the hero in 8x8-tile cells (a sparse bitset), biome ground colours, water and lava, dots for the portal, trader, lost villager and Charged mobs. "Hunger" and "Slow" tags appear next to the hearts while they apply.
 - Damage numbers (toggle), hit flash = pre-tinted white silhouette (not `ctx.filter`), screen shake (toggle), low-HP vignette.
 - Results screen with pixel confetti on a win; records highlighted.
 
@@ -266,7 +284,7 @@ Web Audio synth: square/triangle/noise channels, simple ADSR, delay/reverb send.
 | *Hub* | menus, calm, C major 90 bpm, marimba-ish |
 | *Plains Day* | run, bright |
 | *Night* variation | darker chords, same motif |
-| *Forest* / *Taiga* / *Desert* | per biome, same motif re-harmonised |
+| *Dark Forest* / *Taiga* / *Desert* / *Jungle* / *Swamp* / *Cherry* / *Mushroom* / *Badlands* | one theme per biome (Plains and Forest share *Plains Day*); crossfades when the hero has stayed in a new biome for 4 s (and at least 20 s after the last change); boss, rift and night switch at once |
 | *Nether* | rift arena, tense phrygian |
 | *Boss* | 150 bpm driving |
 | *Victory* / *Game over* stings | |
