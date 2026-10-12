@@ -14,6 +14,9 @@ import type { Projectile } from './entities/projectile';
 import { applyStatus } from './systems/status';
 import { updateMines, updateOrbiters, updateProjectiles, updateZones } from './systems/combat';
 import { updateEnemies } from './systems/enemyAI';
+import { DirectorState, initDirector, onEnemyKilled, updateDirector } from './systems/director';
+import { type Npc, type RescueMarker, updateNpcs } from './systems/npcs';
+import { RiftState, updateRift } from './systems/rift';
 import { updateInteract, type PropState } from './systems/interact';
 import { updateItems } from './systems/items';
 import { xpToNext } from './systems/economy';
@@ -23,7 +26,7 @@ import { SpawnerState, updateSpawner } from './systems/spawner';
 import { updateWeapons } from './systems/weapons';
 import { newWeapon } from './weapons';
 import type { WeaponId, WeaponState } from './weapons/types';
-import { biomeState, type BiomeId } from './world/biomes';
+import { biomeState, type BiomeId, type BiomeState } from './world/biomes';
 import { World } from './world/world';
 
 export interface Mine {
@@ -94,12 +97,29 @@ export type RunStatus = 'playing' | 'dead';
 const PICKUP_COLLECT = 8;
 
 export class RunState {
-  readonly rng: { spawn: Rng; drops: Rng; levelup: Rng; ai: Rng; fx: Rng };
-  readonly world: World;
+  readonly rng: { spawn: Rng; drops: Rng; levelup: Rng; ai: Rng; fx: Rng; events: Rng };
+  /** The world being played: the overworld, or the arena while a rift is active. */
+  world: World;
+  readonly overworld: World;
+  readonly arenaWorld: World;
+  readonly rift = new RiftState();
+  npcs: Npc[] = [];
+  rescue: RescueMarker | null = null;
   readonly player = new Player();
   readonly pathing = new Pathing();
   readonly hash = new SpatialHash<Enemy>(32);
   readonly spawner = new SpawnerState();
+  readonly director = new DirectorState();
+  /** Short announcements shown under the timer. */
+  banners: { text: string; color: string; t: number; dur: number }[] = [];
+  bossKills = 0;
+  miniKills = 0;
+  /** True once the Warden has fallen (Endless continues afterwards). */
+  won = false;
+  victoryShown = false;
+  storm = false;
+  /** White lightning flash alpha (decays). */
+  flash = 0;
 
   enemies: Enemy[] = [];
   nextEnemyId = 1;
@@ -128,6 +148,8 @@ export class RunState {
   bonusOffers = 0;
   offerKind: 'level' | 'enchant' = 'level';
   lavaT = 0;
+  /** Seconds of Warden darkness left (the view shrinks). */
+  darkness = 0;
   /** Timed buffs (beacons, ores): game time at which each ends. */
   buffs = { strength: 0, speed: 0, magnet: 0, haste: 0, lapis: 0, redstone: 0 };
   private buffTick = 0;
@@ -172,7 +194,7 @@ export class RunState {
   chargedBonus = 0;
   private dotAcc = 0;
   /** Base max HP before bonuses (Steve: 100 + 10%). */
-  private readonly baseMaxHp = 110;
+  baseMaxHp = 110;
 
   constructor(
     readonly seed: number,
@@ -185,9 +207,13 @@ export class RunState {
       levelup: root.fork('levelup'),
       ai: root.fork('ai'),
       fx: root.fork('fx'),
+      events: root.fork('events'),
     };
-    this.world = new World(seed);
+    this.overworld = new World(seed);
+    this.arenaWorld = new World(seed ^ 0x51ed27, { r: 22 });
+    this.world = this.overworld;
     this.time = startTime;
+    initDirector(this);
     this.recomputeStats();
     this.player.hp = this.player.maxHp;
   }
@@ -215,12 +241,24 @@ export class RunState {
   }
 
   biome(): BiomeId {
-    return biomeState(this.time).current;
+    return this.rift.active ? 'nether' : biomeState(this.time).current;
   }
 
-  /** Hook for systems that react to kills (events, bosses...). */
-  onKill(_e: Enemy): void {
-    void _e;
+  /** Biome and crossfade state for rendering (the rift arena has no crossfade). */
+  biomeState(): BiomeState {
+    return this.rift.active
+      ? { current: 'nether', previous: null, fade: 1 }
+      : biomeState(this.time);
+  }
+
+  /** Called for every rewarded kill (bosses, mini-bosses, banner carriers). */
+  onKill(e: Enemy): void {
+    onEnemyKilled(this, e);
+  }
+
+  announce(text: string, color: string, seconds: number): void {
+    this.banners.push({ text, color, t: 0, dur: seconds });
+    if (this.banners.length > 3) this.banners.shift();
   }
 
   /** Hook for systems that react to the hero being hurt. */
@@ -240,6 +278,10 @@ export class RunState {
     }
     if (this.item === 'rabbit_foot') m.luck += 0.15;
     const t = this.time;
+    if (this.director.goldenUntil > t) {
+      m.xpMult += 1;
+      m.lootMult *= 2;
+    }
     if (t < this.buffs.strength) m.dmg *= 2;
     if (t < this.buffs.speed) m.speed *= 1.45;
     if (t < this.buffs.magnet) m.magnet *= 4;
@@ -276,7 +318,12 @@ export class RunState {
   update(dt: number, input: InputSource): void {
     this.time += dt;
     this.shake = Math.max(0, this.shake - 14 * dt);
+    this.darkness = Math.max(0, this.darkness - dt);
+    this.flash = Math.max(0, this.flash - dt * 1.5);
+    for (const b of this.banners) b.t += dt;
+    this.banners = this.banners.filter((b) => b.t < b.dur);
     const p = this.player;
+    updateRift(this, dt);
     updateItems(this, dt);
     p.update(dt, input, this.world, this.biome(), this.mods.waterImmune);
     if (p.dead) {
@@ -298,6 +345,8 @@ export class RunState {
     updateZones(this, dt);
     updateOrbiters(this, dt);
     updateInteract(this, dt);
+    updateDirector(this, dt);
+    updateNpcs(this, dt);
     this.buffTick -= dt;
     if (this.buffTick <= 0) {
       this.buffTick = 0.5;

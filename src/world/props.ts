@@ -1,7 +1,7 @@
 /** Pure prop placement: one candidate per 2x2-tile cell, decided by stateless hashes. */
 import { fbm, hash2 } from '../core/noise';
 import { BIOMES, type BiomeId } from './biomes';
-import { CHUNK_TILES, SPAWN_CLEAR, TILE, TILE_PX, tileAt } from './terrain';
+import { type Arena, CHUNK_TILES, SPAWN_CLEAR, TILE, TILE_PX, tileAt } from './terrain';
 
 export type PropKind =
   | 'tree'
@@ -90,7 +90,13 @@ function make(id: string, kind: PropKind, type: number, shape: number, x: number
   return { id, kind, variant: type + 8 * shape, x, y, radius, solid: radius > 0 };
 }
 
-export function genProps(cx: number, cy: number, seed: number, biome: BiomeId): Prop[] {
+export function genProps(
+  cx: number,
+  cy: number,
+  seed: number,
+  biome: BiomeId,
+  arena?: Arena,
+): Prop[] {
   const b = BIOMES[biome];
   const out: Prop[] = [];
   for (let j = 0; j < CELLS_PER_CHUNK; j++) {
@@ -99,12 +105,12 @@ export function genProps(cx: number, cy: number, seed: number, biome: BiomeId): 
       const gy = cy * CELLS_PER_CHUNK + j;
       const tx = gx * CELL_TILES;
       const ty = gy * CELL_TILES;
-      if (Math.hypot(tx + 1, ty + 1) < SPAWN_CLEAR + 1) continue;
+      if (Math.hypot(tx + 1, ty + 1) < (arena ? 5 : SPAWN_CLEAR + 1)) continue;
       if (
-        tileAt(tx, ty, seed) !== TILE.GRASS ||
-        tileAt(tx + 1, ty, seed) !== TILE.GRASS ||
-        tileAt(tx, ty + 1, seed) !== TILE.GRASS ||
-        tileAt(tx + 1, ty + 1, seed) !== TILE.GRASS
+        tileAt(tx, ty, seed, arena) !== TILE.GRASS ||
+        tileAt(tx + 1, ty, seed, arena) !== TILE.GRASS ||
+        tileAt(tx, ty + 1, seed, arena) !== TILE.GRASS ||
+        tileAt(tx + 1, ty + 1, seed, arena) !== TILE.GRASS
       ) {
         continue;
       }
@@ -116,6 +122,12 @@ export function genProps(cx: number, cy: number, seed: number, biome: BiomeId): 
       const grove = fbm(gx * 0.12, gy * 0.12, seed + 505);
       const v = hash2(gx, gy, seed + 707);
       let acc = 0;
+      if (arena) {
+        // Basalt pillars for cover; nothing else grows in the Nether arena.
+        if (r < 0.07 && Math.hypot(tx, ty) < arena.r - 4)
+          out.push(make(id, 'boulder', 0, shape, x, y));
+        continue;
+      }
       const roll = (p: number): boolean => {
         acc += p;
         return r < acc;

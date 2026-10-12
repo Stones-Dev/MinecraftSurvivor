@@ -1,6 +1,6 @@
 import type { RGB } from '../core/pixelart';
 
-export type BiomeId = 'plains' | 'dark_forest' | 'snowy_taiga' | 'desert';
+export type BiomeId = 'plains' | 'dark_forest' | 'snowy_taiga' | 'desert' | 'nether';
 
 export interface Biome {
   id: BiomeId;
@@ -193,6 +193,47 @@ export const BIOMES: Record<BiomeId, Biome> = {
     lava: true,
     snow: false,
   },
+  nether: {
+    id: 'nether',
+    name: 'Nether',
+    grass: [
+      [118, 44, 44],
+      [140, 56, 54],
+      [92, 32, 34],
+    ],
+    dirt: [
+      [78, 30, 32],
+      [96, 40, 40],
+      [58, 22, 26],
+    ],
+    sand: [
+      [96, 76, 60],
+      [74, 58, 46],
+    ],
+    water: [
+      [58, 112, 214],
+      [88, 142, 236],
+      [44, 88, 176],
+      [168, 205, 255],
+    ],
+    leaves: [
+      [90, 30, 30],
+      [110, 40, 40],
+      [70, 24, 26],
+    ],
+    trunk: [
+      [60, 40, 40],
+      [44, 28, 28],
+    ],
+    treeBase: 0,
+    groveBonus: 0,
+    dirtThreshold: 0.7,
+    treeKind: 'none',
+    cactusBase: 0,
+    iceWater: false,
+    lava: true,
+    snow: false,
+  },
 };
 
 /** Biomes rotate in this order every 4 minutes (BRIEF section 7). */
@@ -205,6 +246,11 @@ export interface BiomeState {
   previous: BiomeId | null;
   /** 0..1, 1 once the crossfade has finished. */
   fade: number;
+}
+
+/** Is this a biome of the overworld rotation (not the rift arena)? */
+export function inRotation(id: BiomeId): boolean {
+  return BIOME_ORDER.includes(id);
 }
 
 export function biomeState(t: number): BiomeState {

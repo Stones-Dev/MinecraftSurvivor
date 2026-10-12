@@ -11,7 +11,8 @@ export type Archetype =
   | 'healer'
   | 'teleporter'
   | 'diver'
-  | 'turret';
+  | 'turret'
+  | 'boss';
 
 export interface ShotDef {
   style: ProjStyle;
@@ -86,6 +87,12 @@ export interface EnemyDef {
   trail?: boolean;
   /** Zombified piglins: when one is hurt, nearby ones speed up. */
   packAggro?: boolean;
+  /** Draw scale (bosses and mini-bosses are bigger). */
+  scale?: number;
+  /** Scripted boss pattern (systems/bossAI.ts). */
+  boss?: 'captain' | 'wither' | 'warden';
+  /** Mini-boss: scheduled by the director, never spawned by the trickle. */
+  mini?: boolean;
 }
 
 const E: Record<string, EnemyDef> = {};
@@ -686,6 +693,140 @@ add({
     homing: 2.4,
   },
 });
+
+// Bosses (5:00 Raid Captain, 10:00 Wither, 15:00 Warden) and mini-bosses (BRIEF section 7).
+add({
+  ...base,
+  id: 'raid_captain',
+  sprite: 'mob.pillager_captain',
+  name: 'Raid Captain',
+  hp: 520,
+  dmg: 20,
+  speed: 34,
+  radius: 9,
+  xp: 60,
+  archetype: 'boss',
+  boss: 'captain',
+  scale: 1.7,
+  height: 30,
+});
+add({
+  ...base,
+  id: 'wither',
+  sprite: 'mob.wither',
+  name: 'Wither',
+  hp: 1200,
+  dmg: 16,
+  speed: 30,
+  radius: 12,
+  xp: 150,
+  archetype: 'boss',
+  boss: 'wither',
+  flying: true,
+  scale: 1.6,
+  walkAnim: false,
+  height: 40,
+  anims: { idle: 'firing', aim: 'firing' },
+});
+add({
+  ...base,
+  id: 'warden',
+  sprite: 'mob.warden',
+  name: 'Warden',
+  hp: 2800,
+  dmg: 40,
+  speed: 26,
+  radius: 13,
+  xp: 400,
+  archetype: 'boss',
+  boss: 'warden',
+  scale: 1.7,
+  height: 36,
+});
+add({
+  ...base,
+  id: 'vindicator_captain',
+  sprite: 'mob.vindicator_armor_diamond',
+  name: 'Vindicator Captain',
+  hp: 240,
+  dmg: 26,
+  speed: 36,
+  radius: 7,
+  xp: 30,
+  archetype: 'chaser',
+  mini: true,
+  shieldPct: 0.5,
+  scale: 1.35,
+  height: 36,
+});
+add({
+  ...base,
+  id: 'piglin_brute',
+  sprite: 'mob.piglin_brute',
+  name: 'Piglin Brute',
+  hp: 300,
+  dmg: 26,
+  speed: 34,
+  radius: 8,
+  xp: 30,
+  archetype: 'charger',
+  mini: true,
+  scale: 1.35,
+  height: 36,
+  anims: { windup: 'idle', dash: 'attack' },
+  charge: { range: 170, windup: 0.7, dash: 0.5, speed: 3.4, rest: 1.2 },
+});
+add({
+  ...base,
+  id: 'elder_guardian',
+  sprite: 'mob.guardian',
+  name: 'Elder Guardian',
+  hp: 340,
+  dmg: 20,
+  speed: 22,
+  radius: 11,
+  xp: 30,
+  archetype: 'turret',
+  mini: true,
+  flying: true,
+  walkAnim: false,
+  scale: 1.8,
+  height: 36,
+  anims: { aim: 'firing' },
+  shot: {
+    style: 'bubble',
+    speed: 0,
+    dmgMult: 1,
+    range: 170,
+    count: 1,
+    spread: 0,
+    cd: [2.4, 3.2],
+    windup: 1.2,
+    life: 1,
+  },
+});
+add({
+  ...base,
+  id: 'charged_creeper',
+  sprite: 'mob.charged_creeper',
+  name: 'Charged Creeper',
+  hp: 160,
+  dmg: 80,
+  speed: 38,
+  radius: 8,
+  xp: 30,
+  archetype: 'kamikaze',
+  mini: true,
+  scale: 1.4,
+  height: 36,
+});
+
+export const MINI_BOSSES = [
+  'vindicator_captain',
+  'piglin_brute',
+  'elder_guardian',
+  'charged_creeper',
+] as const;
 
 export const ENEMIES: Record<string, EnemyDef> = E;
 

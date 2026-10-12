@@ -51,11 +51,26 @@ export class Atlas {
     return id in this.data.anims;
   }
 
-  /** Draw a frame with its feet anchor at (x, y); flip mirrors around the anchor. */
-  draw(ctx: CanvasRenderingContext2D, key: string, x: number, y: number, flip = false): void {
+  /** Draw a frame with its feet anchor at (x, y); flip mirrors around the anchor; scale grows it from the feet. */
+  draw(
+    ctx: CanvasRenderingContext2D,
+    key: string,
+    x: number,
+    y: number,
+    flip = false,
+    scale = 1,
+  ): void {
     const f = this.data.frames[key];
     const page = f ? this.pages[f.page] : undefined;
     if (!f || !page) return;
+    if (scale !== 1) {
+      ctx.save();
+      ctx.translate(Math.round(x), Math.round(y));
+      ctx.scale(flip ? -scale : scale, scale);
+      ctx.drawImage(page, f.x, f.y, f.w, f.h, -f.ox, -f.oy, f.w, f.h);
+      ctx.restore();
+      return;
+    }
     const dx = Math.round(x);
     const dy = Math.round(y - f.oy);
     if (flip) {

@@ -57,6 +57,10 @@ export function paintChunk(
     const t = raw(tx, ty);
     return t === TILE.LAVA && !biome.lava ? TILE.GRASS : t;
   };
+  const wallBase = pack([52, 50, 60]);
+  const wallLight = pack([76, 74, 86]);
+  const wallDark = pack([38, 36, 44]);
+  const wallMortar = pack([24, 22, 30]);
   const lCrust = pack([58, 30, 22]);
   const lBase = pack([226, 86, 18]);
   const lLight = pack([255, 172, 44]);
@@ -81,7 +85,13 @@ export function paintChunk(
           const Y = cy * CHUNK_PX + py;
           const j = (NOISE[(((py + oy) & 255) << 8) | ((px + ox) & 255)] ?? 0) / 256;
           let c: number;
-          if (t === TILE.LAVA) {
+          if (t === TILE.WALL) {
+            // Basalt bricks: offset rows of 8 px with dark mortar.
+            const row = py >> 3;
+            const bx = (px + (row % 2) * 8) % 16;
+            if (py % 8 === 0 || bx === 0) c = wallMortar;
+            else c = j < 0.2 ? wallLight : j > 0.85 ? wallDark : wallBase;
+          } else if (t === TILE.LAVA) {
             const dl = Math.min(
               lavaL ? lx : 99,
               lavaR ? TILE_PX - 1 - lx : 99,

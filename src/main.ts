@@ -59,12 +59,16 @@ async function boot(): Promise<void> {
           debug: params.has('debug'),
           weapons: params.get('weapons')?.split(',') as WeaponId[] | undefined,
           startXp: num('xp', 0),
+          hp: num('hp', 0),
+          portal: params.has('portal'),
+          trader: params.has('trader'),
+          villager: params.has('villager'),
         }),
       ),
   };
 
   if (params.has('gallery')) {
-    router.push(galleryScreen(new WorldRenderer(new World(num('seed', 1337)))));
+    router.push(galleryScreen(new WorldRenderer(new World(num('seed', 1337))), num('gallery', 0)));
   } else if (params.has('run')) {
     app.startRun();
   } else {

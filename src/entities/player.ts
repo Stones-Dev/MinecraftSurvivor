@@ -1,6 +1,6 @@
 import type { InputSource } from '../core/input';
 import type { BiomeId } from '../world/biomes';
-import { WATER_SLOW, type World } from '../world/world';
+import { SOUL_SLOW, WATER_SLOW, type World } from '../world/world';
 
 export class Player {
   x = 0;
@@ -47,7 +47,8 @@ export class Player {
     if (this.regen > 0 && this.hungerT <= 0) this.heal(this.regen * dt);
     const v = input.moveVector();
     const surface = world.surface(this.x, this.y, biome);
-    const water = surface === 'water' && !waterImmune ? WATER_SLOW : 1;
+    const water =
+      surface === 'water' && !waterImmune ? WATER_SLOW : surface === 'soul' ? SOUL_SLOW : 1;
     const sp = this.speed * this.speedMult * this.envMult * water * (this.slowT > 0 ? 0.6 : 1);
     const wantX = v.x * sp;
     const wantY = v.y * sp;

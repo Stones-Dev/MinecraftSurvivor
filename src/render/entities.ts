@@ -8,6 +8,9 @@ import type { Pickup } from '../entities/pickup';
 import type { Player } from '../entities/player';
 import type { Projectile } from '../entities/projectile';
 import type { Mine, Orbiter, RunState, Telegraph, Zone } from '../game';
+import { propStateOf } from '../systems/interact';
+import type { Npc } from '../systems/npcs';
+import type { Prop } from '../world/props';
 import { drawIcon } from '../ui/icons';
 import { drawText } from '../ui/panel';
 
@@ -58,10 +61,11 @@ export function drawEnemy(
   if (e.dying) ctx.globalAlpha = Math.max(0, 1 - e.deathT / 0.6);
   const x = e.x - camX;
   const y = e.y - camY;
-  atlas.draw(ctx, key, x, y, e.facing < 0);
+  const sc = e.def.scale ?? 1;
+  atlas.draw(ctx, key, x, y, e.facing < 0, sc);
   ctx.globalAlpha = 1;
   if (e.dying) return;
-  const h = e.def.height ?? 28;
+  const h = (e.def.height ?? 28) * (sc > 1 ? 1 : 1);
   const rx = Math.round(x);
   const ry = Math.round(y);
   if (e.freezeT > 0) {
@@ -478,4 +482,113 @@ export function drawTelegraph(
     pixelRing(ctx, t.x - camX, t.y - camY, t.r * k, 0, Math.PI * 2, 1);
   }
   ctx.globalAlpha = 1;
+}
+
+/** NPC sprites: villagers use a 4-direction sheet (down 0-3, up 4-7, side 8-11); llamas are side-on. */
+export function drawNpc(
+  ctx: CanvasRenderingContext2D,
+  atlas: Atlas,
+  n: Npc,
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const id = `${n.sprite}.${n.kind === 'llama' && !n.moving ? 'idle' : 'walk'}`;
+  if (!atlas.hasAnim(id)) return;
+  const anim = atlas.anim(id);
+  const x = n.x - camX;
+  const y = n.y - camY;
+  if (n.kind === 'llama') {
+    atlas.draw(ctx, frameAt(anim, time + n.id), x, y, n.dx < 0);
+    return;
+  }
+  const f = Math.floor(time * 6) % 4;
+  const vertical = Math.abs(n.dy) > Math.abs(n.dx);
+  const base = vertical ? (n.dy > 0 ? 0 : 4) : 8;
+  const idx = base + (n.moving ? f : 0);
+  const key = anim.frames[idx] ?? anim.frames[0];
+  if (key) atlas.draw(ctx, key, x, y, !vertical && n.dx > 0);
+}
+
+/** Nether portal: obsidian frame with a swirling purple core. */
+export function drawPortal(
+  ctx: CanvasRenderingContext2D,
+  portal: { x: number; y: number; left: number },
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const x = Math.round(portal.x - camX);
+  const y = Math.round(portal.y - camY);
+  const blink = portal.left < 8 && Math.floor(time * 6) % 2 === 0;
+  if (blink) ctx.globalAlpha = 0.5;
+  ctx.fillStyle = '#14101e';
+  ctx.fillRect(x - 13, y - 34, 26, 36);
+  ctx.fillStyle = '#2a1f45';
+  ctx.fillRect(x - 11, y - 32, 22, 32);
+  for (let row = 0; row < 30; row++) {
+    const phase = Math.sin(time * 3 + row * 0.5) * 3;
+    ctx.fillStyle = row % 3 === 0 ? '#b06bff' : row % 3 === 1 ? '#7a3ad8' : '#5a24b0';
+    ctx.fillRect(Math.round(x - 9 + phase), y - 31 + row, 18, 1);
+  }
+  ctx.fillStyle = '#e0c4ff';
+  for (let i = 0; i < 4; i++) {
+    ctx.fillRect(
+      Math.round(x - 8 + ((time * 14 + i * 5) % 16)),
+      Math.round(y - 4 - ((time * 18 + i * 9) % 28)),
+      1,
+      1,
+    );
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Flag marking where the lost villager has to be escorted. */
+export function drawRescueFlag(
+  ctx: CanvasRenderingContext2D,
+  m: { x: number; y: number },
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const x = Math.round(m.x - camX);
+  const y = Math.round(m.y - camY);
+  ctx.fillStyle = '#6b4a2a';
+  ctx.fillRect(x, y - 22, 2, 22);
+  ctx.fillStyle = Math.floor(time * 4) % 2 === 0 ? '#ffd84a' : '#ffb347';
+  ctx.fillRect(x + 2, y - 22, 9, 6);
+  ctx.fillStyle = 'rgba(255,216,74,0.35)';
+  ctx.fillRect(x - 10, y - 2, 22, 3);
+}
+
+/** Small extras on props: locked-chest progress, campfire flames and ash. */
+export function drawPropExtra(
+  ctx: CanvasRenderingContext2D,
+  run: RunState,
+  p: Prop,
+  camX: number,
+  camY: number,
+): void {
+  const x = Math.round(p.x - camX);
+  const y = Math.round(p.y - camY);
+  const st = propStateOf(run, p);
+  if (p.kind === 'locked_chest' && st && st.t > 0.05) {
+    const k = Math.min(1, st.t / 3.5);
+    ctx.fillStyle = '#101014';
+    ctx.fillRect(x - 9, y - 18, 18, 4);
+    ctx.fillStyle = '#ffd84a';
+    ctx.fillRect(x - 8, y - 17, Math.floor(16 * k), 2);
+  } else if (p.kind === 'campfire') {
+    if (st && st.hp <= 0) {
+      ctx.fillStyle = 'rgba(30,24,20,0.7)';
+      ctx.fillRect(x - 6, y - 10, 12, 8);
+    } else {
+      const f = Math.floor(run.time * 10) % 3;
+      ctx.fillStyle = f === 0 ? '#ffe27a' : '#ff9a1c';
+      ctx.fillRect(x - 2 + f, y - 14 - f, 3, 3);
+    }
+  } else if (p.kind === 'beacon') {
+    ctx.fillStyle = `rgba(160,245,255,${(0.25 + 0.15 * Math.sin(run.time * 4)).toFixed(2)})`;
+    ctx.fillRect(x - 2, y - 80, 4, 62);
+  }
 }

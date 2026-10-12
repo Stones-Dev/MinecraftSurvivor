@@ -1,24 +1,28 @@
 /** Pure world queries (no DOM): terrain, props and collision. Rendering lives in renderer.ts. */
 import { BIOMES, type BiomeId } from './biomes';
 import { genProps, type Prop } from './props';
-import { CHUNK_PX, TILE, TILE_PX, tileAt } from './terrain';
+import { type Arena, CHUNK_PX, TILE, TILE_PX, tileAt } from './terrain';
 
 const MAX_PROP_CHUNKS = 220;
 export const WATER_SLOW = 0.6;
 
-export type Surface = 'ground' | 'water' | 'ice' | 'lava';
+export type Surface = 'ground' | 'water' | 'ice' | 'lava' | 'soul';
+export const SOUL_SLOW = 0.65;
 
 export class World {
   private readonly propCache = new Map<string, Prop[]>();
 
-  constructor(readonly seed: number) {}
+  constructor(
+    readonly seed: number,
+    readonly arena?: Arena,
+  ) {}
 
   tileAt(tx: number, ty: number): number {
-    return tileAt(tx, ty, this.seed);
+    return tileAt(tx, ty, this.seed, this.arena);
   }
 
   tileAtPx(x: number, y: number): number {
-    return tileAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), this.seed);
+    return tileAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), this.seed, this.arena);
   }
 
   /** What the ground is at a point in this biome (water freezes in the taiga, lava only in the desert). */
@@ -26,12 +30,14 @@ export class World {
     const t = this.tileAtPx(x, y);
     if (t === TILE.WATER) return BIOMES[biome].iceWater ? 'ice' : 'water';
     if (t === TILE.LAVA && BIOMES[biome].lava) return 'lava';
+    if (t === TILE.SAND && biome === 'nether') return 'soul';
     return 'ground';
   }
 
   /** Movement multiplier at a ground position (water slows). */
   speedFactor(x: number, y: number, biome: BiomeId = 'plains'): number {
-    return this.surface(x, y, biome) === 'water' ? WATER_SLOW : 1;
+    const surface = this.surface(x, y, biome);
+    return surface === 'water' ? WATER_SLOW : surface === 'soul' ? SOUL_SLOW : 1;
   }
 
   /** Props destroyed or used up this run, as `id|kind` keys. */
@@ -50,7 +56,7 @@ export class World {
     const key = `${cx},${cy},${biome}`;
     let props = this.propCache.get(key);
     if (!props) {
-      props = genProps(cx, cy, this.seed, biome);
+      props = genProps(cx, cy, this.seed, biome, this.arena);
       this.propCache.set(key, props);
       if (this.propCache.size > MAX_PROP_CHUNKS) {
         const oldest = this.propCache.keys().next().value;
@@ -114,11 +120,20 @@ export class World {
     return false;
   }
 
+  /** Keep a circle inside the arena's basalt wall (no-op in the overworld). */
+  clampArena(x: number, y: number, r: number): { x: number; y: number } {
+    if (!this.arena) return { x, y };
+    const max = (this.arena.r - 1) * TILE_PX - r;
+    const d = Math.hypot(x, y);
+    return d > max ? { x: (x / d) * max, y: (y / d) * max } : { x, y };
+  }
+
   /** Push a circle out of solid props (two passes so corners settle). */
   collide(x: number, y: number, r: number, biome: BiomeId): { x: number; y: number } {
     const reach = r + 8;
     let px = x;
     let py = y;
+    if (this.arena) ({ x: px, y: py } = this.clampArena(px, py, r));
     for (let pass = 0; pass < 2; pass++) {
       for (
         let cy = Math.floor((py - reach) / CHUNK_PX);

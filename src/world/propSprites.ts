@@ -115,8 +115,17 @@ const ORE_COLORS: RGB[] = [
   [90, 232, 232], // diamond
 ];
 
-function boulder(type: number, shape: number, ore: boolean): Sprite {
-  const buf = new PixBuffer(18, 15);
+function boulder(type: number, shape: number, ore: boolean, basalt = false): Sprite {
+  const buf = new PixBuffer(basalt ? 16 : 18, basalt ? 24 : 15);
+  if (basalt) {
+    // Basalt pillar: tall dark column.
+    rect(buf, 2, 4, 13, 22, [58, 56, 68]);
+    rect(buf, 2, 4, 5, 22, [78, 76, 90]);
+    rect(buf, 11, 4, 13, 22, [40, 38, 48]);
+    rect(buf, 3, 2, 12, 4, [92, 90, 104]);
+    for (let y = 6; y < 22; y += 4) rect(buf, 2, y, 13, y, [34, 32, 42]);
+    return finish(buf, 8, 22);
+  }
   blob(buf, 9, 8, 8, 6, 200 + shape * 11, (dx, dy, r) => {
     if (dy < -1 && dx < 1 && r < 0.6) return [172, 172, 172];
     if (dy > 2 && r < 0.6) return [104, 104, 108];
@@ -289,7 +298,7 @@ export function propSprite(kind: PropKind, biome: BiomeId, variant: number): Spr
         s = tree(biome, type, shape);
         break;
       case 'boulder':
-        s = boulder(0, shape, false);
+        s = boulder(0, shape, false, biome === 'nether');
         break;
       case 'ore':
         s = boulder(type, shape, true);

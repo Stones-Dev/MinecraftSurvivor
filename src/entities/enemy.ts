@@ -37,6 +37,12 @@ export class Enemy {
   summonerId = 0;
   /** Seconds of rage left (zombified piglins; speed x1.5). */
   angry = 0;
+  /** Raid banner carrier: drops a chest when killed. */
+  banner = false;
+  /** Boss attack timers and counters (systems/bossAI.ts). */
+  atk = 0;
+  atk2 = 0;
+  atk3 = 0;
   /** Trail timer for burning ground (magma cubes). */
   trailT = 0;
   /** Orbit angle for divers. */

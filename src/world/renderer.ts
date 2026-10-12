@@ -45,7 +45,7 @@ export class WorldRenderer {
     }
     if (!force && this.bakedThisFrame >= MAX_BAKES_PER_FRAME) return null;
     const t0 = performance.now();
-    const terrain = genTerrain(cx, cy, this.world.seed);
+    const terrain = genTerrain(cx, cy, this.world.seed, this.world.arena);
     const canvas = paintChunk(cx, cy, terrain, BIOMES[biome], this.world.seed).toCanvas();
     this.lastBakeMs = performance.now() - t0;
     this.maxBakeMs = Math.max(this.maxBakeMs, this.lastBakeMs);

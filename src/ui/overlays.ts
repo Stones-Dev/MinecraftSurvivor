@@ -180,6 +180,61 @@ export function itemChoiceScreen(app: App, run: RunState): Screen {
   };
 }
 
+/** Shown once when the Warden falls: carry on into Endless or finish the run. */
+export function victoryScreen(app: App, run: RunState): Screen {
+  let hover = -1;
+  let lastView: View | null = null;
+  const btns = (view: View): Rect[] => {
+    const cx = Math.floor(view.width / 2);
+    const y = Math.floor(view.height / 2) + 6;
+    return [
+      { x: cx - 60, y, w: 120, h: 18 },
+      { x: cx - 60, y: y + 24, w: 120, h: 18 },
+    ];
+  };
+  return {
+    update() {},
+    render(view) {
+      lastView = view;
+      dim(view, 0.5);
+      const { ctx } = view;
+      drawText(
+        ctx,
+        'NIGHT SURVIVED!',
+        view.width / 2,
+        Math.floor(view.height / 2) - 24,
+        '#7dff9a',
+        'center',
+      );
+      drawText(
+        ctx,
+        'The Warden has fallen.',
+        view.width / 2,
+        Math.floor(view.height / 2) - 10,
+        '#fff',
+        'center',
+      );
+      const [a, b] = btns(view);
+      if (a && b) {
+        drawButton(ctx, a, 'Continue (Endless)', hover === 0);
+        drawButton(ctx, b, 'Finish run', hover === 1);
+      }
+    },
+    onMove(x, y) {
+      if (lastView) hover = btns(lastView).findIndex((r) => inRect(r, x, y));
+    },
+    onClick(x, y) {
+      if (!lastView) return;
+      const i = btns(lastView).findIndex((r) => inRect(r, x, y));
+      if (i === 0) app.router.pop();
+      if (i === 1) app.router.replace(resultsScreen(app, run));
+    },
+    onKey(code) {
+      if (code === 'Enter' || code === 'Space') app.router.pop();
+    },
+  };
+}
+
 export function pauseScreen(app: App, onQuit: () => void): Screen {
   let hover = -1;
   let lastView: View | null = null;
@@ -232,14 +287,17 @@ export function resultsScreen(app: App, run: RunState): Screen {
   const earned = runReward({
     timeSec: run.time,
     kills: run.kills,
-    bosses: 0,
-    miniBosses: 0,
+    bosses: run.bossKills,
+    miniBosses: run.miniKills,
     picked: run.emeraldsPicked,
   });
   const newTime = run.time > data.records.bestTimeSec;
   const newKills = run.kills > data.records.bestKills;
   data.currencies.emeralds += earned;
   data.records.runs += 1;
+  if (run.won) data.records.wins += 1;
+  data.currencies.spawnEggs += run.spawnEggs;
+  data.currencies.rareSpawnEggs += run.rareSpawnEggs;
   data.records.bestTimeSec = Math.max(data.records.bestTimeSec, Math.floor(run.time));
   data.records.bestKills = Math.max(data.records.bestKills, run.kills);
   app.store.save(data);
@@ -267,11 +325,20 @@ export function resultsScreen(app: App, run: RunState): Screen {
         h: 108,
       };
       drawPanel(ctx, panel);
-      drawText(ctx, 'YOU DIED', width / 2, panel.y + 16, '#ff6b6b', 'center');
+      drawText(
+        ctx,
+        run.won ? 'NIGHT SURVIVED' : 'YOU DIED',
+        width / 2,
+        panel.y + 16,
+        run.won ? '#7dff9a' : '#ff6b6b',
+        'center',
+      );
       const rows: [string, string, boolean][] = [
         ['Time', `${m}:${s.toString().padStart(2, '0')}`, newTime],
         ['Kills', String(run.kills), newKills],
         ['Level', String(run.level), false],
+        ['Bosses / mini-bosses', `${run.bossKills} / ${run.miniKills}`, false],
+        ['Spawn Eggs (rare)', `${run.spawnEggs} (${run.rareSpawnEggs})`, false],
         ['Emeralds earned', `+${earned}`, false],
       ];
       rows.forEach(([k, v, record], i) => {

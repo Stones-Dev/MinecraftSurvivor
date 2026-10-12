@@ -35,7 +35,11 @@
   "mob.pillager_captain.",
   "mob.piglin_brute.",
   "mob.charged_creeper.",
-  "mob.vindicator_armor_diamond."
+  "mob.vindicator_armor_diamond.",
+  "npc.wandering_trader.",
+  "npc.farmer_plains_villager.",
+  "pet.brown_llama_trader_decor.",
+  "pet.white_llama_trader_decor."
  ],
  "unship": []
 }

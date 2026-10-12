@@ -50,6 +50,8 @@ export function makeEnemy(
   e.cd = run.rng.spawn.range(0.5, 2);
   e.cd2 = run.rng.spawn.range(1, 4);
   if (def.shieldPct) e.shield = def.shieldPct * e.maxHp;
+  if (def.boss) e.boss = 'boss';
+  else if (def.mini) e.boss = 'mini';
   return e;
 }
 
@@ -93,7 +95,11 @@ function pickType(run: RunState): string {
 }
 
 /** A free point on the spawn ring at `angle`, or null if every attempt is blocked. */
-function ringPoint(run: RunState, angle: number, radius: number): { x: number; y: number } | null {
+export function ringPoint(
+  run: RunState,
+  angle: number,
+  radius: number,
+): { x: number; y: number } | null {
   const p = run.player;
   const biome = run.biome();
   for (let i = 0; i < 6; i++) {
@@ -137,6 +143,7 @@ function spawnOne(run: RunState, angle: number, limit: number): boolean {
 }
 
 export function updateSpawner(run: RunState, dt: number): void {
+  if (run.rift.active) return;
   const s = run.spawner;
   const t = run.time;
   const rate = trickleRate(t) * (1 + 0.4 * nightFactor(t)) * run.spawnMult;

@@ -9,6 +9,7 @@ import { boltPoints, makeFx } from '../entities/fx';
 import { Projectile } from '../entities/projectile';
 import type { RunState } from '../game';
 import { explode, hurtPlayer, killEnemy } from './combat';
+import { updateBoss } from './bossAI';
 import { makeEnemy } from './spawner';
 import { tickStatus } from './status';
 
@@ -29,8 +30,9 @@ function step(run: RunState, e: Enemy, vx: number, vy: number, dt: number): void
   let nx = e.x + (vx + e.kx) * dt;
   let ny = e.y + (vy + e.ky) * dt;
   if (e.def.flying) {
-    e.x = nx;
-    e.y = ny;
+    const c = run.world.clampArena(nx, ny, e.radius);
+    e.x = c.x;
+    e.y = c.y;
   } else {
     run.hash.query(e.x, e.y, e.radius, neigh);
     for (const o of neigh) {
@@ -59,10 +61,17 @@ function waterMult(run: RunState, e: Enemy): number {
 }
 
 /** Direction to walk towards the player: the BFS route when far, a straight line when close. */
-function chase(run: RunState, e: Enemy, ux: number, uy: number, dist: number): void {
-  if (!e.def.flying && dist > 36 && run.pathing.dir(e.x, e.y, dir)) return;
+function chase(
+  run: RunState,
+  e: Enemy,
+  ux: number,
+  uy: number,
+  dist: number,
+): { x: number; y: number } {
+  if (!e.def.flying && dist > 36 && run.pathing.dir(e.x, e.y, dir)) return dir;
   dir.x = ux;
   dir.y = uy;
+  return dir;
 }
 
 function contact(run: RunState, e: Enemy, dist: number): void {
@@ -266,6 +275,8 @@ function healPulse(run: RunState, e: Enemy): void {
     run.fx.push(makeFx('text', m.x, m.y - 18, 0.6, { text: '+', vy: -14, color: '#6dff8a' }));
   }
 }
+
+const TOOLS = { step, chase, contact, lineStrike };
 
 export function updateEnemies(run: RunState, dt: number): void {
   const p = run.player;
@@ -570,6 +581,9 @@ export function updateEnemies(run: RunState, dt: number): void {
         }
         break;
       }
+      case 'boss':
+        updateBoss(run, e, dt, ux, uy, dist, speed, TOOLS);
+        break;
       case 'kamikaze': {
         if (e.state === 'fuse') {
           e.stateT -= dt;
@@ -577,7 +591,7 @@ export function updateEnemies(run: RunState, dt: number): void {
           if (dist > 60) {
             e.state = 'move';
           } else if (e.stateT <= 0) {
-            explode(run, e.x, e.y, BLAST_RADIUS, e.dmg * 0.6, e.dmg, e);
+            explode(run, e.x, e.y, BLAST_RADIUS * (def.scale ?? 1), e.dmg * 0.6, e.dmg, e);
             killEnemy(run, e, false);
           }
         } else {

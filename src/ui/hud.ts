@@ -4,6 +4,7 @@ import { ITEMS } from '../data/items';
 import { WEAPONS } from '../weapons';
 import type { RunState } from '../game';
 import { xpToNext } from '../systems/economy';
+import { getMarkers } from '../systems/npcs';
 import { drawIcon } from './icons';
 import { drawText } from './panel';
 
@@ -29,7 +30,40 @@ function slot(
 }
 
 /** Canvas HUD: hearts, XP bar, timer, counters, weapon and passive slots, low-HP vignette. */
-export function drawHud(view: View, run: RunState): void {
+/** Arrows at the screen edge pointing to off-screen targets (Charged mobs, portal, flag, trader). */
+function drawMarkers(view: View, run: RunState, camX: number, camY: number): void {
+  const { ctx, width, height } = view;
+  const cx = width / 2;
+  const cy = height / 2;
+  for (const m of getMarkers(run)) {
+    const sx = m.x - camX;
+    const sy = m.y - camY;
+    if (sx > 8 && sx < width - 8 && sy > 8 && sy < height - 8) continue;
+    const dx = sx - cx;
+    const dy = sy - cy;
+    const k = Math.min(
+      (cx - 12) / Math.max(1, Math.abs(dx)),
+      (cy - 16) / Math.max(1, Math.abs(dy)),
+    );
+    const ax = cx + dx * k;
+    const ay = cy + dy * k;
+    const a = Math.atan2(dy, dx);
+    ctx.fillStyle = '#101014';
+    ctx.beginPath();
+    ctx.moveTo(ax + Math.cos(a) * 7, ay + Math.sin(a) * 7);
+    ctx.lineTo(ax + Math.cos(a + 2.5) * 6, ay + Math.sin(a + 2.5) * 6);
+    ctx.lineTo(ax + Math.cos(a - 2.5) * 6, ay + Math.sin(a - 2.5) * 6);
+    ctx.fill();
+    ctx.fillStyle = m.color;
+    ctx.beginPath();
+    ctx.moveTo(ax + Math.cos(a) * 5, ay + Math.sin(a) * 5);
+    ctx.lineTo(ax + Math.cos(a + 2.5) * 4, ay + Math.sin(a + 2.5) * 4);
+    ctx.lineTo(ax + Math.cos(a - 2.5) * 4, ay + Math.sin(a - 2.5) * 4);
+    ctx.fill();
+  }
+}
+
+export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
   const { ctx, width, height } = view;
   const p = run.player;
 
@@ -67,6 +101,44 @@ export function drawHud(view: View, run: RunState): void {
   run
     .passiveList()
     .forEach((ps, i) => slot(ctx, 4 + i * 18, y0 - 18, PASSIVES[ps.id].icon, ps.level));
+
+  drawMarkers(view, run, camX, camY);
+  if (run.rift.active) {
+    const left = Math.max(0, Math.ceil(run.rift.timer));
+    drawText(
+      ctx,
+      `Rift ${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, '0')}`,
+      width / 2,
+      26,
+      '#ff9a3a',
+      'center',
+    );
+  }
+  // Boss bar and announcements under the timer.
+  const boss = run.enemies.find((e) => e.boss === 'boss' && !e.dying);
+  let by = run.rift.active ? 32 : 24;
+  if (boss) {
+    const w = 160;
+    const x = Math.floor((width - w) / 2);
+    ctx.fillStyle = '#101014';
+    ctx.fillRect(x - 1, by, w + 2, 7);
+    ctx.fillStyle = '#5a1a1a';
+    ctx.fillRect(x, by + 1, w, 5);
+    ctx.fillStyle = '#e04040';
+    ctx.fillRect(x, by + 1, Math.max(0, Math.floor((w * boss.hp) / boss.maxHp)), 5);
+    drawText(ctx, boss.def.name, width / 2, by + 16, '#ffd0d0', 'center');
+    by += 20;
+  }
+  for (const b of run.banners) {
+    ctx.globalAlpha = Math.min(1, (b.dur - b.t) * 2, b.t * 4 + 0.2);
+    drawText(ctx, b.text, width / 2, by + 8, b.color, 'center');
+    ctx.globalAlpha = 1;
+    by += 11;
+  }
+  if (run.director.goldenUntil > run.time) {
+    drawIcon(ctx, 'star', width - 54, 36);
+    drawText(ctx, `${Math.ceil(run.director.goldenUntil - run.time)}s`, width - 40, 45, '#ffd84a');
+  }
 
   if (run.item) {
     const def = ITEMS[run.item];
