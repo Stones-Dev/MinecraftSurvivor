@@ -372,7 +372,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     cactusBase: 0,
     boulderBonus: 0,
     flowers: 0.12,
-    lake: -0.1,
+    lake: -0.12,
     bank: 0.015,
     lavaLevel: 1,
     iceWater: false,

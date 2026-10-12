@@ -6,6 +6,7 @@ import { Pickup } from '../entities/pickup';
 import type { Projectile } from '../entities/projectile';
 import { makeEnemy } from './spawner';
 import { applyStatus } from './status';
+import { nightFactor } from './daynight';
 import type { RunState } from '../game';
 
 const SPARK_COLORS = ['#ffffff', '#ffe27a', '#ffb347'];
@@ -28,6 +29,13 @@ export function damageEnemy(
   quiet = false,
 ): void {
   if (e.dying || dmg <= 0) return;
+  // Pet bonuses: Arctic Fox (chilled targets), Glare (elites and bosses), Bat (night), Ocelot (crits).
+  const pm = run.mods;
+  if (pm.chillDmg > 0 && (e.slowT > 0 || e.freezeT > 0 || e.stunT > 0)) dmg *= 1 + pm.chillDmg;
+  if (pm.bossDmg > 0 && (e.boss !== null || e.elite)) dmg *= 1 + pm.bossDmg;
+  if (pm.nightBoost > 0) dmg *= 1 + pm.nightBoost * nightFactor(run.time);
+  const crit = !quiet && pm.critChance > 0 && run.rng.ai.chance(pm.critChance);
+  if (crit) dmg *= 2;
   if (e.shield > 0) {
     const absorbed = Math.min(e.shield, dmg);
     e.shield -= absorbed;
@@ -51,7 +59,17 @@ export function damageEnemy(
       for (const m of mates) if (m.def.packAggro) m.angry = 6;
     }
     if (run.fx.length < QUALITY_TEXT_CAP[run.quality]) {
-      run.fx.push(makeFx('text', e.x, e.y - 16, 0.55, { text: String(Math.round(dmg)), vy: -26 }));
+      run.fx.push(
+        makeFx(
+          'text',
+          e.x,
+          e.y - 16,
+          0.55,
+          crit
+            ? { text: `${Math.round(dmg)}!`, vy: -30, color: '#ffd84a' }
+            : { text: String(Math.round(dmg)), vy: -26 },
+        ),
+      );
     }
     for (let i = 0; i < QUALITY_SPARKS[run.quality]; i++) {
       const a = run.rng.fx.range(0, Math.PI * 2);
@@ -64,6 +82,7 @@ export function damageEnemy(
         }),
       );
     }
+    run.kit.onHitEnemy?.(run, e, dmg);
   }
   if (e.hp <= 0) killEnemy(run, e, true);
 }
@@ -78,12 +97,21 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
   run.onKill(e);
   const m = run.mods;
   const slimy = e.def.id.startsWith('slime') || e.def.id.startsWith('magma_cube');
-  const slimeXp = slimy ? (1 + m.slimeXp) * (run.loadout.hero === 'rana' ? 2 : 1) : 1;
-  const xp = e.def.xp * (e.elite ? 1.6 : 1) * (e.charged ? 5 : 1) * m.xpMult * slimeXp;
+  const slimeXp = slimy ? (1 + m.slimeXp) * (run.kit.slimeXpMult ?? 1) : 1;
+  const big = e.elite || e.boss !== null;
+  const xp =
+    e.def.xp *
+    (e.elite ? 1.6 : 1) *
+    (e.charged ? 5 : 1) *
+    m.xpMult *
+    slimeXp *
+    (big ? 1 + m.eliteXp : 1);
   run.pickups.push(new Pickup('xp', e.x, e.y, xp));
   if (run.rng.drops.chance(0.08 * m.lootMult + m.emeraldDrop)) {
     run.pickups.push(new Pickup('emerald', e.x + 4, e.y + 2, 1));
   }
+  // Glare: elites and bosses always drop an extra Emerald.
+  if (big && m.bossDmg > 0) run.pickups.push(new Pickup('emerald', e.x - 4, e.y + 2, 1));
   if (m.healOnKill > 0) run.player.heal(m.healOnKill);
   if (m.healWater > 0 && run.world.surface(run.player.x, run.player.y) === 'water') {
     run.player.heal(run.player.maxHp * m.healWater);
@@ -103,7 +131,7 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
     );
   }
   const into = e.def.splitInto;
-  const maxSplit = run.loadout.hero === 'rana' ? 1 : 2;
+  const maxSplit = run.kit.maxSlimeSplit ?? 2;
   if (into && e.splitDepth < maxSplit) {
     for (let i = 0; i < 2; i++) {
       const child = makeEnemy(run, into, e.x + (i === 0 ? -6 : 6), e.y, false);
@@ -135,6 +163,25 @@ export function hurtPlayer(run: RunState, raw: number, attacker: Enemy | null = 
     }
     return 0;
   }
+  const kit = run.kit;
+  if (kit.beforeHurt && !run.player.dead && run.player.iframes <= 0) {
+    raw = kit.beforeHurt(run, raw, attacker);
+    if (raw <= 0) return 0;
+  }
+  // Golden Monkey: a clean dodge (no damage, short invulnerability).
+  if (run.mods.dodge > 0 && !run.player.dead && run.player.iframes <= 0) {
+    if (run.rng.ai.chance(run.mods.dodge)) {
+      run.player.iframes = 0.3;
+      run.fx.push(
+        makeFx('text', run.player.x, run.player.y - 24, 0.6, {
+          text: 'DODGE',
+          vy: -18,
+          color: '#ffe9a0',
+        }),
+      );
+      return 0;
+    }
+  }
   let incoming = raw * run.mods.dmgTaken;
   if (run.absorb > 0 && run.player.iframes <= 0) {
     const soak = Math.min(run.absorb, incoming);
@@ -160,6 +207,7 @@ export function hurtPlayer(run: RunState, raw: number, attacker: Enemy | null = 
     damageEnemy(run, attacker, raw * run.mods.thorns + 2, run.player.x, run.player.y, 50);
   }
   run.onPlayerHurt();
+  kit.onHurt?.(run, dealt, attacker);
   return dealt;
 }
 
@@ -311,8 +359,10 @@ export function updateProjectiles(run: RunState, dt: number): void {
           );
           continue;
         }
-        if (p.blast > 0) explode(run, p.x, p.y, p.blast, 0, p.dmg, null);
-        else hurtPlayer(run, p.dmg);
+        // Magma Cow: fireballs hurt less.
+        const dmg = p.style === 'fireball' ? p.dmg * (1 - run.mods.fireResist) : p.dmg;
+        if (p.blast > 0) explode(run, p.x, p.y, p.blast, 0, dmg, null);
+        else hurtPlayer(run, dmg);
         if (p.slowT > 0) pl.slowT = Math.max(pl.slowT, p.slowT);
         p.alive = false;
       }

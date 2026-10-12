@@ -1,5 +1,6 @@
 /** Short-lived visual effects; purely cosmetic, never read by gameplay code. */
-export type FxKind = 'arc' | 'ring' | 'spark' | 'text' | 'bolt';
+/** `anvil`: an anvil dropping from the sky onto (x, y) over its life (Village Smith's Anvil Drop). */
+export type FxKind = 'arc' | 'ring' | 'spark' | 'text' | 'bolt' | 'anvil';
 
 export interface Fx {
   kind: FxKind;

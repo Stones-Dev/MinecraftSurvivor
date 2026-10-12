@@ -135,7 +135,7 @@ export const harming: WeaponDef = {
       targets.push(next);
     }
     const dmg = damageOf(run, s, true);
-    const radius = areaOf(run, s);
+    const radius = areaOf(run, s) * run.mods.potionArea;
     const pool: Pool | null = w.evolved
       ? { dps: dmg * POOL_SHARE, dur: 4 * run.mods.duration }
       : null;

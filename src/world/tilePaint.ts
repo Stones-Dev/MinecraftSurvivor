@@ -86,6 +86,8 @@ export function paintChunk(
   };
   const at = (tx: number, ty: number): number => terrain[(ty + 1) * side + tx + 1] ?? TILE.GRASS;
   const reach = Math.ceil((BORDER_WARP + BORDER_GRAIN) / 2 / TILE_PX);
+  const warpX = new Float32Array(16);
+  const warpY = new Float32Array(16);
   const minT = -BIOME_BORDER;
   const maxT = CHUNK_TILES + BIOME_BORDER - 1;
   const wallBase = pack([52, 50, 60]);
@@ -112,6 +114,15 @@ export function paintChunk(
             mixed = true;
             break;
           }
+        }
+      }
+      if (mixed) {
+        // The warp field is smooth (10 px lattice): sample it once per 4x4-pixel block of the tile.
+        for (let k = 0; k < 16; k++) {
+          const X = cx * CHUNK_PX + tx * TILE_PX + (k & 3) * 4 + 2;
+          const Y = cy * CHUNK_PX + ty * TILE_PX + (k >> 2) * 4 + 2;
+          warpX[k] = (noiseAt(latWx, X, Y) - 0.5) * BORDER_WARP;
+          warpY[k] = (noiseAt(latWy, X, Y) - 0.5) * BORDER_WARP;
         }
       }
       const iceWater = BIOMES[BIOME_IDS[own] ?? 'plains'].iceWater;
@@ -178,9 +189,10 @@ export function paintChunk(
             let pal = ownPal;
             let bi = own;
             if (mixed) {
-              const wx = px + (noiseAt(latWx, X, Y) - 0.5) * BORDER_WARP + (j - 0.5) * BORDER_GRAIN;
+              const sub = (ly >> 2) * 4 + (lx >> 2);
               const g = (NOISE[(((px + ox + 37) & 255) << 8) | ((py + oy + 59) & 255)] ?? 0) / 256;
-              const wy = py + (noiseAt(latWy, X, Y) - 0.5) * BORDER_WARP + (g - 0.5) * BORDER_GRAIN;
+              const wx = px + (warpX[sub] ?? 0) + (j - 0.5) * BORDER_GRAIN;
+              const wy = py + (warpY[sub] ?? 0) + (g - 0.5) * BORDER_GRAIN;
               const sx = Math.max(minT, Math.min(maxT, Math.floor(wx / TILE_PX)));
               const sy = Math.max(minT, Math.min(maxT, Math.floor(wy / TILE_PX)));
               bi = biomeAt(sx, sy);

@@ -1,12 +1,32 @@
 import { COMPANION_BY_ID } from '../data/companions';
 import { META_BY_ID } from '../data/metaUpgrades';
 
-/** Versioned save data behind a SaveStore interface (BRIEF section 2); a cloud store can implement it later. */
-export const SAVE_VERSION = 1;
+/**
+ * Versioned save data behind a SaveStore interface (BRIEF section 2). `LocalSaveStore` is the
+ * device copy; `CloudSaveStore` (src/net/cloudSave.ts) wraps it and syncs to the cloud.
+ */
+export const SAVE_VERSION = 2;
+
+export type ColorblindMode = 'off' | 'protanopia' | 'deuteranopia' | 'tritanopia';
+export type TouchControlsMode = 'auto' | 'on' | 'off';
+
+export interface HeroStats {
+  runs: number;
+  bestTimeSec: number;
+  bestKills: number;
+}
+
+export interface MissionProgress {
+  id: string;
+  progress: number;
+  claimed: boolean;
+}
 
 export interface SaveData {
   saveVersion: number;
   createdAt: number;
+  /** Wall-clock ms of the last local change (stamped by the store); drives cloud conflict checks. */
+  lastModified: number;
   gachaSeed: number;
   pullCount: number;
   /** Pulls since the last Legendary, per banner id. */
@@ -17,7 +37,40 @@ export interface SaveData {
   loadout: { hero: string; pet: string | null; allies: string[] };
   /** Permanent upgrades: per hero id, plus the account-wide pseudo-hero `account`. */
   upgrades: Record<string, Record<string, number>>;
+  /** v1 records, kept for compatibility; `stats` is the v2 superset (never lower than these). */
   records: { bestTimeSec: number; bestKills: number; wins: number; runs: number };
+  /** Player identity shown in the hub and leaderboards. `avatar` is a hero id. */
+  profile: { id: string; name: string; avatar: string };
+  stats: {
+    kills: number;
+    runs: number;
+    wins: number;
+    playSeconds: number;
+    bosses: number;
+    minis: number;
+    eggsOpened: number;
+    emeraldsEarned: number;
+    bestTimeSec: number;
+    bestKills: number;
+    perHero: Record<string, HeroStats>;
+  };
+  /** Achievement id -> unlock time (ms). */
+  achievements: Record<string, { at: number }>;
+  missions: {
+    /** yyyy-mm-dd of the current daily set ('' = none rolled yet). */
+    day: string;
+    /** ISO week key (yyyy-Www) of the current weekly set. */
+    weekKey: string;
+    daily: MissionProgress[];
+    weekly: MissionProgress[];
+    rerollsLeft: number;
+  };
+  dailyReward: { lastClaimDay: string; streak: number };
+  /**
+   * Cloud bookkeeping: `uid` of the account this copy last synced with, `rev` the remote revision
+   * it is based on, and `lastSyncedAt` the `lastModified` value that the cloud copy holds.
+   */
+  cloud: { uid: string | null; rev: number; lastSyncedAt: number };
   settings: {
     musicVolume: number;
     sfxVolume: number;
@@ -26,6 +79,14 @@ export interface SaveData {
     screenShake: boolean;
     showFps: boolean;
     quality: 'auto' | 'high' | 'medium' | 'low';
+    /** Camera leads slightly in the movement direction. */
+    cameraLead: boolean;
+    accessibility: {
+      colorblind: ColorblindMode;
+      textScale: 1 | 2;
+      reduceFlash: boolean;
+      touchControls: TouchControlsMode;
+    };
     /** Key remaps (action -> KeyboardEvent.code list); empty uses the defaults. */
     controls: Partial<
       Record<'up' | 'down' | 'left' | 'right' | 'pause' | 'item' | 'ability', string[]>
@@ -44,11 +105,33 @@ export interface SaveStore {
   reset(): SaveData;
 }
 
+/** Random id for profiles and devices: crypto.randomUUID when available, never Math.random. */
+export function makeId(): string {
+  const c = (globalThis as { crypto?: Crypto }).crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  if (c && typeof c.getRandomValues === 'function') {
+    const b = c.getRandomValues(new Uint8Array(16));
+    return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  }
+  idCounter = (idCounter + 1) >>> 0;
+  const perf = typeof performance !== 'undefined' ? Math.floor(performance.now() * 1000) : 0;
+  return `${Date.now().toString(36)}-${perf.toString(36)}-${idCounter.toString(36)}`;
+}
+let idCounter = 0;
+
+export const DEFAULT_AVATAR = 'steve';
+/** Upper bound for counters (emeralds, kills, ...): keeps tampered saves from overflowing math. */
+export const MAX_COUNT = 1e12;
+/** Upper bound for second-based stats (about 31 years). */
+export const MAX_SECONDS = 1e9;
+
 export function defaultSave(now = Date.now()): SaveData {
+  const gachaSeed = (now ^ 0x5bd1e995) >>> 0;
   return {
     saveVersion: SAVE_VERSION,
     createdAt: now,
-    gachaSeed: (now ^ 0x5bd1e995) >>> 0,
+    lastModified: now,
+    gachaSeed,
     pullCount: 0,
     pity: {},
     currencies: { emeralds: 500, spawnEggs: 0, rareSpawnEggs: 0 },
@@ -56,6 +139,25 @@ export function defaultSave(now = Date.now()): SaveData {
     loadout: { hero: 'steve', pet: null, allies: [] },
     upgrades: {},
     records: { bestTimeSec: 0, bestKills: 0, wins: 0, runs: 0 },
+    // Deterministic so defaultSave(t) is reproducible; local profiles get a random id when created.
+    profile: { id: `p-${now.toString(36)}-${gachaSeed.toString(36)}`, name: '', avatar: 'steve' },
+    stats: {
+      kills: 0,
+      runs: 0,
+      wins: 0,
+      playSeconds: 0,
+      bosses: 0,
+      minis: 0,
+      eggsOpened: 0,
+      emeraldsEarned: 0,
+      bestTimeSec: 0,
+      bestKills: 0,
+      perHero: {},
+    },
+    achievements: {},
+    missions: { day: '', weekKey: '', daily: [], weekly: [], rerollsLeft: 0 },
+    dailyReward: { lastClaimDay: '', streak: 0 },
+    cloud: { uid: null, rev: 0, lastSyncedAt: 0 },
     settings: {
       musicVolume: 0.6,
       sfxVolume: 0.8,
@@ -64,6 +166,13 @@ export function defaultSave(now = Date.now()): SaveData {
       screenShake: true,
       showFps: false,
       quality: 'auto',
+      cameraLead: false,
+      accessibility: {
+        colorblind: 'off',
+        textScale: 1,
+        reduceFlash: false,
+        touchControls: 'auto',
+      },
       controls: {},
     },
     flags: { tutorialDone: false },
@@ -91,6 +200,28 @@ export const migrations: Record<number, Migration> = {
       saveVersion: 1,
     };
   },
+  // v2 adds profile, stats, achievements, missions, daily reward, cloud bookkeeping and
+  // accessibility settings. `records` seeds `stats`; the rest starts from the defaults.
+  1: (old) => {
+    const rec = isRecord(old.records) ? old.records : {};
+    const createdAt = typeof old.createdAt === 'number' ? old.createdAt : Date.now();
+    const pick = (k: string): number => (typeof rec[k] === 'number' ? (rec[k] as number) : 0);
+    const loadout = isRecord(old.loadout) ? old.loadout : {};
+    const hero = typeof loadout.hero === 'string' ? loadout.hero : 'steve';
+    const runs = pick('runs');
+    return {
+      ...old,
+      lastModified: createdAt,
+      profile: { ...defaultSave(createdAt).profile, avatar: hero },
+      stats: {
+        runs,
+        wins: pick('wins'),
+        bestTimeSec: pick('bestTimeSec'),
+        bestKills: pick('bestKills'),
+      },
+      saveVersion: 2,
+    };
+  },
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -98,24 +229,59 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const num = (v: unknown, fallback: number, min = -Infinity): number =>
-  typeof v === 'number' && Number.isFinite(v) && v >= min ? v : fallback;
+/** Ids used as object keys (heroes, achievements, missions): short, plain and prototype-safe. */
+const ID_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
+const safeId = (k: unknown): k is string =>
+  typeof k === 'string' && ID_RE.test(k) && !UNSAFE_KEYS.has(k);
+const num = (v: unknown, fallback: number, min = -Infinity, max = Infinity): number =>
+  typeof v === 'number' && Number.isFinite(v) && v >= min ? Math.min(max, v) : fallback;
+const count = (v: unknown, fallback = 0, max = MAX_COUNT): number =>
+  Math.floor(num(v, fallback, 0, max));
+const secs = (v: unknown): number => num(v, 0, 0, MAX_SECONDS);
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
+function oneOf<T extends string | number>(v: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.includes(v as T) ? (v as T) : fallback;
+}
+/** Printable text without control characters, trimmed and capped. */
+export function cleanText(v: unknown, max: number): string {
+  if (typeof v !== 'string') return '';
+  // eslint-disable-next-line no-control-regex
+  return [...v.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim()].slice(0, max).join('');
+}
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const WEEK_RE = /^\d{4}-W\d{2}$/;
+const dayKey = (v: unknown): string => (typeof v === 'string' && DAY_RE.test(v) ? v : '');
 
-/** Keep only well-typed fields of a merged v1 save; everything else falls back to the defaults. */
+function sanitizeMissions(v: unknown): MissionProgress[] {
+  if (!Array.isArray(v)) return [];
+  const out: MissionProgress[] = [];
+  for (const m of v.slice(0, 12)) {
+    if (!isRecord(m) || !safeId(m.id)) continue;
+    out.push({ id: m.id, progress: count(m.progress), claimed: bool(m.claimed, false) });
+  }
+  return out;
+}
+
+/** Keep only well-typed fields of a merged save; everything else falls back to the defaults. */
 function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const cur = isRecord(data.currencies) ? data.currencies : {};
   const rec = isRecord(data.records) ? data.records : {};
   const set = isRecord(data.settings) ? data.settings : {};
+  const acc = isRecord(set.accessibility) ? set.accessibility : {};
   const flg = isRecord(data.flags) ? data.flags : {};
   const lo = isRecord(data.loadout) ? data.loadout : {};
+  const prof = isRecord(data.profile) ? data.profile : {};
+  const st = isRecord(data.stats) ? data.stats : {};
+  const mis = isRecord(data.missions) ? data.missions : {};
+  const dr = isRecord(data.dailyReward) ? data.dailyReward : {};
+  const cl = isRecord(data.cloud) ? data.cloud : {};
   const owned: SaveData['owned'] = {};
   if (isRecord(data.owned)) {
     for (const [id, o] of Object.entries(data.owned)) {
       if (!isRecord(o) || UNSAFE_KEYS.has(id)) continue;
       owned[id] = {
         level: Math.min(5, Math.max(1, Math.floor(num(o.level, 1)))),
-        shards: Math.max(0, Math.floor(num(o.shards, 0))),
+        shards: count(o.shards),
         obtainedAt: num(o.obtainedAt, d.createdAt),
       };
     }
@@ -123,7 +289,8 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   if (!owned['steve']) owned['steve'] = { level: 1, shards: 0, obtainedAt: d.createdAt };
   const pity: SaveData['pity'] = {};
   if (isRecord(data.pity)) {
-    for (const [k, v] of Object.entries(data.pity)) if (!UNSAFE_KEYS.has(k)) pity[k] = num(v, 0, 0);
+    for (const [k, v] of Object.entries(data.pity))
+      if (!UNSAFE_KEYS.has(k)) pity[k] = num(v, 0, 0, MAX_COUNT);
   }
   const upgrades: SaveData['upgrades'] = {};
   if (isRecord(data.upgrades)) {
@@ -151,16 +318,44 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
       }
     }
   }
+  const records: SaveData['records'] = {
+    bestTimeSec: secs(rec.bestTimeSec),
+    bestKills: count(rec.bestKills),
+    wins: count(rec.wins),
+    runs: count(rec.runs),
+  };
+  const perHero: SaveData['stats']['perHero'] = {};
+  if (isRecord(st.perHero)) {
+    for (const [id, h] of Object.entries(st.perHero).slice(0, 128)) {
+      if (!safeId(id) || !isRecord(h)) continue;
+      perHero[id] = {
+        runs: count(h.runs),
+        bestTimeSec: secs(h.bestTimeSec),
+        bestKills: count(h.bestKills),
+      };
+    }
+  }
+  const achievements: SaveData['achievements'] = {};
+  if (isRecord(data.achievements)) {
+    for (const [id, a] of Object.entries(data.achievements).slice(0, 1000)) {
+      if (safeId(id) && isRecord(a)) achievements[id] = { at: num(a.at, 0, 0) };
+    }
+  }
+  const avatar = typeof prof.avatar === 'string' ? prof.avatar : '';
+  const createdAt = num(data.createdAt, d.createdAt);
+  const profileId = cleanText(prof.id, 64);
+  const uid = cleanText(cl.uid, 128);
   return {
     saveVersion: SAVE_VERSION,
-    createdAt: num(data.createdAt, d.createdAt),
+    createdAt,
+    lastModified: num(data.lastModified, createdAt, 0),
     gachaSeed: num(data.gachaSeed, d.gachaSeed),
-    pullCount: Math.floor(num(data.pullCount, 0, 0)),
+    pullCount: count(data.pullCount),
     pity,
     currencies: {
-      emeralds: Math.floor(num(cur.emeralds, d.currencies.emeralds, 0)),
-      spawnEggs: Math.floor(num(cur.spawnEggs, 0, 0)),
-      rareSpawnEggs: Math.floor(num(cur.rareSpawnEggs, 0, 0)),
+      emeralds: count(cur.emeralds, d.currencies.emeralds, 1e9),
+      spawnEggs: count(cur.spawnEggs, 0, 1e9),
+      rareSpawnEggs: count(cur.rareSpawnEggs, 0, 1e9),
     },
     owned,
     loadout: {
@@ -182,20 +377,62 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
         : [],
     },
     upgrades,
-    records: {
-      bestTimeSec: num(rec.bestTimeSec, 0, 0),
-      bestKills: num(rec.bestKills, 0, 0),
-      wins: Math.floor(num(rec.wins, 0, 0)),
-      runs: Math.floor(num(rec.runs, 0, 0)),
+    records,
+    profile: {
+      id: profileId || d.profile.id,
+      name: cleanText(prof.name, 16),
+      avatar: COMPANION_BY_ID.get(avatar)?.kind === 'hero' ? avatar : DEFAULT_AVATAR,
+    },
+    stats: {
+      kills: Math.max(count(st.kills), records.bestKills),
+      // Older code paths still bump `records`: stats never report less than them.
+      runs: Math.max(count(st.runs), records.runs),
+      wins: Math.max(count(st.wins), records.wins),
+      playSeconds: secs(st.playSeconds),
+      bosses: count(st.bosses),
+      minis: count(st.minis),
+      eggsOpened: count(st.eggsOpened),
+      emeraldsEarned: count(st.emeraldsEarned),
+      bestTimeSec: Math.max(secs(st.bestTimeSec), records.bestTimeSec),
+      bestKills: Math.max(count(st.bestKills), records.bestKills),
+      perHero,
+    },
+    achievements,
+    missions: {
+      day: dayKey(mis.day),
+      weekKey: typeof mis.weekKey === 'string' && WEEK_RE.test(mis.weekKey) ? mis.weekKey : '',
+      daily: sanitizeMissions(mis.daily),
+      weekly: sanitizeMissions(mis.weekly),
+      rerollsLeft: count(mis.rerollsLeft, 0, 99),
+    },
+    dailyReward: {
+      lastClaimDay: dayKey(dr.lastClaimDay),
+      streak: count(dr.streak, 0, 100000),
+    },
+    cloud: {
+      uid: uid || null,
+      rev: count(cl.rev),
+      lastSyncedAt: num(cl.lastSyncedAt, 0, 0),
     },
     settings: {
-      musicVolume: Math.min(1, num(set.musicVolume, d.settings.musicVolume, 0)),
-      sfxVolume: Math.min(1, num(set.sfxVolume, d.settings.sfxVolume, 0)),
+      musicVolume: num(set.musicVolume, d.settings.musicVolume, 0, 1),
+      sfxVolume: num(set.sfxVolume, d.settings.sfxVolume, 0, 1),
       muted: bool(set.muted, false),
       damageNumbers: bool(set.damageNumbers, true),
       screenShake: bool(set.screenShake, true),
       showFps: bool(set.showFps, false),
       quality: quality === 'high' || quality === 'medium' || quality === 'low' ? quality : 'auto',
+      cameraLead: bool(set.cameraLead, d.settings.cameraLead),
+      accessibility: {
+        colorblind: oneOf(
+          acc.colorblind,
+          ['off', 'protanopia', 'deuteranopia', 'tritanopia'] as const,
+          'off',
+        ),
+        textScale: oneOf(acc.textScale, [1, 2] as const, 1),
+        reduceFlash: bool(acc.reduceFlash, false),
+        touchControls: oneOf(acc.touchControls, ['auto', 'on', 'off'] as const, 'auto'),
+      },
       controls,
     },
     flags: { tutorialDone: bool(flg.tutorialDone, false) },
@@ -223,6 +460,11 @@ export function migrate(raw: unknown): SaveData {
   return tryMigrate(raw) ?? defaultSave();
 }
 
+/** True when `raw` is a save from a newer build than this one (never overwrite it). */
+export function isNewerSave(raw: unknown): boolean {
+  return isRecord(raw) && typeof raw.saveVersion === 'number' && raw.saveVersion > SAVE_VERSION;
+}
+
 /** True when `raw` looks like a MineSurvive save (current or prototype), used to vet imports. */
 function looksLikeSave(raw: unknown): boolean {
   if (!isRecord(raw)) return false;
@@ -230,6 +472,34 @@ function looksLikeSave(raw: unknown): boolean {
     (k) => k in raw,
   );
 }
+
+/** Summary used by sync conflict prompts and to tell an untouched save from real progress. */
+export interface SaveSummary {
+  runs: number;
+  emeralds: number;
+  owned: number;
+  pullCount: number;
+  lastPlayed: number;
+  name: string;
+  /** runs + pulls + owned companions beyond Steve: 0 means a fresh, untouched save. */
+  progress: number;
+}
+
+export function summarizeSave(s: SaveData): SaveSummary {
+  const owned = Object.keys(s.owned).length;
+  const runs = Math.max(s.stats.runs, s.records.runs);
+  return {
+    runs,
+    emeralds: s.currencies.emeralds,
+    owned,
+    pullCount: s.pullCount,
+    lastPlayed: s.lastModified,
+    name: s.profile.name,
+    progress: runs + s.pullCount + Math.max(0, owned - 1),
+  };
+}
+
+type StorageLike = Pick<Storage, 'getItem' | 'setItem'> & Partial<Pick<Storage, 'removeItem'>>;
 
 export class LocalSaveStore implements SaveStore {
   private cache: SaveData | null = null;
@@ -239,9 +509,33 @@ export class LocalSaveStore implements SaveStore {
   saveFailed = false;
 
   constructor(
-    private readonly storage: Pick<Storage, 'getItem' | 'setItem'> | null,
-    private readonly key = 'minesurvive.save',
+    private readonly storage: StorageLike | null,
+    readonly key = 'minesurvive.save',
   ) {}
+
+  /** True while the stored save comes from a newer build (writes are held back). */
+  get isLocked(): boolean {
+    this.load();
+    return this.locked;
+  }
+
+  /** True when this key holds a stored blob (usable or not). */
+  hasStored(): boolean {
+    try {
+      return !!this.storage?.getItem(this.key);
+    } catch {
+      return false;
+    }
+  }
+
+  /** The raw stored text (for backups), or null. */
+  rawText(): string | null {
+    try {
+      return this.storage?.getItem(this.key) ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   load(): SaveData {
     if (this.cache) return this.cache;
@@ -257,11 +551,7 @@ export class LocalSaveStore implements SaveStore {
     if (text && !migrated) {
       // Corrupt or from a newer build: keep the original aside so a rollback does not wipe progress.
       this.backup(text);
-      const newer =
-        isRecord(parsed) &&
-        typeof parsed.saveVersion === 'number' &&
-        parsed.saveVersion > SAVE_VERSION;
-      this.locked = newer;
+      this.locked = isNewerSave(parsed);
     }
     this.cache = migrated ?? defaultSave();
     return this.cache;
@@ -284,6 +574,12 @@ export class LocalSaveStore implements SaveStore {
     } catch {
       this.saveFailed = true; // storage full or blocked: keep the in-memory copy so the session works
     }
+  }
+
+  /** Replace the save wholesale (cloud adoption, account switch); clears a newer-build lock. */
+  replace(data: SaveData): void {
+    this.locked = false;
+    this.save(data);
   }
 
   export(): string {

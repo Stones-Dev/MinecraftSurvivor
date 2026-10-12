@@ -76,14 +76,14 @@ function reward(run: RunState, p: Prop): void {
       break;
     }
     case 'chest': {
-      const n = Math.round(run.rng.drops.range(4, 10) * loot);
+      const n = Math.round(run.rng.drops.range(4, 10) * loot * run.mods.chestMult);
       run.emeraldsPicked += n;
       text(run, p.x, p.y, `+${n} emeralds`, '#7dff9a');
       if (run.rng.drops.chance(0.08 * luck)) giveItem(run, run.rng.drops.pick(ITEM_IDS));
       break;
     }
     case 'locked_chest': {
-      const n = Math.round(run.rng.drops.range(15, 30) * loot);
+      const n = Math.round(run.rng.drops.range(15, 30) * loot * run.mods.chestMult);
       run.emeraldsPicked += n;
       const eggs = 1 + run.rng.drops.int(3);
       run.spawnEggs += eggs;

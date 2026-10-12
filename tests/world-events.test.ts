@@ -5,7 +5,8 @@ import { killEnemy } from '../src/systems/combat';
 import { spawnTrader } from '../src/systems/npcs';
 import { BOSS_SCHEDULE } from '../src/systems/director';
 import { makeEnemy } from '../src/systems/spawner';
-import { BIOMES } from '../src/world/biomes';
+import { BIOMES, type BiomeId } from '../src/world/biomes';
+import { biomeAtTile } from '../src/world/biomeMap';
 import { genProps } from '../src/world/props';
 import { tileAt, TILE } from '../src/world/terrain';
 
@@ -166,29 +167,32 @@ describe('interactables and hazards', () => {
     expect(run.emeraldsPicked).toBeGreaterThanOrEqual(4);
   });
 
-  it('lava burns the hero in the desert but not elsewhere', () => {
-    const run = new RunState(17, 3 * 240 + 10); // desert
-    expect(run.biome()).toBe('desert');
-    const lava = findTile(run.seed, TILE.LAVA);
+  it('lava burns the hero in hot biomes and only exists there', () => {
+    const run = new RunState(17, 10);
+    const lava = findTileIn(run.seed, TILE.LAVA, 'desert');
     run.player.maxHp = run.player.hp = 500;
     run.player.x = lava.x;
     run.player.y = lava.y;
+    expect(run.biome()).toBe('desert');
     step(run, 1.5);
     expect(run.player.hp).toBeLessThan(500);
-    const plains = new RunState(17, 10);
-    plains.player.maxHp = plains.player.hp = 500;
-    plains.player.x = lava.x;
-    plains.player.y = lava.y;
-    step(plains, 1.5);
-    expect(plains.player.hp).toBeGreaterThanOrEqual(499);
+    // Read as another biome, the same tile is harmless ground; and no lava tile lies outside lava biomes.
+    expect(run.world.surface(lava.x, lava.y, 'plains')).toBe('ground');
+    for (let ty = -300; ty < 300; ty += 3) {
+      for (let tx = -300; tx < 300; tx += 3) {
+        if (tileAt(tx, ty, 17) === TILE.LAVA)
+          expect(BIOMES[biomeAtTile(tx, ty, 17)].lava).toBe(true);
+      }
+    }
   });
 
   it('ice is slippery: the hero keeps sliding after the input stops', () => {
-    const run = new RunState(19, 2 * 240 + 10); // snowy taiga: water is ice
-    expect(BIOMES[run.biome()].iceWater).toBe(true);
-    const ice = findTile(run.seed, TILE.WATER);
+    const run = new RunState(19, 10);
+    const ice = findTileIn(run.seed, TILE.WATER, 'snowy_taiga');
     run.player.x = ice.x;
     run.player.y = ice.y;
+    expect(BIOMES[run.biome()].iceWater).toBe(true);
+    expect(run.world.surface(ice.x, ice.y)).toBe('ice');
     const input = new Still();
     input.dx = 1;
     step(run, 0.5, input);
@@ -273,13 +277,20 @@ function findProp(run: RunState, kind: string) {
   return found;
 }
 
-function findTile(seed: number, code: number): { x: number; y: number } {
-  for (let r = 20; r < 400; r++) {
-    for (let a = 0; a < 40; a++) {
-      const tx = Math.round(Math.cos((a / 40) * Math.PI * 2) * r);
-      const ty = Math.round(Math.sin((a / 40) * Math.PI * 2) * r);
-      if (tileAt(tx, ty, seed) === code) return { x: tx * 16 + 8, y: ty * 16 + 8 };
+/** Centre of the nearest tile with this code inside a biome (ring search over 4x4 biome cells). */
+function findTileIn(seed: number, code: number, biome: BiomeId): { x: number; y: number } {
+  for (let r = 0; r < 200; r++) {
+    for (let by = -r; by <= r; by++) {
+      for (let bx = -r; bx <= r; bx++) {
+        if (Math.max(Math.abs(bx), Math.abs(by)) !== r) continue;
+        if (biomeAtTile(bx * 4, by * 4, seed) !== biome) continue;
+        for (let k = 0; k < 16; k++) {
+          const tx = bx * 4 + (k % 4);
+          const ty = by * 4 + (k >> 2);
+          if (tileAt(tx, ty, seed) === code) return { x: tx * 16 + 8, y: ty * 16 + 8 };
+        }
+      }
     }
   }
-  throw new Error(`no tile ${code}`);
+  throw new Error(`no tile ${code} in ${biome}`);
 }

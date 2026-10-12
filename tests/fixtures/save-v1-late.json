@@ -1,0 +1,34 @@
+{
+  "saveVersion": 1,
+  "createdAt": 1760000000000,
+  "gachaSeed": 2847261933,
+  "pullCount": 47,
+  "pity": { "overworld": 23 },
+  "currencies": { "emeralds": 12840, "spawnEggs": 3, "rareSpawnEggs": 1 },
+  "owned": {
+    "steve": { "level": 1, "shards": 0, "obtainedAt": 1760000000000 },
+    "alex": { "level": 2, "shards": 1, "obtainedAt": 1760100000000 },
+    "cat": { "level": 3, "shards": 2, "obtainedAt": 1760050000000 },
+    "wolf": { "level": 2, "shards": 0, "obtainedAt": 1760060000000 },
+    "horse": { "level": 1, "shards": 0, "obtainedAt": 1760070000000 },
+    "iron_golem": { "level": 1, "shards": 0, "obtainedAt": 1760200000000 }
+  },
+  "loadout": { "hero": "alex", "pet": "cat", "allies": ["wolf", "iron_golem"] },
+  "upgrades": {
+    "steve": { "vitality": 4, "strength": 3, "magnet": 2 },
+    "alex": { "stride": 2, "reflexes": 1 },
+    "account": { "leadership": 1, "kennel": 2 }
+  },
+  "records": { "bestTimeSec": 1023.6, "bestKills": 2410, "wins": 2, "runs": 58 },
+  "settings": {
+    "musicVolume": 0.45,
+    "sfxVolume": 0.7,
+    "muted": false,
+    "damageNumbers": false,
+    "screenShake": true,
+    "showFps": true,
+    "quality": "medium",
+    "controls": { "up": ["KeyZ", "ArrowUp"], "item": ["KeyE"] }
+  },
+  "flags": { "tutorialDone": true }
+}

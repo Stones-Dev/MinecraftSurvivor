@@ -121,7 +121,7 @@ export const poison: WeaponDef = {
     }
     const evolved = w.evolved;
     const dps = damageOf(run, s, true);
-    const radius = areaOf(run, s) * (evolved ? 1.4 : 1);
+    const radius = areaOf(run, s) * run.mods.potionArea * (evolved ? 1.4 : 1);
     const dur = (CLOUD_DUR[levelIndex(w)] ?? 4) * run.mods.duration * (evolved ? 1.3 : 1);
     const kind: Zone['kind'] = evolved ? 'wither' : 'poison';
     const slowF = evolved ? 0.6 : 1;

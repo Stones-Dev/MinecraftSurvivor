@@ -20,6 +20,8 @@ import { Ally, PetState } from './entities/ally';
 import { defaultLoadout, applyLoadoutMods, heroBaseHp, type RunLoadout } from './systems/meta';
 import { spawnCompanions, updateAllies, updatePet } from './systems/allies';
 import { allyById, heroById } from './data/companions';
+import { kitOf, type HeroKit } from './data/heroKits';
+import { type Decoy, updateDecoys } from './abilities/decoys';
 import { RiftState, updateRift } from './systems/rift';
 import { updateInteract, type PropState } from './systems/interact';
 import { updateItems } from './systems/items';
@@ -184,6 +186,13 @@ export class RunState {
   hazardT = 0;
   absorb = 0;
   resistUntil = 0;
+  /** Timed self-buff from a hero ability (Gold Rush): multipliers active until game time `until`. */
+  heroBuff: { until: number; dmg: number; speed: number; emeraldDrop: number } | null = null;
+  /** Friendly decoys that lure chasers (Illusioner). */
+  decoys: Decoy[] = [];
+  /** The chosen hero's passive hooks (data/heroKits.ts) and their per-run scratch values. */
+  readonly kit: HeroKit;
+  kitData: Record<string, number> = {};
   dash: { dx: number; dy: number; t: number } | null = null;
   /** Cursor position in world coordinates (set by the screen each frame). */
   targetX = 0;
@@ -225,9 +234,9 @@ export class RunState {
   readonly abilityId: string | null;
   ability = { cd: 0, castCount: 0 };
 
-  /** Cards one armor tier costs: 2 for everyone, 1 for Steve (Builder's Grit). */
+  /** Cards one armor tier costs: 2 unless the hero's kit says otherwise (Steve's Builder's Grit: 1). */
   armorCardCost(): number {
-    return this.loadout.hero === 'steve' ? 1 : 2;
+    return this.kit.armorCardCost ?? 2;
   }
 
   /** Seconds the hero has stood still (Turtle shield). */
@@ -235,8 +244,6 @@ export class RunState {
   /** Hostile-free companions: allies (fight, can be downed) and the pet. */
   allies: Ally[] = [];
   pet: PetState | null = null;
-  /** Whether Steve's free Leather tier at minute 1 has been handed out. */
-  private freeLeather = false;
   /** Biome banner state: the biome last announced (or started in), a candidate and its dwell time. */
   private shownBiome: BiomeId = 'plains';
   private biomeCand: BiomeId = 'plains';
@@ -262,7 +269,10 @@ export class RunState {
     this.world = this.overworld;
     this.time = startTime;
     this.baseMaxHp = heroBaseHp(loadout.hero);
-    this.abilityId = heroById(loadout.hero).ability;
+    const hero = heroById(loadout.hero);
+    this.abilityId = hero.ability;
+    this.kit = kitOf(hero.id);
+    this.player.radius = hero.radius ?? 5;
     initDirector(this);
     this.applyLoadoutStart();
     this.recomputeStats();
@@ -275,11 +285,7 @@ export class RunState {
   private applyLoadoutStart(): void {
     const l = this.loadout;
     this.rerolls = 1 + (l.upgrades['reroll'] ?? 0);
-    if (l.hero === 'alex') {
-      const bow = newWeapon('bow');
-      bow.level = 2;
-      this.weapons.push(bow);
-    }
+    this.kit.onStart?.(this);
     if ((l.upgrades['repertoire'] ?? 0) > 0) {
       const pool = ['tnt', 'crossbow', 'snowball', 'trident', 'axe'] as const;
       const id = this.rng.drops.pick(pool);
@@ -417,6 +423,12 @@ export class RunState {
     if (t < this.buffs.redstone) m.cd *= 0.8;
     if (t < this.buffs.lapis) m.luck += 0.3;
     if (this.time < this.resistUntil) m.dmgTaken *= 0.5;
+    const hb = this.heroBuff;
+    if (hb && t < hb.until) {
+      m.dmg *= hb.dmg;
+      m.speed *= hb.speed;
+      m.emeraldDrop += hb.emeraldDrop;
+    }
     if (sword) {
       m.burnChance += sword.burn;
       this.swordDmg = sword.dmg;
@@ -480,8 +492,13 @@ export class RunState {
     updateNpcs(this, dt);
     updateAllies(this, dt);
     updatePet(this, dt);
+    updateDecoys(this, dt);
     this.updateHeroPassives(dt);
     this.ability.cd = Math.max(0, this.ability.cd - dt);
+    if (this.heroBuff && this.time >= this.heroBuff.until) {
+      this.heroBuff = null;
+      this.recomputeStats();
+    }
     if (p.footfall && !p.dead) {
       this.emit('step');
       if (this.quality > 0 && this.world.surface(p.x, p.y, this.biome()) === 'ground') {
@@ -570,18 +587,10 @@ export class RunState {
     }
   }
 
-  /** Steve's free Leather tier at minute 1 and the Turtle's shield that refills while standing still. */
+  /** The hero kit's per-step hook and the Turtle's shield that refills while standing still. */
   private updateHeroPassives(dt: number): void {
     const p = this.player;
-    if (this.loadout.hero === 'steve' && !this.freeLeather && this.time >= 60) {
-      this.freeLeather = true;
-      if (this.armorTier === 0) {
-        this.armorTier = 1;
-        this.armorProgress = 0;
-        this.recomputeStats();
-        this.announce("Builder's Grit: free Leather armor", '#c8a06a', 3);
-      }
-    }
+    if (!p.dead) this.kit.tick?.(this, dt);
     if (this.mods.turtleShield > 0 && !p.dead) {
       this.stillT = p.moving ? 0 : this.stillT + dt;
       if (this.stillT >= 2 && this.absorb < this.mods.turtleShield) {

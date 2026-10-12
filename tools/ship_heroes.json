@@ -1,0 +1,13 @@
+{
+  "ship": [
+    "mob.skeleton.",
+    "mob.enderman.",
+    "mob.witch.",
+    "mob.piglin.",
+    "mob.illusioner.",
+    "mob.illusioner_fake.",
+    "mob.enchanted_creeper.",
+    "npc.wandering_trader.",
+    "npc.weaponsmith_plains_villager."
+  ]
+}

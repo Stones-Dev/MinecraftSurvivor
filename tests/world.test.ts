@@ -3,9 +3,15 @@ import { hash2, valueNoise } from '../src/core/noise';
 import { nightFactor } from '../src/systems/daynight';
 import { BIOME_PERIOD, biomeState } from '../src/world/biomes';
 import { genProps } from '../src/world/props';
-import { CHUNK_TILES, genTerrain, SPAWN_CLEAR, TILE, tileAt } from '../src/world/terrain';
+import {
+  CHUNK_TILES,
+  genChunkBiomes,
+  genTerrain,
+  SPAWN_CLEAR,
+  TILE,
+  tileAt,
+} from '../src/world/terrain';
 import { World } from '../src/world/world';
-import { BIOMES } from '../src/world/biomes';
 import { paintChunk } from '../src/world/tilePaint';
 
 describe('noise', () => {
@@ -78,19 +84,17 @@ describe('props', () => {
 describe('collision', () => {
   it('pushes a circle out of a solid prop and leaves free space alone', () => {
     const world = new World(5);
-    const tree = world
-      .propsInRect(-2000, -2000, 2000, 2000, 'plains')
-      .find((p) => p.kind === 'tree');
+    const tree = world.propsInRect(-2000, -2000, 2000, 2000).find((p) => p.kind === 'tree');
     expect(tree).toBeDefined();
     if (!tree) return;
-    const r = world.collide(tree.x + 1, tree.y, 5, 'plains');
+    const r = world.collide(tree.x + 1, tree.y, 5);
     expect(Math.hypot(r.x - tree.x, r.y - tree.y)).toBeGreaterThanOrEqual(5 + tree.radius - 0.001);
-    expect(world.collide(0, 0, 5, 'plains')).toEqual({ x: 0, y: 0 });
+    expect(world.collide(0, 0, 5)).toEqual({ x: 0, y: 0 });
   });
 });
 
-describe('biome clock and day/night', () => {
-  it('starts in plains without a fade and crossfades into the next biome', () => {
+describe('legacy biome clock and day/night', () => {
+  it('the legacy rotation starts in plains and crossfades into the next biome', () => {
     expect(biomeState(0)).toEqual({ current: 'plains', previous: null, fade: 1 });
     const s = biomeState(BIOME_PERIOD + 1);
     expect(s.current).toBe('dark_forest');
@@ -110,17 +114,45 @@ describe('biome clock and day/night', () => {
 
 describe('chunk baking budget', () => {
   it('paints a 256x256 chunk well inside the frame budget (BRIEF 8: <= 4 ms; generous CI limit)', () => {
-    const terrain = genTerrain(3, 3, 1337);
-    paintChunk(3, 3, terrain, BIOMES.plains, 1337); // warm up the JIT
+    // A chunk on a biome border (the slow path: per-pixel dithering between palettes).
+    const world = new World(1337);
+    const border = findBorderChunk(world);
+    const terrain = genTerrain(border.cx, border.cy, 1337);
+    const biomes = genChunkBiomes(border.cx, border.cy, (tx, ty) => world.biomeIndexAtTile(tx, ty));
+    expect(new Set(biomes).size).toBeGreaterThan(1);
+    paintChunk(3, 3, terrain, biomes, 1337); // warm up the JIT
     // Best of several batches: a noisy neighbour on a shared CI box must not fail a perf smoke test.
     let best = Infinity;
     for (let batch = 0; batch < 5; batch++) {
       const runs = 10;
       const t0 = performance.now();
-      for (let i = 0; i < runs; i++) paintChunk(3 + i, 3 + batch, terrain, BIOMES.plains, 1337);
+      for (let i = 0; i < runs; i++) {
+        const cx = border.cx + i;
+        const cy = border.cy + batch;
+        // Per-chunk biome arrays are computed once per bake, so they are part of the budget.
+        const b = genChunkBiomes(cx, cy, (tx, ty) => world.biomeIndexAtTile(tx, ty));
+        paintChunk(cx, cy, terrain, b, 1337);
+      }
       best = Math.min(best, (performance.now() - t0) / runs);
     }
     console.log(`paintChunk best batch average: ${best.toFixed(2)} ms`);
     expect(best).toBeLessThan(14);
   });
+
+  it('paints a single-biome chunk from a biome id as well', () => {
+    const terrain = genTerrain(0, 0, 3);
+    const a = paintChunk(0, 0, terrain, 'plains', 3);
+    const b = paintChunk(0, 0, terrain, 'desert', 3);
+    expect(a.data[100 * 256 + 100]).not.toBe(b.data[100 * 256 + 100]);
+  });
 });
+
+function findBorderChunk(world: World): { cx: number; cy: number } {
+  for (let cy = -8; cy <= 8; cy++) {
+    for (let cx = -8; cx <= 8; cx++) {
+      const b = genChunkBiomes(cx, cy, (tx, ty) => world.biomeIndexAtTile(tx, ty));
+      if (new Set(b).size > 1) return { cx, cy };
+    }
+  }
+  throw new Error('no border chunk');
+}

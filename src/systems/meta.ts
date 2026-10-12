@@ -1,6 +1,7 @@
 /** Turns the hero, pet, allies and permanent upgrades picked in the hub into run modifiers (BRIEF sections 6, 11, 12). */
 import { ACCOUNT_KEY, applyUpgradeMods } from '../data/metaUpgrades';
 import { allyById, heroById, petById, type PetDef } from '../data/companions';
+import { kitOf } from '../data/heroKits';
 import type { Mods } from '../data/upgrades';
 import type { SaveData } from '../core/save';
 
@@ -19,10 +20,31 @@ export interface RunLoadout {
   kennel: number;
   /** Leadership: second ally slot. */
   leadership: boolean;
+  /** Shards (duplicates) collected for the chosen hero: they raise the ability rank (see abilityRank). */
+  heroShards?: number;
+}
+
+/** Shards per ability rank, the rank cap and the per-rank bonuses (rank 1 is the base ability). */
+export const SHARDS_PER_RANK = 5;
+export const MAX_ABILITY_RANK = 5;
+export const RANK_POWER = 0.08;
+export const RANK_COOLDOWN = 0.04;
+
+/** Ability rank 1..5 from the hero's shards: 1 + floor(shards / 5), capped. */
+export function abilityRank(shards: number): number {
+  return Math.max(1, Math.min(MAX_ABILITY_RANK, 1 + Math.floor(Math.max(0, shards) / SHARDS_PER_RANK)));
 }
 
 export function defaultLoadout(): RunLoadout {
-  return { hero: 'steve', pet: null, allies: [], upgrades: {}, kennel: 0, leadership: false };
+  return {
+    hero: 'steve',
+    pet: null,
+    allies: [],
+    upgrades: {},
+    kennel: 0,
+    leadership: false,
+    heroShards: 0,
+  };
 }
 
 export function maxAllySlots(save: SaveData): number {
@@ -54,6 +76,7 @@ export function loadoutFromSave(save: SaveData): RunLoadout {
     upgrades: { ...(save.upgrades[hero] ?? {}) },
     kennel: save.upgrades[ACCOUNT_KEY]?.['kennel'] ?? 0,
     leadership: slots > 1,
+    heroShards: save.owned[hero]?.shards ?? 0,
   };
 }
 
@@ -118,6 +141,52 @@ function applyPet(l: RunLoadout, m: Mods): void {
       m.lavaImmune = true;
       m.lavaSpeed += v / 100;
       break;
+    case 'duck':
+      m.projSpeed *= 1 + v / 100;
+      break;
+    case 'moobloom':
+      m.regen += v;
+      break;
+    case 'arctic_fox':
+      m.chillDmg += v / 100;
+      break;
+    case 'toast':
+      m.lootMult += v / 100;
+      break;
+    case 'pufferfish':
+      m.thorns += v / 100;
+      break;
+    case 'polar_bear':
+      m.frost = Math.max(m.frost, v);
+      break;
+    case 'toucan':
+      m.eliteXp += v / 100;
+      break;
+    case 'magma_cow':
+      m.fireResist = Math.min(0.9, m.fireResist + v / 100);
+      break;
+    case 'ocelot':
+      m.critChance += v / 100;
+      break;
+    case 'mooshroom':
+      m.stewHeal = Math.max(m.stewHeal, v / 100);
+      break;
+    case 'piggy_bank':
+      m.chestEggs += v / 100;
+      break;
+    case 'golden_monkey':
+      m.dodge = Math.min(0.5, m.dodge + v / 100);
+      break;
+    case 'bat':
+      m.nightBoost += v / 100;
+      m.nightVision += 0.3 * kennelK;
+      break;
+    case 'glare':
+      m.bossDmg += v / 100;
+      break;
+    case 'wisp':
+      m.revive = Math.max(m.revive, Math.min(1, v / 100));
+      break;
   }
 }
 
@@ -126,20 +195,17 @@ export function applyLoadoutMods(l: RunLoadout, m: Mods): void {
   const hero = heroById(l.hero);
   m.dmg *= hero.dmg;
   m.speed *= hero.speed;
-  if (hero.id === 'alex') {
-    m.projSpeed *= 1.15;
-    m.pierce += 1;
-  } else if (hero.id === 'rana') {
-    m.luck += 0.1;
-    m.waterImmune = true;
-  }
+  kitOf(hero.id).mods?.(m, l);
+  const bonusRanks = abilityRank(l.heroShards ?? 0) - 1;
+  m.abilityPower *= 1 + RANK_POWER * bonusRanks;
+  m.abilityCd *= 1 - RANK_COOLDOWN * bonusRanks;
   applyUpgradeMods(l.upgrades, m);
   applyPet(l, m);
   if (l.allies.some((a) => allyById(a.id)?.role === 'horse')) m.speed *= 1.2;
 }
 
-/** Base max HP of a hero (before bonuses); Steve gets +10% from Builder's Grit. */
+/** Base max HP of a hero (before bonuses); kits may scale it (Steve: +10% from Builder's Grit). */
 export function heroBaseHp(heroId: string): number {
   const hero = heroById(heroId);
-  return Math.round(hero.hp * (hero.id === 'steve' ? 1.1 : 1));
+  return Math.round(hero.hp * (kitOf(hero.id).hpMult ?? 1));
 }

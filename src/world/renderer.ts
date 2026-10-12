@@ -107,6 +107,7 @@ export class WorldRenderer {
     camY: number,
     w: number,
     h: number,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy crossfade state, ignored
     _state?: BiomeState | null,
   ): PropItem[] {
     const x0 = camX - 24;

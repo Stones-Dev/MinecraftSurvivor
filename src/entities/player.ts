@@ -28,7 +28,11 @@ export class Player {
   /** Distance-driven walk cycle phase in half-strides (integer part flips the foot) and a footfall flag. */
   walkPhase = 0;
   footfall = false;
-  readonly radius = 5;
+  /** Hitbox radius in art px (set from the hero at run start). */
+  radius = 5;
+  /** Last non-zero move direction (unit vector; starts facing down): 4-direction sprite heroes read it. */
+  moveDX = 0;
+  moveDY = 1;
   speed = 72; // art px per second (4.5 tiles/s)
   speedMult = 1;
   /** Environmental speed factor set each step (snowfall, cobwebs). */
@@ -47,6 +51,9 @@ export class Player {
   hurtT = 0;
   /** Sword swing animation seconds left. */
   swingT = 0;
+  /** Ability cast animation: seconds left and the total length it was started with. */
+  castT = 0;
+  castDur = 0;
   /** Slowed by enemy attacks (seconds left; movement x0.6). */
   slowT = 0;
   /** Damage over time on the hero: poison (cannot kill), wither and burning (can). */
@@ -61,6 +68,7 @@ export class Player {
     this.iframes = Math.max(0, this.iframes - dt);
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.swingT = Math.max(0, this.swingT - dt);
+    this.castT = Math.max(0, this.castT - dt);
     this.slowT = Math.max(0, this.slowT - dt);
     this.hungerT = Math.max(0, this.hungerT - dt);
     if (this.dead) return;
@@ -75,6 +83,11 @@ export class Player {
     // Accelerate towards the wanted velocity and brake when the keys are released, so starts and stops
     // ease in instead of snapping; ice keeps the old slippery feel with much lower rates.
     const input2 = v.x !== 0 || v.y !== 0;
+    if (input2) {
+      const len = Math.hypot(v.x, v.y);
+      this.moveDX = v.x / len;
+      this.moveDY = v.y / len;
+    }
     const ice = surface === 'ice';
     const rate = ice ? (input2 ? ICE_ACCEL : ICE_BRAKE) : input2 ? ACCEL : BRAKE;
     const dvx = wantX - this.vx;

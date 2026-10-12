@@ -98,6 +98,7 @@ export class World {
    * Props of a chunk, each grown for the biome of its own cell. The trailing biome parameter of this and
    * the other prop/collision queries is legacy and ignored: props are a property of the world.
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy biome argument, ignored
   chunkProps(cx: number, cy: number, _biome?: BiomeId): Prop[] {
     const key = chunkKey(cx, cy);
     let props = this.propCache.get(key);
@@ -113,6 +114,7 @@ export class World {
   }
 
   /** Props whose feet lie inside the rectangle. */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy biome argument, ignored
   propsInRect(x0: number, y0: number, x1: number, y1: number, _biome?: BiomeId): Prop[] {
     const out: Prop[] = [];
     for (let cy = Math.floor(y0 / CHUNK_PX); cy <= Math.floor(y1 / CHUNK_PX); cy++) {
@@ -143,6 +145,7 @@ export class World {
   }
 
   /** Does a circle overlap any solid prop? (used for cover against enemy projectiles) */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy biome argument, ignored
   overlapsSolid(x: number, y: number, r: number, _biome?: BiomeId): boolean {
     const reach = r + 8;
     for (
@@ -175,6 +178,7 @@ export class World {
   }
 
   /** Push a circle out of solid props (two passes so corners settle). */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy biome argument, ignored
   collide(x: number, y: number, r: number, _biome?: BiomeId): { x: number; y: number } {
     const reach = r + 8;
     let px = x;

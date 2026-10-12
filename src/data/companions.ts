@@ -44,7 +44,22 @@ export type PetEffect =
   | 'axolotl'
   | 'wolf_pup'
   | 'panda'
-  | 'strider';
+  | 'strider'
+  | 'duck'
+  | 'moobloom'
+  | 'arctic_fox'
+  | 'toast'
+  | 'pufferfish'
+  | 'polar_bear'
+  | 'toucan'
+  | 'magma_cow'
+  | 'ocelot'
+  | 'mooshroom'
+  | 'piggy_bank'
+  | 'golden_monkey'
+  | 'bat'
+  | 'glare'
+  | 'wisp';
 
 export type AllyRole =
   | 'wolf'
@@ -56,7 +71,19 @@ export type AllyRole =
   | 'armorer'
   | 'librarian'
   | 'horse'
-  | 'iron_golem';
+  | 'iron_golem'
+  | 'mini_golem'
+  | 'butcher'
+  | 'leatherworker'
+  | 'goat'
+  | 'cat'
+  | 'melon_golem'
+  | 'fisherman'
+  | 'copper_golem'
+  | 'shepherd'
+  | 'love_golem'
+  | 'furnace_golem'
+  | 'soul_wizard';
 
 interface CompanionBase {
   id: string;
@@ -69,7 +96,13 @@ interface CompanionBase {
 
 export interface HeroDef extends CompanionBase {
   kind: 'hero';
-  /** Atlas hero name (`hero.<name>...`). */
+  /**
+   * How the hero is drawn: 'hero' uses the layered hero sheets (`hero.<hero>.<armor>.<sword>.<anim>`, armor and
+   * sword tiers swap the sprite); 'sprite' uses a mob/NPC set under `sprite` (idle/walk/attack/hurt/death) and
+   * keeps the tiers as stats only.
+   */
+  render: 'hero' | 'sprite';
+  /** Atlas hero name (`hero.<name>...`); sprite heroes use their id (it is never looked up). */
   hero: string;
   /** Id of this hero's active ability (src/abilities). */
   ability: string;
@@ -78,6 +111,14 @@ export interface HeroDef extends CompanionBase {
   speed: number;
   passiveName: string;
   passive: string;
+  /** Sprite heroes: draw scale (feet anchored), default 1. */
+  scale?: number;
+  /** Hitbox radius in art px (default 5). */
+  radius?: number;
+  /** Sprite heroes: css colour washed over the sprite (recolours; keep the alpha low). */
+  tint?: string;
+  /** Sprite heroes: animation played while the ability is being cast (first one that exists wins). */
+  castAnims?: readonly string[];
 }
 
 export interface PetDef extends CompanionBase {
@@ -87,6 +128,10 @@ export interface PetDef extends CompanionBase {
   values: readonly [number, number, number, number, number];
   /** Text for the collection (value is the level's number). */
   text: string;
+  /** Floats above the ground with a gentle bob (bats, wisps, fish). */
+  hover?: boolean;
+  /** Draw scale (feet anchored), default 1. */
+  scale?: number;
 }
 
 export interface AllyDef extends CompanionBase {
@@ -97,6 +142,8 @@ export interface AllyDef extends CompanionBase {
   dmg: number;
   speed: number;
   text: string;
+  /** Draw scale (feet anchored), default 1. */
+  scale?: number;
 }
 
 export type CompanionDef = HeroDef | PetDef | AllyDef;
@@ -116,6 +163,7 @@ export const HEROES: HeroDef[] = [
     name: 'Steve',
     rarity: 'common',
     sprite: 'hero.steve.none.none',
+    render: 'hero',
     hero: 'steve',
     ability: 'iron_resolve',
     hp: 100,
@@ -132,6 +180,7 @@ export const HEROES: HeroDef[] = [
     name: 'Alex',
     rarity: 'legendary',
     sprite: 'hero.alex.none.none',
+    render: 'hero',
     hero: 'alex',
     ability: 'arrow_rain',
     hp: 90,
@@ -147,6 +196,7 @@ export const HEROES: HeroDef[] = [
     name: 'Rana',
     rarity: 'legendary',
     sprite: 'hero.rana.none.none',
+    render: 'hero',
     hero: 'rana',
     ability: 'frog_leap',
     hp: 85,
@@ -156,6 +206,145 @@ export const HEROES: HeroDef[] = [
     passive:
       '+10% luck, double XP from slimes and magma cubes, slimes split at most once, water does not slow her.',
     quip: 'Jumps at every puddle. Lands on the right side of luck.',
+  },
+  // Sprite heroes: drawn from mob / NPC sets; armor and sword tiers only change their stats.
+  {
+    id: 'skeleton',
+    kind: 'hero',
+    name: 'Skeleton',
+    rarity: 'uncommon',
+    sprite: 'mob.skeleton',
+    render: 'sprite',
+    hero: 'skeleton',
+    ability: 'bone_barrage',
+    hp: 75,
+    dmg: 1,
+    speed: 1.04,
+    passiveName: 'Bone Dry',
+    passive: 'Starts with the Bow at level 3, projectiles +1 pierce. Undead: immune to poison.',
+    castAnims: ['firing', 'attack'],
+    quip: 'All bones, no stamina. Still out-shoots everyone in the room.',
+  },
+  {
+    id: 'wandering_trader',
+    kind: 'hero',
+    name: 'Wandering Trader',
+    rarity: 'rare',
+    sprite: 'npc.wandering_trader',
+    render: 'sprite',
+    hero: 'wandering_trader',
+    ability: 'emerald_shower',
+    hp: 95,
+    dmg: 0.95,
+    speed: 1,
+    passiveName: 'Haggler',
+    passive: '+25% Emerald payout and +25% Emeralds from chests. Starts the run with a random item.',
+    castAnims: ['trading', 'talk'],
+    quip: 'Sells you a bucket of fish for twelve emeralds. Somehow you say yes.',
+  },
+  {
+    id: 'village_smith',
+    kind: 'hero',
+    name: 'Village Smith',
+    rarity: 'rare',
+    sprite: 'npc.weaponsmith_plains_villager',
+    render: 'sprite',
+    hero: 'village_smith',
+    ability: 'anvil_drop',
+    hp: 110,
+    dmg: 1.02,
+    speed: 0.96,
+    passiveName: 'Forge Master',
+    passive: 'Sword damage +20% and starts with an Iron sword. +2 armor.',
+    castAnims: ['trading', 'talk'],
+    quip: 'Hrm. Fixes swords, fixes armor, fixes you with a look.',
+  },
+  {
+    id: 'enderman',
+    kind: 'hero',
+    name: 'Enderman',
+    rarity: 'epic',
+    sprite: 'mob.enderman',
+    render: 'sprite',
+    hero: 'enderman',
+    ability: 'blink',
+    hp: 90,
+    dmg: 1.05,
+    speed: 1.08,
+    passiveName: 'Phase Step',
+    passive: '15% chance to blink out of the way of a hit. Takes 30% more damage while in water.',
+    castAnims: ['teleport_appear', 'teleport_away'],
+    quip: 'Do not look him in the eyes. Do look at his damage numbers.',
+  },
+  {
+    id: 'witch',
+    kind: 'hero',
+    name: 'Witch',
+    rarity: 'epic',
+    sprite: 'mob.witch',
+    render: 'sprite',
+    hero: 'witch',
+    ability: 'witch_brew',
+    hp: 85,
+    dmg: 1,
+    speed: 0.98,
+    passiveName: 'Cauldron Craft',
+    passive: 'Potion weapons +30% area. Starts with a random potion weapon (Poison or Harming).',
+    castAnims: ['throw', 'attack'],
+    quip: 'Cackles at everything. The potions are labelled, just not honestly.',
+  },
+  {
+    id: 'illusioner',
+    kind: 'hero',
+    name: 'Illusioner',
+    rarity: 'epic',
+    sprite: 'mob.illusioner',
+    render: 'sprite',
+    hero: 'illusioner',
+    ability: 'mirror_images',
+    hp: 85,
+    dmg: 1,
+    speed: 1,
+    passiveName: 'Sleight of Hand',
+    passive: '+10% speed. 20% of the hits you take leave a decoy behind that lures enemies for 1.5 s.',
+    castAnims: ['magic', 'firing'],
+    quip: 'There are four of him. None of them did the dishes.',
+  },
+  {
+    id: 'piglin',
+    kind: 'hero',
+    name: 'Piglin',
+    rarity: 'legendary',
+    sprite: 'mob.piglin',
+    render: 'sprite',
+    hero: 'piglin',
+    ability: 'gold_rush',
+    hp: 100,
+    dmg: 1.08,
+    speed: 1,
+    passiveName: 'Gold Digger',
+    passive:
+      '+15% luck and heal 1 HP per kill. Piglins and zombified piglins ignore him (bosses and rift foes do not).',
+    castAnims: ['attack'],
+    tint: 'rgba(255,214,90,0.22)',
+    quip: 'Will fight for you. Will fight a lot harder for gold.',
+  },
+  {
+    id: 'creeper',
+    kind: 'hero',
+    name: 'Creeper',
+    rarity: 'legendary',
+    sprite: 'mob.enchanted_creeper',
+    render: 'sprite',
+    hero: 'creeper',
+    ability: 'charged_blast',
+    hp: 95,
+    dmg: 1.08,
+    speed: 1,
+    passiveName: 'Short Fuse',
+    passive: 'Explosion damage taken -50%. 10% of his hits set off a mini explosion.',
+    castAnims: ['explode'],
+    quip: 'Finally found a hug that lasts. Everyone else keeps running away.',
   },
 ];
 
@@ -325,6 +514,176 @@ export const PETS: PetDef[] = [
     text: 'Lava immunity; +{v}% speed on lava and Nether ground',
     quip: 'Shivers on dry land. Skates over lava like it is a dance floor.',
   },
+  {
+    id: 'duck',
+    kind: 'pet',
+    name: 'Duck',
+    rarity: 'common',
+    sprite: 'pet.duck',
+    effect: 'duck',
+    values: v(8, 11, 14, 17, 20),
+    text: '+{v}% projectile speed',
+    quip: 'Quacks at your arrows until they hurry up.',
+  },
+  {
+    id: 'moobloom',
+    kind: 'pet',
+    name: 'Moobloom',
+    rarity: 'common',
+    sprite: 'pet.moobloom',
+    effect: 'moobloom',
+    values: v(0.2, 0.3, 0.4, 0.5, 0.6),
+    text: '+{v} HP regenerated per second',
+    quip: 'Smells like buttercups. Mostly. Do not check the other part.',
+  },
+  {
+    id: 'arctic_fox',
+    kind: 'pet',
+    name: 'Arctic Fox',
+    rarity: 'common',
+    sprite: 'pet.arctic_fox',
+    effect: 'arctic_fox',
+    values: v(10, 14, 18, 22, 26),
+    text: '+{v}% damage to slowed, frozen or stunned enemies',
+    quip: 'Pounces on anything that stops moving. Including snowmen.',
+  },
+  {
+    id: 'toast',
+    kind: 'pet',
+    name: 'Toast',
+    rarity: 'common',
+    sprite: 'pet.toast',
+    effect: 'toast',
+    values: v(6, 9, 12, 15, 18),
+    text: '+{v}% loot drops (Emeralds and Spawn Eggs)',
+    quip: 'A rabbit named after breakfast. Finds things nobody dropped.',
+  },
+  {
+    id: 'pufferfish',
+    kind: 'pet',
+    name: 'Pufferfish',
+    rarity: 'uncommon',
+    sprite: 'pet.pufferfish_big',
+    effect: 'pufferfish',
+    values: v(30, 40, 50, 60, 75),
+    text: 'Reflects {v}% of contact damage',
+    quip: 'Hugs are not recommended. Neither is biting the hero.',
+    hover: true,
+  },
+  {
+    id: 'polar_bear',
+    kind: 'pet',
+    name: 'Polar Bear Cub',
+    rarity: 'uncommon',
+    sprite: 'pet.baby_polar_bear',
+    effect: 'polar_bear',
+    values: v(20, 24, 28, 32, 36),
+    text: 'Enemies within {v} px are slowed; snow does not slow you',
+    quip: 'Chilly breath, warm heart, cold stare for skeletons.',
+  },
+  {
+    id: 'toucan',
+    kind: 'pet',
+    name: 'Toucan',
+    rarity: 'uncommon',
+    sprite: 'pet.toucan',
+    effect: 'toucan',
+    values: v(25, 35, 45, 55, 70),
+    text: '+{v}% XP from elites and bosses',
+    quip: 'Big beak, bigger appetite for the shiny ones.',
+    hover: true,
+  },
+  {
+    id: 'magma_cow',
+    kind: 'pet',
+    name: 'Magma Cow',
+    rarity: 'uncommon',
+    sprite: 'pet.magma_cow',
+    effect: 'magma_cow',
+    values: v(25, 35, 45, 55, 65),
+    text: 'Burning, lava and fireballs hurt you {v}% less',
+    quip: 'Gives hot milk. Very hot. Please use a bucket.',
+  },
+  {
+    id: 'ocelot',
+    kind: 'pet',
+    name: 'Ocelot',
+    rarity: 'rare',
+    sprite: 'pet.ocelot',
+    effect: 'ocelot',
+    values: v(6, 8, 10, 12, 15),
+    text: '{v}% chance for any hit to crit for double damage',
+    quip: 'Will not be tamed. Will, however, point at weak spots.',
+  },
+  {
+    id: 'mooshroom',
+    kind: 'pet',
+    name: 'Mooshroom',
+    rarity: 'rare',
+    sprite: 'pet.mooshroom',
+    effect: 'mooshroom',
+    values: v(15, 20, 25, 30, 35),
+    text: 'Below 35% HP, a stew heals {v}% of max HP (40 s cooldown)',
+    quip: 'Carries soup on its back. Suspiciously generous.',
+  },
+  {
+    id: 'piggy_bank',
+    kind: 'pet',
+    name: 'Piggy Bank',
+    rarity: 'rare',
+    sprite: 'pet.piggy_bank',
+    effect: 'piggy_bank',
+    values: v(8, 11, 14, 17, 20),
+    text: 'Chests and ores have a {v}% chance to give a Spawn Egg',
+    quip: 'Saving up for something. Will not say what. Jingles when it runs.',
+  },
+  {
+    id: 'golden_monkey',
+    kind: 'pet',
+    name: 'Golden Monkey',
+    rarity: 'epic',
+    sprite: 'pet.golden_monkey',
+    effect: 'golden_monkey',
+    values: v(6, 8, 10, 12, 15),
+    text: '{v}% chance to dodge a hit completely',
+    quip: 'Pulls you out of the way by the sleeve. Charges in bananas.',
+  },
+  {
+    id: 'bat',
+    kind: 'pet',
+    name: 'Bat',
+    rarity: 'epic',
+    sprite: 'pet.bat',
+    effect: 'bat',
+    values: v(10, 13, 16, 20, 25),
+    text: 'At night: +{v}% speed and damage; nights are brighter',
+    quip: 'Sleeps all day upside down. Night shift is where it shines.',
+    hover: true,
+  },
+  {
+    id: 'glare',
+    kind: 'pet',
+    name: 'Glare',
+    rarity: 'legendary',
+    sprite: 'pet.glare_classic_oak',
+    effect: 'glare',
+    values: v(15, 20, 25, 30, 40),
+    text: '+{v}% damage to elites and bosses; elites drop an Emerald',
+    quip: 'Glares at the dark until the dark apologises.',
+    hover: true,
+  },
+  {
+    id: 'wisp',
+    kind: 'pet',
+    name: 'Wisp',
+    rarity: 'legendary',
+    sprite: 'pet.yellow_wisp',
+    effect: 'wisp',
+    values: v(30, 40, 50, 60, 75),
+    text: 'Once per run, revive with {v}% HP when you fall',
+    quip: 'A tiny lantern with opinions. Refuses to let you stay down.',
+    hover: true,
+  },
 ];
 
 export const ALLIES: AllyDef[] = [
@@ -457,6 +816,162 @@ export const ALLIES: AllyDef[] = [
     speed: 36,
     text: 'Taunts nearby enemies and slams for area damage',
     quip: 'Gives flowers to villagers. Gives zombies a bad day.',
+  },
+  {
+    id: 'mini_golem',
+    kind: 'ally',
+    name: 'Small Iron Golem',
+    rarity: 'common',
+    sprite: 'ally.small_iron_golem',
+    role: 'mini_golem',
+    hp: 140,
+    dmg: 0.5,
+    speed: 40,
+    text: 'Tiny tank: taunts enemies within 40 px, takes 40% less damage',
+    quip: 'Built from leftover blocks. Has something to prove.',
+  },
+  {
+    id: 'butcher',
+    kind: 'ally',
+    name: 'Villager Butcher',
+    rarity: 'common',
+    sprite: 'npc.butcher_plains_villager',
+    role: 'butcher',
+    hp: 60,
+    dmg: 0.6,
+    speed: 52,
+    text: 'Cleaver melee; each kill he lands heals you 2% of max HP',
+    quip: 'Hrm. Knows forty ways to cook a zombie. Recommends none.',
+  },
+  {
+    id: 'leatherworker',
+    kind: 'ally',
+    name: 'Villager Leatherworker',
+    rarity: 'common',
+    sprite: 'npc.leatherworker_plains_villager',
+    role: 'leatherworker',
+    hp: 55,
+    dmg: 0,
+    speed: 40,
+    text: 'Stitches a patch every 12 s: +6 shield HP (stacks to 18)',
+    quip: 'Hrm. Patches your armor while you are still wearing it.',
+  },
+  {
+    id: 'goat',
+    kind: 'ally',
+    name: 'Goat',
+    rarity: 'uncommon',
+    sprite: 'pet.goat',
+    role: 'goat',
+    hp: 80,
+    dmg: 0.9,
+    speed: 60,
+    text: 'Telegraphs a charge, then rams through a line of enemies',
+    quip: 'Screams first, rams second, apologises never.',
+  },
+  {
+    id: 'black_cat',
+    kind: 'ally',
+    name: 'Black Cat',
+    rarity: 'uncommon',
+    sprite: 'pet.black_cat',
+    role: 'cat',
+    hp: 45,
+    dmg: 0.4,
+    speed: 92,
+    text: 'Fast scratcher; 25% of scratches crit for 2.5x',
+    quip: 'Crossed your path on purpose. It is the zombies who are unlucky.',
+  },
+  {
+    id: 'melon_golem',
+    kind: 'ally',
+    name: 'Melon Golem',
+    rarity: 'uncommon',
+    sprite: 'ally.melon_golem',
+    role: 'melon_golem',
+    hp: 60,
+    dmg: 0.35,
+    speed: 30,
+    text: 'Spits a fan of 3 melon seeds that pierce 2 enemies',
+    quip: 'Snow golem who went on holiday. Never came back.',
+  },
+  {
+    id: 'fisherman',
+    kind: 'ally',
+    name: 'Villager Fisherman',
+    rarity: 'uncommon',
+    sprite: 'npc.fisherman_plains_villager',
+    role: 'fisherman',
+    hp: 55,
+    dmg: 0,
+    speed: 40,
+    text: 'Reels in the farthest XP orb or Emerald every 1.5 s',
+    quip: 'Hrm. Caught a boot, two orbs and, once, a creeper.',
+  },
+  {
+    id: 'copper_golem',
+    kind: 'ally',
+    name: 'Copper Golem',
+    rarity: 'rare',
+    sprite: 'ally.copper_golem',
+    role: 'copper_golem',
+    hp: 110,
+    dmg: 0.6,
+    speed: 34,
+    text: 'Melee; calls a lightning bolt on crowds every 6 s (3 s in storms)',
+    quip: 'Presses buttons. One of them summons lightning. It loves that button.',
+  },
+  {
+    id: 'shepherd',
+    kind: 'ally',
+    name: 'Villager Shepherd',
+    rarity: 'rare',
+    sprite: 'npc.shepherd_plains_villager',
+    role: 'shepherd',
+    hp: 55,
+    dmg: 0,
+    speed: 40,
+    text: 'Drops a wool decoy every 12 s that lures nearby enemies for 5 s',
+    quip: 'Hrm. Every sheep is a decoy if you believe in it.',
+  },
+  {
+    id: 'love_golem',
+    kind: 'ally',
+    name: 'Love Golem',
+    rarity: 'epic',
+    sprite: 'ally.love_golem',
+    role: 'love_golem',
+    hp: 150,
+    dmg: 0,
+    speed: 36,
+    text: 'Charms the toughest nearby enemy every 4 s (stun 2.5 s) and heals you',
+    quip: 'Gives flowers to zombies. They are too confused to bite.',
+  },
+  {
+    id: 'furnace_golem',
+    kind: 'ally',
+    name: 'Furnace Golem',
+    rarity: 'epic',
+    sprite: 'ally.furnace_golem',
+    role: 'furnace_golem',
+    hp: 220,
+    dmg: 0.8,
+    speed: 34,
+    text: 'Melee bruiser with a burning aura (sets enemies within 36 px on fire)',
+    quip: 'Runs on coal and spite. Do not ask it to make toast.',
+  },
+  {
+    id: 'soul_wizard',
+    kind: 'ally',
+    name: 'Soul Wizard',
+    rarity: 'legendary',
+    sprite: 'ally.soul_wizard',
+    role: 'soul_wizard',
+    hp: 80,
+    dmg: 0.8,
+    speed: 44,
+    text: 'Casts 3 homing soul orbs every 2.2 s; blinks to you when cornered',
+    quip: 'Speaks only in whispers and critical hits.',
   },
 ];
 

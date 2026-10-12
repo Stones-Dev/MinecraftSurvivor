@@ -11,6 +11,7 @@ import type { RunState } from '../game';
 import { explode, hurtPlayer, killEnemy } from './combat';
 import { updateBoss } from './bossAI';
 import { tauntTarget } from './allies';
+import { ignoresHero, lureTarget } from '../abilities/decoys';
 import { makeEnemy } from './spawner';
 import { tickStatus } from './status';
 
@@ -325,16 +326,18 @@ export function updateEnemies(run: RunState, dt: number): void {
     }
     switch (def.archetype) {
       case 'chaser': {
-        // An Iron Golem taunts chasers within 4 tiles: they go for it instead of the hero.
-        const bait = run.allies.length > 0 ? tauntTarget(run, e) : null;
+        // Decoys and hero-neutral wandering (abilities/decoys.ts) win, then an Iron Golem's taunt (4 tiles).
+        const lure = lureTarget(run, e);
+        const bait = lure ?? (run.allies.length > 0 ? tauntTarget(run, e) : null);
         if (bait) {
           const bx = bait.x - e.x;
           const by = bait.y - e.y;
           const bd = Math.hypot(bx, by) || 1;
-          chase(run, e, bx / bd, by / bd, bd);
+          // A lure is walked to in a straight line (the BFS route leads to the hero).
+          chase(run, e, bx / bd, by / bd, lure ? 0 : bd);
         } else chase(run, e, ux, uy, dist);
         step(run, e, dir.x * speed, dir.y * speed, dt);
-        if (!p.dead) contact(run, e, dist);
+        if (!p.dead && !ignoresHero(run, e)) contact(run, e, dist);
         break;
       }
       case 'kiter':

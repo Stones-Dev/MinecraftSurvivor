@@ -60,6 +60,32 @@ export interface Mods {
   /** Hero ability cooldown multiplier (lower is faster) and effect strength multiplier. */
   abilityCd: number;
   abilityPower: number;
+  /** Radius multiplier for potion weapons only (Witch). */
+  potionArea: number;
+  /** Emeralds found in chests multiplier (Wandering Trader). */
+  chestMult: number;
+  /** Sword weapon damage multiplier on top of the sword tier (Village Smith). */
+  swordMult: number;
+  /** Arctic Fox: extra damage fraction against slowed, frozen or stunned enemies. */
+  chillDmg: number;
+  /** Toucan: extra XP fraction from elites, mini-bosses and bosses. */
+  eliteXp: number;
+  /** Magma Cow: fraction of burning, lava and fireball damage removed. */
+  fireResist: number;
+  /** Ocelot: chance that a hit is critical (double damage). */
+  critChance: number;
+  /** Mooshroom: fraction of max HP the emergency stew heals (0 = no stew). */
+  stewHeal: number;
+  /** Piggy Bank: chance that a broken chest or ore also gives a Spawn Egg. */
+  chestEggs: number;
+  /** Golden Monkey: chance to dodge a hit completely. */
+  dodge: number;
+  /** Bat: speed and damage fraction gained at full night (scaled by how dark it is). */
+  nightBoost: number;
+  /** Glare: extra damage fraction against elites, mini-bosses and bosses. */
+  bossDmg: number;
+  /** Wisp: once per run, revive at this fraction of max HP (0 = none). */
+  revive: number;
 }
 
 export function baseMods(): Mods {
@@ -102,6 +128,19 @@ export function baseMods(): Mods {
     payoutMult: 1,
     abilityCd: 1,
     abilityPower: 1,
+    potionArea: 1,
+    chestMult: 1,
+    swordMult: 1,
+    chillDmg: 0,
+    eliteXp: 0,
+    fireResist: 0,
+    critChance: 0,
+    stewHeal: 0,
+    chestEggs: 0,
+    dodge: 0,
+    nightBoost: 0,
+    bossDmg: 0,
+    revive: 0,
   };
 }
 

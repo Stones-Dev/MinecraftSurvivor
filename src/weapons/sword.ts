@@ -43,7 +43,7 @@ export const sword: WeaponDef = {
     p.swingT = 0.33;
     run.emit('swing');
     const half = w.evolved ? Math.PI : w.level >= 5 ? 1.4 : 1.1;
-    const dmg = damageOf(run, s) * run.swordDmg * (w.evolved ? 1.15 : 1);
+    const dmg = damageOf(run, s) * run.swordDmg * run.mods.swordMult * (w.evolved ? 1.15 : 1);
     enemiesInCircle(run, p.x, p.y, area, hits);
     for (const e of hits) {
       const a = Math.atan2(e.y - p.y, e.x - p.x);
