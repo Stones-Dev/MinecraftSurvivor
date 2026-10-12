@@ -32,7 +32,7 @@ Notes for later phases:
 
 Built: 14 weapons (Sword, Bow, TNT plus Crossbow, Trident, Snowball, Fishing Rod, Harming and Poison potions, Lava Bucket, Lightning Rod, Blaze Rods, Axe, Shield; every one has 5 levels, an evolution and tests), 24 passives (enchantments and potion effects), armor tiers (7) and sword tiers (7) that swap the hero sprite plus an enchanted glint, 8 items with `Space` actives and the second-item swap prompt, 31 enemy types over 11 data-driven archetypes (chaser, kiter, leaper, kamikaze, charger, summoner, healer, teleporter, diver, turret, boss), 4 biomes (Plains, Dark Forest, Snowy Taiga with ice and snowfall, Desert with cacti and lava) on a 4-minute rotation, interactables (ores, chests, locked chests, melons/pumpkins, beacon, campfire, anvil, enchanting table, TNT traps, cobwebs, magma), events (Raid, Golden Hour, Lost Villager escort, Wandering Trader with llamas, thunderstorms that Charge creepers), the Nether rift (portal, walled arena as its own `World`, 90 s fight, rewards), three scripted bosses at 5:00 / 10:00 / 15:00 (Raid Captain, Wither, Warden with a boss bar), four mini-bosses, Charged mobs, the win at 15:00 and Endless scaling.
 
-Balance (`docs/BALANCE.md`, `npm run balance`): a headless bot plays real `RunState`s with two policies. Findings that changed the game: a base regeneration of 0.4 HP/s and a stronger Sword. Fresh Steve with only the sword now dies around 5:00 for a competent bot; ranged starters with smart card picks reach the Wither (median 9-10 min).
+Balance (`docs/BALANCE.md`, `npm run balance`): a headless bot plays real `RunState`s with two policies. Findings that changed the game: a base regeneration of 0.4 HP/s and a stronger Sword. Fresh Steve with only the sword dies around 5:00 for a competent bot; the v1.0 claim that ranged starters reach the Wither at a 9-10 minute median was later found to be 4-seed noise (see Checkpoint 6, Balance).
 
 Self code review (independent read-only pass, 27 findings, all verified by reading the code). Fixed: lightning left "undead" enemies; Endless bosses could spawn in a burst; rift kill rewards (XP/emeralds) were discarded and rift foes also paid mini-boss rewards; reroll at an enchanting table produced an exploitable normal offer; scheduled callbacks (lightning) survived the rift swap; a death and a win in the same frame counted as a loss; old fleeing villagers broke the next escort and doubled its timer; module-level NPC id counter broke determinism; the last DoT tick was lost; two banner carriers per raid; a second item prompt overwrote the first; the anvil was consumed when nothing could be upgraded; save loading kept mistyped fields, silently replaced unreadable or newer saves (now backed up under `.bak` and never overwritten), imports accepted anything, "NEW RECORD" compared floats, and `?t=` inflated rewards without `debug`. Performance fixes: numeric chunk keys and a cached removed-prop check in the collision path, an allocation-free biome lookup, memoised enemy animation ids, tighter spatial-hash query bounds plus bucket cleanup, pre-rendered pool discs, batched damage text with a cap, off-screen culling and a 300-orb cap (the oldest are banked as XP), hazard props refreshed 3 times a second, early-out in prop overlays. Not done (low value or large): pooling `Fx` objects, pre-rendering damage digits, a `collide()` output object reuse.
 
@@ -89,17 +89,18 @@ Built (the v1.1 waves 0-4 by area; details in `docs/DECISIONS.md`, entries dated
 - Earlier uncapped headless readings with 150 enemies (biome-content round): 136-270 fps, minimap on or off within noise. Minimap repaint 0.4-0.7 ms about every 2 s; ambient particles update in about 0.01 ms.
 - Screenshots: `docs/screenshots/` (prefixes `a1`, `a2`, `b`, `c2`, `w0`-`w2`, `p`; for example `w1-biome-jungle-crowd150.png`, `p-focus-*.png`).
 
-### Balance (`docs/BALANCE_RESULTS.md`, `npm run balance`, 12 seeds, cap 20 min, bot plays a fresh Steve)
+### Balance (`docs/BALANCE_RESULTS.md`, `BAL_RUNS=48 BAL_BIOMES=1 npm run balance`, bot plays a fresh Steve)
 
-| Cell | Median survival | p10-p90 | Kills (median) |
-|---|---|---|---|
-| newbie policy | 2:51 | 1:57-3:58 | 47 |
-| smart policy | 5:00 | 3:26-6:40 | 51 |
-| smart, start biome plains / forest / badlands | 4:38 / 3:51 / 5:21 | | 44 / 50 / 83 |
-| smart, all 10 start biomes | 3:51 (forest) to 5:21 (badlands) | | |
-| smart, per starting weapon | 4:24 (poison) to 6:57 (lightning rod); sword 5:18 | | |
+A balance hunt found that the v1.0 per-weapon medians quoted in earlier checkpoints (bow 9:27 and so on) were 4-seed noise; re-measured with 24 seeds v1.0 gave bow 6:28. Two real losses were found in v1.1 (the bot re-planned too slowly for the new acceleration model, and wandered into lava) and fixed in the bot; base regeneration was raised from 0.4 to 0.7 HP/s (a real game change, picked by a sweep on held-out seeds). Medians with 48 seeds (+/- 0:25 to 0:40 per cell):
 
-The smart bot sits inside the 4-6 minute new-player target in 9 of the 10 start biomes (Forest 3:51 is the exception; the sample is 12 seeds, so the noise is large). The newbie policy (2:51) is below the target. The 10:00 Wither target from the brief is **not** reproduced in the last run: most starting weapons record 0.0 bosses; the sim bot does not use companions, upgrades, abilities, chests, rifts or trades, so it is a fresh-save baseline and not a measure of real play. `docs/BALANCE.md` still carries the older v1.0 table (for example bow 9:27) next to a short v1.1 note; the two are not directly comparable.
+| Cell | Median survival |
+|---|---|
+| smart policy, sword | 5:41 |
+| newbie policy (150 seeds) | 3:08 (3:19 at 48 seeds), same as v1.0 (3:15) |
+| smart, per starting weapon | bow 10:03, lightning rod 10:10, TNT 9:00, blaze rods 8:40, crossbow 8:16, snowball 7:01, axe 5:05, sword 5:27; p90 above 10:00 for 12 of 14 starters |
+| smart, sword, all 10 start biomes | 5:00 to 5:54 (plains 5:09) |
+
+Caveats: the numbers are fitted to the bot, which does not use companions, upgrades, abilities, chests, rifts or trades, so real runs (which have all of those) may be easier than these medians say; the newbie median sits at the low end of the 3:15-4:15 target and was not tuned; smart-sword medians are near the top of the 4-6 minute band.
 
 ### Reviews
 

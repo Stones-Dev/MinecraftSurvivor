@@ -51,7 +51,7 @@ export interface Biome {
   ambient: Ambient;
   /** Music theme while the hero is in this biome. */
   theme: ThemeId;
-  /** Relative danger (1 = baseline). Data for the spawner / director; not applied yet. */
+  /** Relative danger (1 = baseline). Scales spawn density and enemy HP in `spawnOne` (`1 + 0.6 (danger - 1)` for HP); not applied to bosses, raids or rift foes. */
   danger: number;
   grass: readonly [RGB, RGB, RGB]; // base, light, dark (the ground family's colours)
   dirt: readonly [RGB, RGB, RGB];

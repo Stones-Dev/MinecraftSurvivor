@@ -54,6 +54,10 @@ const GENERAL: Section[] = [
     body: 'Tiny5, Copyright 2022-2024 The Tiny5 Project Authors, SIL Open Font License 1.1.',
   },
   {
+    head: 'Cloud',
+    body: 'Optional accounts use the Firebase JavaScript SDK (Apache-2.0), loaded only on deployments set up with Firebase. See CREDITS.md for the full list.',
+  },
+  {
     head: 'Audio',
     body: 'All music and sound effects are generated live with the Web Audio API. No audio files.',
   },
