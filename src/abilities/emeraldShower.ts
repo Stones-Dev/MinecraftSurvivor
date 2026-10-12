@@ -24,7 +24,9 @@ export const emeraldShower: AbilityDef = {
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + run.rng.fx.range(0, 0.6);
       const d = run.rng.fx.range(36, 58);
-      run.pickups.push(new Pickup('emerald', p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * 0.8, 1));
+      run.pickups.push(
+        new Pickup('emerald', p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * 0.8, 1),
+      );
     }
     const radius = RADIUS * run.mods.area;
     enemiesInCircle(run, p.x, p.y, radius, hits);

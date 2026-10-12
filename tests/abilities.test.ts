@@ -100,3 +100,156 @@ describe('casting', () => {
     expect(run.zones.some((z) => z.kind === 'poison' && z.friendly)).toBe(true);
   });
 });
+
+describe('sprite hero abilities', () => {
+  const heroRun = (hero: string, seed = 11): RunState => {
+    const run = new RunState(seed, 0, { ...defaultLoadout(), hero });
+    run.weapons = [];
+    run.player.maxHp = run.player.hp = 9000;
+    return run;
+  };
+  const castOk = (run: RunState, at = aim): void => {
+    const def = ABILITIES[run.abilityId ?? ''];
+    if (!def) throw new Error('no ability');
+    expect(castAbility(run, at)).toBe(true);
+    expect(run.ability.cd).toBeCloseTo(abilityCooldown(run, def));
+    expect(def.cooldown).toBeGreaterThanOrEqual(10);
+    expect(def.cooldown).toBeLessThanOrEqual(22);
+    expect(castAbility(run, at)).toBe(false);
+    expect(run.player.castT).toBeGreaterThan(0);
+  };
+  const hurtCount = (run: RunState, hp: number): number =>
+    run.enemies.filter((e) => e.hp < hp).length;
+
+  it("Wandering Trader's Emerald Shower drops Emeralds and stuns nearby enemies", () => {
+    const run = heroRun('wandering_trader');
+    crowd(run, 6, 40);
+    step(run, 0.05);
+    const before = run.pickups.filter((p) => p.kind === 'emerald').length;
+    castOk(run);
+    expect(run.pickups.filter((p) => p.kind === 'emerald').length).toBeGreaterThanOrEqual(
+      before + 4,
+    );
+    expect(run.enemies.every((e) => e.stunT > 0)).toBe(true);
+    expect(hurtCount(run, 200)).toBe(6);
+  });
+
+  it("Enderman's Blink teleports towards the cursor and pops at both ends", () => {
+    const run = heroRun('enderman');
+    crowd(run, 4, 20);
+    step(run, 0.05);
+    const x0 = run.player.x;
+    castOk(run, { x: 400, y: 0, moveX: 0, moveY: 0 });
+    expect(run.player.x).toBeGreaterThan(x0 + 100);
+    expect(run.player.x).toBeLessThanOrEqual(x0 + 151);
+    expect(Number.isNaN(run.player.prevX)).toBe(true);
+    expect(run.player.iframes).toBeGreaterThanOrEqual(0.4);
+    expect(hurtCount(run, 200)).toBeGreaterThan(0);
+  });
+
+  it("Witch's Brew lands a big lingering pool at the cursor", () => {
+    const run = heroRun('witch');
+    for (let i = 0; i < 5; i++) {
+      const e = makeEnemy(run, 'zombie', 0, 0, false);
+      if (!e) continue;
+      e.x = 90 + (i - 2) * 8;
+      e.y = 0;
+      e.maxHp = e.hp = 500;
+      e.speed = 0;
+      run.enemies.push(e);
+    }
+    castOk(run);
+    step(run, 1.6);
+    const pool = run.zones.find((z) => z.friendly && Math.abs(z.x - 90) < 2);
+    expect(pool).toBeDefined();
+    expect(pool?.r ?? 0).toBeGreaterThan(60); // 56 x Cauldron Craft 1.3
+    expect(hurtCount(run, 500)).toBeGreaterThan(2);
+  });
+
+  it("Piglin's Gold Rush raises damage, speed and Emerald drops, then wears off", () => {
+    const run = heroRun('piglin');
+    const dmg = run.mods.dmg;
+    const speed = run.mods.speed;
+    const drop = run.mods.emeraldDrop;
+    castOk(run);
+    expect(run.mods.dmg).toBeGreaterThan(dmg * 1.2);
+    expect(run.mods.speed).toBeGreaterThan(speed * 1.2);
+    expect(run.mods.emeraldDrop).toBeGreaterThan(drop);
+    step(run, 6.2);
+    expect(run.heroBuff).toBeNull();
+    expect(run.mods.dmg).toBeCloseTo(dmg);
+  });
+
+  it("Skeleton's Bone Barrage fires piercing arrows in every direction", () => {
+    const run = heroRun('skeleton');
+    crowd(run, 8, 60);
+    step(run, 0.05);
+    castOk(run);
+    const arrows = run.projectiles.filter((p) => p.friendly && p.style === 'arrow');
+    expect(arrows.length).toBeGreaterThanOrEqual(8);
+    expect(arrows.every((a) => a.pierce >= 2)).toBe(true);
+    step(run, 0.5);
+    expect(run.projectiles.filter((p) => p.style === 'arrow').length).toBeGreaterThan(0);
+    expect(hurtCount(run, 200)).toBeGreaterThanOrEqual(6);
+  });
+
+  it("Illusioner's Mirror Images lure chasers to decoys, then burst", () => {
+    const run = heroRun('illusioner');
+    castOk(run);
+    expect(run.decoys).toHaveLength(3);
+    const d = run.decoys[0];
+    if (!d) throw new Error('no decoy');
+    const e = makeEnemy(run, 'zombie', 0, 0, false);
+    if (!e) throw new Error('no zombie');
+    e.x = d.x + (d.x - run.player.x) * 1.5;
+    e.y = d.y + (d.y - run.player.y) * 1.5;
+    e.maxHp = e.hp = 500;
+    run.enemies.push(e);
+    const start = Math.hypot(e.x - d.x, e.y - d.y);
+    step(run, 1);
+    expect(Math.hypot(e.x - d.x, e.y - d.y)).toBeLessThan(start);
+    step(run, 5.5);
+    expect(run.decoys).toHaveLength(0);
+    expect(e.hp).toBeLessThan(500);
+  });
+
+  it("Village Smith's Anvil Drop slams, stuns and damages after the fall", () => {
+    const run = heroRun('village_smith');
+    for (let i = 0; i < 4; i++) {
+      const e = makeEnemy(run, 'zombie', 0, 0, false);
+      if (!e) continue;
+      e.x = 90 + (i - 2) * 10;
+      e.y = 4;
+      e.maxHp = e.hp = 500;
+      run.enemies.push(e);
+    }
+    castOk(run);
+    expect(run.fx.some((f) => f.kind === 'anvil')).toBe(true);
+    expect(hurtCount(run, 500)).toBe(0);
+    step(run, 0.4);
+    expect(hurtCount(run, 500)).toBe(4);
+    expect(run.enemies.every((e) => e.stunT > 0.8)).toBe(true);
+  });
+
+  it("Creeper's Charged Blast fuses, then blows enemies away without hurting him", () => {
+    const run = heroRun('creeper');
+    crowd(run, 6, 50);
+    const mine = { x: 30, y: 0, fuse: 9, area: 30, dmg: 1 };
+    run.mines.push(mine);
+    step(run, 0.05);
+    const hp = run.player.hp;
+    castOk(run);
+    expect(run.player.castT).toBeCloseTo(1.2);
+    step(run, 1.1);
+    expect(hurtCount(run, 200)).toBe(0);
+    expect(run.player.iframes).toBeGreaterThan(0);
+    const dist = (): number =>
+      run.enemies.reduce((s, e) => s + Math.hypot(e.x - run.player.x, e.y - run.player.y), 0);
+    const near = dist();
+    step(run, 0.25);
+    expect(hurtCount(run, 200)).toBe(6);
+    expect(dist()).toBeGreaterThan(near + 6 * 10);
+    expect(mine.fuse).toBeLessThan(1);
+    expect(run.player.hp).toBeGreaterThanOrEqual(hp - 1);
+  });
+});

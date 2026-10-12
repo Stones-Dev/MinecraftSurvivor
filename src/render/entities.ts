@@ -1,6 +1,7 @@
 /** Drawing of combat entities: enemies, hero, pickups, projectiles, mines, pools, orbiters, effects, telegraphs. */
 import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
+import { heroById, type HeroDef } from '../data/companions';
 import { ARMOR_IDS, SWORD_IDS } from '../data/tiers';
 import type { Ally, PetState } from '../entities/ally';
 import type { EnemyDef } from '../data/enemies';
@@ -10,6 +11,7 @@ import type { Pickup } from '../entities/pickup';
 import type { Player } from '../entities/player';
 import type { Projectile } from '../entities/projectile';
 import type { Mine, Orbiter, RunState, Telegraph, Zone } from '../game';
+import { AURA_RADIUS } from '../systems/allies';
 import { propStateOf } from '../systems/interact';
 import type { Npc } from '../systems/npcs';
 import type { Prop } from '../world/props';
@@ -164,6 +166,194 @@ export function drawEnemy(
   }
 }
 
+/** Sword swing length (weapons/sword.ts sets `swingT` to this). */
+const SWING_TIME = 0.33;
+/** Animation names tried for a sprite hero's attack (sword swing), in order. */
+const ATTACK_ANIMS = ['attack', 'firing', 'throw', 'magic', 'ram'] as const;
+const DEATH_ANIMS = ['death'] as const;
+const WALK_ANIMS = ['walk'] as const;
+const IDLE_ANIMS = ['idle', 'walk'] as const;
+/** Armor tier colours for the ring under sprite heroes (they keep their look; the ring shows the tier). */
+const ARMOR_RING = [
+  '#f2f2f2',
+  '#b07a48',
+  '#a8aeb8',
+  '#e8e8f0',
+  '#ffd84a',
+  '#6fe0e0',
+  '#6a5a6e',
+  '#c08bff',
+];
+const spriteAnimCache = new Map<string, Record<string, string | null>>();
+
+/** First animation `<base>.<name>` that exists among `names`, memoised per base and slot. */
+export function spriteHeroAnim(
+  atlas: Atlas,
+  base: string,
+  slot: string,
+  names: readonly string[],
+): string | null {
+  let m = spriteAnimCache.get(base);
+  if (!m) {
+    m = {};
+    spriteAnimCache.set(base, m);
+  }
+  const hit = m[slot];
+  if (hit !== undefined) return hit;
+  let found: string | null = null;
+  for (const n of names) {
+    if (atlas.hasAnim(`${base}.${n}`)) {
+      found = `${base}.${n}`;
+      break;
+    }
+  }
+  m[slot] = found;
+  return found;
+}
+
+/** Frame of a one-shot animation at `progress` 0..1, spread evenly over its first `limit` frames. */
+function frameAtProgress(
+  frames: readonly string[],
+  progress: number,
+  limit = frames.length,
+): string | undefined {
+  const n = Math.max(1, Math.min(frames.length, limit));
+  return frames[Math.max(0, Math.min(n - 1, Math.floor(progress * n)))];
+}
+
+/** Flat ellipse of pixels (the tier ring under sprite heroes). */
+function pixelEllipse(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+): void {
+  const steps = Math.max(12, Math.floor(rx * 3));
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    ctx.fillRect(Math.round(cx + Math.cos(a) * rx), Math.round(cy + Math.sin(a) * ry), 1, 1);
+  }
+}
+
+/** Villager-style 4-direction rows (down 0-3, up 4-7, side 8-11): base frame index and mirror for a direction. */
+function npcRow(dx: number, dy: number): { base: number; flip: boolean } {
+  const vertical = Math.abs(dy) > Math.abs(dx);
+  npcOut.base = vertical ? (dy > 0 ? 0 : 4) : 8;
+  npcOut.flip = !vertical && dx > 0;
+  return npcOut;
+}
+const npcOut = { base: 0, flip: false };
+
+/**
+ * A hero drawn from a mob / NPC sprite set: death, cast, attack (sword swings), walk (frames follow the
+ * distance walked) or idle. NPC sets pick their row from the last move direction; side-view mobs mirror with
+ * the hero's facing. Returns the drawn sprite height (for the overlays above it).
+ */
+export function drawSpriteHero(
+  ctx: CanvasRenderingContext2D,
+  atlas: Atlas,
+  run: RunState,
+  def: HeroDef,
+  x: number,
+  y: number,
+): number {
+  const p: Player = run.player;
+  const base = def.sprite;
+  const npc = base.startsWith('npc.');
+  const sc = def.scale ?? 1;
+  let key: string | undefined;
+  let flip = p.facing < 0;
+  let alpha = 1;
+  const row = npc ? npcRow(p.moveDX, p.moveDY) : null;
+  if (row) flip = row.flip;
+  const castId =
+    p.castT > 0 ? spriteHeroAnim(atlas, base, 'cast', def.castAnims ?? ATTACK_ANIMS) : null;
+  const attackId = p.swingT > 0 ? spriteHeroAnim(atlas, base, 'attack', ATTACK_ANIMS) : null;
+  if (p.dead) {
+    const deathId = spriteHeroAnim(atlas, base, 'death', DEATH_ANIMS);
+    if (deathId) {
+      key = frameAt(atlas.anim(deathId), run.deadT);
+      alpha = Math.max(0.35, 1 - run.deadT * 0.5);
+    } else alpha = Math.max(0, 0.7 - run.deadT * 0.6);
+  } else if (castId) {
+    key = frameAtProgress(
+      atlas.anim(castId).frames,
+      1 - p.castT / Math.max(0.01, p.castDur),
+      def.castFrames,
+    );
+  } else if (attackId) {
+    key = frameAtProgress(atlas.anim(attackId).frames, 1 - p.swingT / SWING_TIME);
+  } else if (p.moving) {
+    const walkId = spriteHeroAnim(atlas, base, 'walk', WALK_ANIMS);
+    if (walkId) {
+      const frames = atlas.anim(walkId).frames;
+      const step = Math.floor(p.walkPhase);
+      key =
+        row && frames.length >= 12 ? frames[row.base + (step & 3)] : frames[step % frames.length];
+    }
+  }
+  if (key === undefined) {
+    const idleId = spriteHeroAnim(atlas, base, 'idle', IDLE_ANIMS);
+    if (!idleId) return 0;
+    const anim = atlas.anim(idleId);
+    key = row && anim.frames.length >= 12 ? anim.frames[row.base] : frameAt(anim, run.time);
+    if (key === undefined) return 0;
+  }
+  // Tier ring at the feet: marks the hero among look-alike mobs and shows the armor tier.
+  if (!p.dead) {
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = ARMOR_RING[run.armorTier] ?? '#f2f2f2';
+    pixelEllipse(ctx, x, y + 1, 8 * sc, 3 * sc);
+  }
+  if (p.iframes > 0 && !p.dead && Math.floor(run.time * 20) % 2 === 0) alpha *= 0.65;
+  ctx.globalAlpha = alpha;
+  if (p.hurtT > 0) atlas.draw(ctx, `${key}@flash`, x, y, flip, sc);
+  else if (def.tint) atlas.drawTinted(ctx, key, x, y, flip, sc, def.tint);
+  else atlas.draw(ctx, key, x, y, flip, sc);
+  ctx.globalAlpha = 1;
+  return (atlas.frameSize(key)?.h ?? 32) * sc;
+}
+
+const DECOY_TINT = 'rgba(176,150,255,0.45)';
+
+/** Decoys (Illusioner): translucent violet copies of the hero (flickering as they fade), drawn under him. */
+function drawDecoys(
+  ctx: CanvasRenderingContext2D,
+  atlas: Atlas,
+  run: RunState,
+  def: HeroDef,
+  camX: number,
+  camY: number,
+): void {
+  const fake = `${def.sprite}_fake`;
+  const base = def.render === 'sprite' ? (atlas.hasAnim(`${fake}.idle`) ? fake : def.sprite) : '';
+  const id = base ? spriteHeroAnim(atlas, base, 'idle', IDLE_ANIMS) : null;
+  for (let i = 0; i < run.decoys.length; i++) {
+    const d = run.decoys[i];
+    if (!d) continue;
+    const left = d.dur - d.t;
+    ctx.globalAlpha = left < 1 && Math.floor(run.time * 12) % 2 === 0 ? 0.3 : 0.8;
+    const x = d.x - camX;
+    const y = d.y - camY;
+    if (id)
+      atlas.drawTinted(
+        ctx,
+        frameAt(atlas.anim(id), run.time + i * 0.37),
+        x,
+        y,
+        d.facing < 0,
+        def.scale ?? 1,
+        DECOY_TINT,
+      );
+    else {
+      ctx.fillStyle = '#9a7bff';
+      pixelRing(ctx, x, y - 10, 7, 0, Math.PI * 2, 1);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 export function drawHero(
   ctx: CanvasRenderingContext2D,
   atlas: Atlas,
@@ -172,27 +362,24 @@ export function drawHero(
   camY: number,
 ): void {
   const p: Player = run.player;
+  const def = heroById(run.loadout.hero);
+  if (run.decoys.length > 0) drawDecoys(ctx, atlas, run, def, camX, camY);
   const armor = ARMOR_IDS[run.armorTier] ?? 'none';
   const sword = SWORD_IDS[run.swordTier] ?? 'wood';
-  const swinging = p.swingT > 0;
-  const name = run.loadout.hero;
-  const id = `hero.${name}.${armor}.sword_${sword}.${swinging ? 'swing' : 'idle'}`;
-  const walking = p.moving && !swinging && !p.dead;
-  const t = swinging ? 0.33 - p.swingT : run.time * (walking ? 1.5 : 1);
-  const anim = atlas.hasAnim(id) ? atlas.anim(id) : atlas.anim(`hero.${name}.none.sword_wood.idle`);
-  let key = frameAt(anim, t);
-  if (p.hurtT > 0) key += '@flash';
-  if (p.dead) ctx.globalAlpha = 0.5;
-  else if (p.iframes > 0 && Math.floor(run.time * 20) % 2 === 0) ctx.globalAlpha = 0.65;
   const x = p.rx - camX;
   const y = p.ry - camY;
-  if (walking) {
-    // Distance-driven walk cycle: the legs shuffle +1, 0, -1, 0 px and the body rises on the passing step.
-    const stage = Math.floor(p.walkPhase) & 3;
-    const legDx = stage === 1 ? 1 : stage === 3 ? -1 : 0;
-    atlas.drawWalk(ctx, key, x, y, p.facing < 0, legDx, stage & 1);
-  } else atlas.draw(ctx, key, x, y, p.facing < 0);
-  ctx.globalAlpha = 1;
+  let height = 30;
+  if (def.render === 'sprite') height = drawSpriteHero(ctx, atlas, run, def, x, y);
+  else drawLayeredHero(ctx, atlas, run, def.hero, armor, sword, x, y);
+  if (run.heroBuff && run.time < run.heroBuff.until && !p.dead) {
+    // Gold Rush: gold flecks spiralling up the hero.
+    ctx.fillStyle = '#ffd84a';
+    for (let i = 0; i < 4; i++) {
+      const a = run.time * 5 + i * 1.6;
+      const h = (run.time * 30 + i * 9) % height;
+      ctx.fillRect(Math.round(x + Math.cos(a) * 8), Math.round(y - h), 1, 2);
+    }
+  }
   if (armor === 'enchanted' || sword === 'enchanted') {
     // Enchantment glint: a few purple sparkles drifting over the hero.
     for (let i = 0; i < 3; i++) {
@@ -207,8 +394,39 @@ export function drawHero(
     }
   }
   if (run.shield.has && run.shield.ready) {
-    drawIcon(ctx, 'shield', Math.round(x + p.facing * 9 - 6), Math.round(y - 20));
+    const sy = def.render === 'sprite' ? Math.max(20, Math.round(height * 0.6)) : 20;
+    drawIcon(ctx, 'shield', Math.round(x + p.facing * 9 - 6), Math.round(y - sy));
   }
+}
+
+/** Steve / Alex / Rana: the layered hero sheets, swapped by armor and sword tier. */
+function drawLayeredHero(
+  ctx: CanvasRenderingContext2D,
+  atlas: Atlas,
+  run: RunState,
+  name: string,
+  armor: string,
+  sword: string,
+  x: number,
+  y: number,
+): void {
+  const p: Player = run.player;
+  const swinging = p.swingT > 0;
+  const id = `hero.${name}.${armor}.sword_${sword}.${swinging ? 'swing' : 'idle'}`;
+  const walking = p.moving && !swinging && !p.dead;
+  const t = swinging ? SWING_TIME - p.swingT : run.time * (walking ? 1.5 : 1);
+  const anim = atlas.hasAnim(id) ? atlas.anim(id) : atlas.anim(`hero.${name}.none.sword_wood.idle`);
+  let key = frameAt(anim, t);
+  if (p.hurtT > 0) key += '@flash';
+  if (p.dead) ctx.globalAlpha = 0.5;
+  else if (p.iframes > 0 && Math.floor(run.time * 20) % 2 === 0) ctx.globalAlpha = 0.65;
+  if (walking) {
+    // Distance-driven walk cycle: the legs shuffle +1, 0, -1, 0 px and the body rises on the passing step.
+    const stage = Math.floor(p.walkPhase) & 3;
+    const legDx = stage === 1 ? 1 : stage === 3 ? -1 : 0;
+    atlas.drawWalk(ctx, key, x, y, p.facing < 0, legDx, stage & 1);
+  } else atlas.draw(ctx, key, x, y, p.facing < 0);
+  ctx.globalAlpha = 1;
 }
 
 export function drawPickup(
@@ -358,6 +576,16 @@ export function drawProjectile(
     case 'bubble':
       px(ctx, x - 2, y - 2, 5, 5, 'rgba(140,220,255,0.7)');
       px(ctx, x - 1, y - 1, 1, 1, '#ffffff');
+      break;
+    case 'seed':
+      px(ctx, x - 1, y - 1, 3, 2, '#1c1c14');
+      px(ctx, x - 1, y - 1, 1, 1, '#5a5a40');
+      break;
+    case 'soul':
+      px(ctx, x - 2, y - 2, 5, 5, 'rgba(70,220,230,0.45)');
+      px(ctx, x - 1, y - 1, 3, 3, '#5ff0f0');
+      px(ctx, x - dx * 4, y - dy * 4, 2, 2, 'rgba(95,240,240,0.5)');
+      px(ctx, x, y, 1, 1, '#e8ffff');
       break;
   }
 }
@@ -510,10 +738,33 @@ export function drawFx(ctx: CanvasRenderingContext2D, f: Fx, camX: number, camY:
     ctx.fillStyle = f.color;
     ctx.fillRect(Math.round(x), Math.round(y), 2, 2);
     ctx.globalAlpha = 1;
+  } else if (f.kind === 'anvil') {
+    // Falls from 70 px above the target, accelerating, and lands as the fx ends.
+    const ax = Math.round(x);
+    const ay = Math.round(y - 70 * (1 - k * k));
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(
+      ax - 6 + Math.round(3 * (1 - k)),
+      Math.round(y) - 1,
+      12 - Math.round(6 * (1 - k)),
+      2,
+    );
+    ctx.fillStyle = '#2a2a30';
+    ctx.fillRect(ax - 8, ay - 13, 16, 5);
+    ctx.fillRect(ax - 3, ay - 8, 6, 4);
+    ctx.fillRect(ax - 6, ay - 4, 12, 4);
+    ctx.fillStyle = '#5a5a66';
+    ctx.fillRect(ax - 7, ay - 12, 14, 3);
+    ctx.fillRect(ax - 2, ay - 8, 4, 4);
+    ctx.fillRect(ax - 5, ay - 3, 10, 2);
+    ctx.fillStyle = '#8a8a96';
+    ctx.fillRect(ax - 7, ay - 12, 14, 1);
   } else if (f.kind === 'bolt') {
     ctx.globalAlpha = k < 0.5 ? 1 : 1 - (k - 0.5) * 2;
-    for (const pass of [0, 1]) {
-      ctx.fillStyle = pass === 0 ? '#ffe27a' : '#ffffff';
+    // `a0 === 1` draws a single thin line in `color` (fishing lines); otherwise a two-tone lightning bolt.
+    const line = f.a0 === 1;
+    for (const pass of line ? [1] : [0, 1]) {
+      ctx.fillStyle = line ? f.color : pass === 0 ? '#ffe27a' : '#ffffff';
       const off = pass === 0 ? 1 : 0;
       for (let i = 0; i + 3 < f.pts.length; i += 2) {
         pixelLine(
@@ -556,7 +807,7 @@ export function drawTelegraph(
   const k = t.t / t.dur;
   const alpha = 0.35 + 0.35 * Math.abs(Math.sin(k * Math.PI * 4));
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = '#ff3b3b';
+  ctx.fillStyle = t.friendly ? '#7dd0ff' : '#ff3b3b';
   if (t.kind === 'line') {
     const dx = t.x2 - t.x;
     const dy = t.y2 - t.y;
@@ -688,12 +939,24 @@ export function drawPropExtra(
 }
 
 /** Pick the animation id for a companion sprite prefix, trying the usual action names in order. */
-function companionAnim(atlas: Atlas, sprite: string, moving: boolean): string | null {
-  const order = moving
-    ? ['walk', 'flying', 'jump', 'swim', 'idle']
-    : ['idle', 'walk', 'flying', 'jump', 'swim'];
+function companionAnim(
+  atlas: Atlas,
+  sprite: string,
+  moving: boolean,
+  hover = false,
+): string | null {
+  const order = hover
+    ? ['flying', 'swim', 'idle', 'walk', 'jump']
+    : moving
+      ? ['walk', 'flying', 'jump', 'swim', 'idle']
+      : ['idle', 'walk', 'flying', 'jump', 'swim'];
   for (const a of order) if (atlas.hasAnim(`${sprite}.${a}`)) return `${sprite}.${a}`;
   return null;
+}
+
+/** Animal-sheet sprites (`pet.*`) face left; ally and hero sheets face right. */
+function companionFlip(sprite: string, facing: number): boolean {
+  return sprite.startsWith('pet.') ? facing > 0 : facing < 0;
 }
 
 /** An ally: fades when downed, flashes when hurt, villagers use their 4-direction walk rows. */
@@ -705,34 +968,58 @@ export function drawAlly(
   camY: number,
   time: number,
 ): void {
-  const id = companionAnim(atlas, a.def.sprite, a.moving);
+  const role = a.def.role;
+  // Ground marks drawn under the ally: the Shepherd's wool decoy and the Furnace Golem's heat.
+  if (role === 'shepherd' && a.decoy.t > 0 && !a.downed) {
+    const dx = Math.round(a.decoy.x - camX);
+    const dy = Math.round(a.decoy.y - camY);
+    if (a.decoy.t > 1 || Math.floor(time * 8) % 2 === 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(dx - 6, dy - 1, 12, 3);
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(dx - 5, dy - 9, 10, 9);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(dx - 5, dy - 9, 10, 2);
+      ctx.fillStyle = '#c8c8d0';
+      ctx.fillRect(dx - 5, dy - 2, 10, 2);
+      ctx.fillRect(dx - 2, dy - 6, 2, 2);
+    }
+  }
+  if (role === 'furnace_golem' && !a.downed) {
+    ctx.fillStyle = `rgba(255,120,30,${(0.1 + 0.05 * Math.sin(time * 6)).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.ellipse(a.rx - camX, a.ry - camY + 2, AURA_RADIUS, AURA_RADIUS * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // The Goat lowers its horns while winding up and charging.
+  const ram = role === 'goat' && a.phase > 0 && atlas.hasAnim(`${a.def.sprite}.ram`);
+  const id = ram ? `${a.def.sprite}.ram` : companionAnim(atlas, a.def.sprite, a.moving);
   if (!id) return;
   const anim = atlas.anim(id);
   const x = a.rx - camX;
   const y = a.ry - camY + 4;
+  const sc = a.def.scale ?? 1;
   if (a.downed) ctx.globalAlpha = 0.35 + 0.1 * Math.sin(time * 6);
+  let key: string | undefined;
   if (a.def.sprite.startsWith('npc.') && id.endsWith('.walk')) {
     const f = Math.floor(time * 6) % 4;
     const vertical = Math.abs(a.dy) > Math.abs(a.dx);
     const base = vertical ? (a.dy > 0 ? 0 : 4) : 8;
-    const key = anim.frames[base + (a.moving ? f : 0)] ?? anim.frames[0];
-    if (key) atlas.draw(ctx, key, x, y, !vertical && a.dx > 0);
+    key = anim.frames[base + (a.moving ? f : 0)] ?? anim.frames[0];
+    if (key) atlas.draw(ctx, key, x, y, !vertical && a.dx > 0, sc);
   } else {
-    atlas.draw(
-      ctx,
-      frameAt(anim, time + a.slot),
-      x,
-      y,
-      a.facing < 0 && !a.def.sprite.startsWith('pet.'),
-    );
+    key = frameAt(anim, time + a.slot);
+    atlas.draw(ctx, key, x, y, companionFlip(a.def.sprite, a.facing), sc);
   }
   ctx.globalAlpha = 1;
+  // Health bar just above the head (tall golems included).
+  const h = key ? Math.min(64, Math.max(18, (atlas.frameSize(key)?.h ?? 18) * sc)) : 18;
   if (!a.downed && a.hp < a.maxHp) {
     const w = 14;
     ctx.fillStyle = '#101014';
-    ctx.fillRect(Math.round(x - w / 2) - 1, Math.round(y) - 22, w + 2, 4);
+    ctx.fillRect(Math.round(x - w / 2) - 1, Math.round(y - h) - 4, w + 2, 4);
     ctx.fillStyle = '#4ac04a';
-    ctx.fillRect(Math.round(x - w / 2), Math.round(y) - 21, Math.round((w * a.hp) / a.maxHp), 2);
+    ctx.fillRect(Math.round(x - w / 2), Math.round(y - h) - 3, Math.round((w * a.hp) / a.maxHp), 2);
   }
   if (a.hurtT > 0) {
     ctx.fillStyle = 'rgba(255,60,60,0.25)';
@@ -740,7 +1027,7 @@ export function drawAlly(
   }
 }
 
-/** The pet: flies/hops/walks after the hero, mirrored by its facing. */
+/** The pet: flies/hops/walks after the hero, mirrored by its facing; hovering pets bob in the air. */
 export function drawPet(
   ctx: CanvasRenderingContext2D,
   atlas: Atlas,
@@ -749,9 +1036,23 @@ export function drawPet(
   camY: number,
   time: number,
 ): void {
-  const id = companionAnim(atlas, p.def.sprite, p.moving);
+  const hover = p.def.hover === true;
+  const id = companionAnim(atlas, p.def.sprite, p.moving, hover);
   if (!id) return;
-  const flying = id.endsWith('.flying') || p.def.id === 'parrot' || p.def.id === 'bee';
+  const flying = hover || id.endsWith('.flying') || p.def.id === 'parrot' || p.def.id === 'bee';
   const bob = flying ? Math.sin(time * 5 + p.t) * 2 - 6 : 0;
-  atlas.draw(ctx, frameAt(atlas.anim(id), time), p.rx - camX, p.ry - camY + 4 + bob, p.facing < 0);
+  const x = p.rx - camX;
+  const y = p.ry - camY + 4;
+  if (flying) {
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(Math.round(x) - 4, Math.round(y) - 1, 8, 2);
+  }
+  atlas.draw(
+    ctx,
+    frameAt(atlas.anim(id), time),
+    x,
+    y + bob,
+    companionFlip(p.def.sprite, p.facing),
+    p.def.scale ?? 1,
+  );
 }

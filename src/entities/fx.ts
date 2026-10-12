@@ -8,7 +8,7 @@ export interface Fx {
   y: number;
   t: number;
   life: number;
-  /** arc: start/end angle; ring: unused. */
+  /** arc: start/end angle; ring: unused; bolt: a0 = 1 draws a plain line in `color`. */
   a0: number;
   a1: number;
   /** arc/ring radius (ring grows from 0 to r). */

@@ -10,7 +10,14 @@ import type {
   RemoteSave,
 } from './backend';
 import { CloudError } from './errors';
-import { compareEntries, isBetterEntry, validBoardId, RUN_TIME_SLACK_SEC } from './leaderboardCore';
+import {
+  compareEntries,
+  isBetterEntry,
+  MAX_KILLS_PER_SEC,
+  MAX_RUN_SEC,
+  RUN_TIME_SLACK_SEC,
+  validBoardId,
+} from './leaderboard';
 import { nicknameError, normalizeNick } from './validate';
 
 /**
@@ -282,7 +289,11 @@ export class MemoryBackend implements CloudBackend {
       this.requireOwner(uid);
       const lower = normalizeNick(profile.nick);
       if (this.server.state.names[lower] !== uid) throw new CloudError('permission');
-      this.server.state.profiles[uid] = { nick: profile.nick.trim(), lower, avatar: profile.avatar };
+      this.server.state.profiles[uid] = {
+        nick: profile.nick.trim(),
+        lower,
+        avatar: profile.avatar,
+      };
     });
   }
 
@@ -297,7 +308,14 @@ export class MemoryBackend implements CloudBackend {
     submit: (board: string, entry: LeaderboardSubmission) =>
       this.call(() => {
         this.requireOwner(entry.uid);
-        if (!validBoardId(board)) throw new CloudError('permission');
+        const sane =
+          Number.isInteger(entry.timeSec) &&
+          Number.isInteger(entry.kills) &&
+          entry.timeSec > 0 &&
+          entry.timeSec <= MAX_RUN_SEC &&
+          entry.kills >= 0 &&
+          entry.kills <= 100 + entry.timeSec * MAX_KILLS_PER_SEC;
+        if (!validBoardId(board) || !sane) throw new CloudError('permission');
         const now = this.server.time();
         // Mirrors the rules: a time cannot exceed the real time since the run started (+ slack),
         // and the nickname must be the player's claimed one.

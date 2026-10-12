@@ -32,7 +32,10 @@ export const RANK_COOLDOWN = 0.04;
 
 /** Ability rank 1..5 from the hero's shards: 1 + floor(shards / 5), capped. */
 export function abilityRank(shards: number): number {
-  return Math.max(1, Math.min(MAX_ABILITY_RANK, 1 + Math.floor(Math.max(0, shards) / SHARDS_PER_RANK)));
+  return Math.max(
+    1,
+    Math.min(MAX_ABILITY_RANK, 1 + Math.floor(Math.max(0, shards) / SHARDS_PER_RANK)),
+  );
 }
 
 export function defaultLoadout(): RunLoadout {

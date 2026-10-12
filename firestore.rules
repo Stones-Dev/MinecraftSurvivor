@@ -1,0 +1,127 @@
+rules_version = '2';
+
+// MineSurvive security rules (least privilege; see docs/FIREBASE_SETUP.md, "Security rules").
+//   saves/{uid}          the player's save: owner only, revision must grow by exactly 1
+//   names/{lower}        unique nickname claims (lowercase id), created together with the profile
+//   profiles/{uid}       public nickname + avatar, readable by signed-in players
+//   runs/{uid}           server time at which the player's current run started (anti-cheat)
+//   lb/{board}/e/{uid}   leaderboard entry: one per player and board, only ever improved
+// Everything else is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function isOwner(uid) { return signedIn() && me() == uid; }
+    function path(p) { return /databases/$(database)/documents/$(p); }
+    function validNick(lower) { return lower is string && lower.matches('^[a-z0-9_]{3,16}$'); }
+
+    // ---------- saves ----------
+
+    function validSave() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['save', 'updatedAt', 'v'])
+        && d.keys().hasAll(['save', 'updatedAt', 'v'])
+        && d.save is map
+        && d.save.size() <= 40
+        && d.save.saveVersion is int
+        && d.v is int
+        && d.updatedAt == request.time;
+    }
+
+    match /saves/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create: if isOwner(uid) && validSave() && request.resource.data.v == 1;
+      // Optimistic concurrency: a write must be based on the current revision.
+      allow update: if isOwner(uid) && validSave() && request.resource.data.v == resource.data.v + 1;
+    }
+
+    // ---------- nicknames and profiles ----------
+
+    match /names/{lower} {
+      // Anyone may check a single nickname (sign-up form); nobody may list them.
+      allow get: if true;
+      allow list: if false;
+      // A claim is created in the same write as the profile that uses it, so one player holds
+      // exactly one nickname and cannot squat others.
+      allow create: if signedIn()
+        && validNick(lower)
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == me()
+        && getAfter(path('profiles/' + me())).data.lower == lower;
+      // Released only by its holder, and only when the profile moves to another nickname.
+      allow delete: if signedIn()
+        && resource.data.uid == me()
+        && (!existsAfter(path('profiles/' + me()))
+            || getAfter(path('profiles/' + me())).data.lower != lower);
+      allow update: if false;
+    }
+
+    match /profiles/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['nick', 'lower', 'avatar', 'at'])
+        && request.resource.data.keys().hasAll(['nick', 'lower', 'avatar', 'at'])
+        && request.resource.data.nick is string
+        && validNick(request.resource.data.lower)
+        && request.resource.data.nick.lower() == request.resource.data.lower
+        && request.resource.data.avatar is string
+        && request.resource.data.avatar.size() <= 32
+        && request.resource.data.at == request.time
+        && getAfter(path('names/' + request.resource.data.lower)).data.uid == me()
+        // Renaming must release the old claim in the same write.
+        && (resource == null
+            || resource.data.lower == request.resource.data.lower
+            || !existsAfter(path('names/' + resource.data.lower)));
+      allow delete: if isOwner(uid);
+    }
+
+    // ---------- leaderboards ----------
+
+    match /runs/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['startedAt'])
+        && request.resource.data.startedAt == request.time;
+    }
+
+    function validBoard(board) {
+      return board.matches('^time_(all|week_[0-9]{4}-W[0-9]{2}|day_[0-9]{4}-[0-9]{2}-[0-9]{2})$');
+    }
+
+    // A time can never exceed the real time elapsed since the run started (+5 s slack), kills must
+    // be plausible for that time, and the nickname must be the player's claimed one.
+    function validEntry(uid) {
+      let d = request.resource.data;
+      let run = get(path('runs/' + me())).data;
+      let prof = get(path('profiles/' + me())).data;
+      return d.keys().hasOnly(['uid', 'nick', 'avatar', 'hero', 'timeSec', 'kills', 'at'])
+        && d.keys().hasAll(['uid', 'nick', 'avatar', 'hero', 'timeSec', 'kills', 'at'])
+        && d.uid == uid
+        && d.nick == prof.nick
+        && d.avatar is string && d.avatar.size() <= 32
+        && d.hero is string && d.hero.size() > 0 && d.hero.size() <= 32
+        && d.timeSec is int && d.timeSec > 0 && d.timeSec <= 7200
+        && d.timeSec <= (request.time - run.startedAt).seconds() + 5
+        && d.kills is int && d.kills >= 0 && d.kills <= 100 + d.timeSec * 30
+        && d.at == request.time;
+    }
+
+    function improves() {
+      let d = request.resource.data;
+      let o = resource.data;
+      return d.timeSec > o.timeSec || (d.timeSec == o.timeSec && d.kills > o.kills);
+    }
+
+    match /lb/{board}/e/{uid} {
+      allow read: if signedIn();
+      allow create: if isOwner(uid) && validBoard(board) && validEntry(uid);
+      allow update: if isOwner(uid) && validBoard(board) && validEntry(uid) && improves();
+      allow delete: if isOwner(uid);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

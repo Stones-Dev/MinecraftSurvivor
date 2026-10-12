@@ -84,9 +84,7 @@ const FIREBASE_CODES: Record<string, CloudErrorCode> = {
 export function toCloudError(e: unknown): CloudError {
   if (e instanceof CloudError) return e;
   const code =
-    typeof e === 'object' && e !== null && 'code' in e && typeof e.code === 'string'
-      ? e.code
-      : '';
+    typeof e === 'object' && e !== null && 'code' in e && typeof e.code === 'string' ? e.code : '';
   const mapped = FIREBASE_CODES[code.replace(/^firestore\//, '')];
   if (mapped) return new CloudError(mapped);
   // Offline browsers often surface fetch failures as TypeErrors.
@@ -108,7 +106,8 @@ const MESSAGES: Record<CloudErrorCode, string> = {
   'email-in-use': 'An account already exists with this email. Sign in instead.',
   'weak-password': 'Use a password with at least 6 characters.',
   'too-many-requests': 'Too many attempts. Wait a moment and try again.',
-  'unauthorized-domain': 'This site is not authorized for sign-in yet (Firebase authorized domains).',
+  'unauthorized-domain':
+    'This site is not authorized for sign-in yet (Firebase authorized domains).',
   'provider-disabled': 'This sign-in method is not enabled for this game yet.',
   'nickname-taken': 'That nickname is taken. Try another one.',
   'invalid-nickname': 'Nicknames use 3-16 letters, digits or _.',

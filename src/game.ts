@@ -60,6 +60,8 @@ export interface Telegraph {
   r: number;
   t: number;
   dur: number;
+  /** Drawn in blue: an ally's attack about to land (enemy telegraphs are red). */
+  friendly?: boolean;
 }
 
 /** A damage pool on the ground (lingering potions, lava trail, poison clouds, frost). */
@@ -594,7 +596,7 @@ export class RunState {
   /** The hero kit's per-step hook and the Turtle's shield that refills while standing still. */
   private updateHeroPassives(dt: number): void {
     const p = this.player;
-    if (!p.dead) this.kit.tick?.(this, dt);
+    this.kit.tick?.(this, dt);
     if (this.mods.turtleShield > 0 && !p.dead) {
       this.stillT = p.moving ? 0 : this.stillT + dt;
       if (this.stillT >= 2 && this.absorb < this.mods.turtleShield) {

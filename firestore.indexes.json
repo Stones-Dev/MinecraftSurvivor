@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "e",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hero", "order": "ASCENDING" },
+        { "fieldPath": "timeSec", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

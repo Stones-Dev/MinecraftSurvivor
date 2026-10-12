@@ -33,7 +33,8 @@ export const blink: AbilityDef = {
   name: 'Blink',
   icon: 'pearl',
   cooldown: 10,
-  blurb: 'Teleport up to 150 px towards the cursor; both ends burst for damage and you are untouchable briefly.',
+  blurb:
+    'Teleport up to 150 px towards the cursor; both ends burst for damage and you are untouchable briefly.',
   cast(run, aim) {
     const p = run.player;
     const dir = aimDirection(run, aim);

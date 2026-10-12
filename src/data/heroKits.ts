@@ -28,7 +28,7 @@ export interface HeroKit {
   maxSlimeSplit?: number;
   /** One-time run-start effects (starting weapons, items, tiers); runs before the allies' start effects. */
   onStart?(run: RunState): void;
-  /** Every simulation step while the run is going. */
+  /** Every simulation step (also after death, like the other passives). */
   tick?(run: RunState, dt: number): void;
   /** A direct (non damage-over-time) hit of `dmg` landed on `e`. */
   onHitEnemy?(run: RunState, e: Enemy, dmg: number): void;
@@ -143,7 +143,9 @@ export const HERO_KITS: Record<string, HeroKit> = {
         p.snap();
         p.iframes = Math.max(p.iframes, 0.5);
         run.fx.push(makeFx('ring', p.x, p.y - 12, 0.3, { r: 14, color: '#b06bff' }));
-        run.fx.push(makeFx('text', p.x, p.y - 30, 0.6, { text: 'Blink', vy: -16, color: '#d9a6ff' }));
+        run.fx.push(
+          makeFx('text', p.x, p.y - 30, 0.6, { text: 'Blink', vy: -16, color: '#d9a6ff' }),
+        );
         return 0;
       }
       return run.world.surface(p.x, p.y, run.biome()) === 'water' ? raw * WATER_DAMAGE : raw;

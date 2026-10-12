@@ -72,6 +72,8 @@ export interface Biome {
   lake: number;
   /** Width of the sand bank around lakes (in lake-noise units). */
   bank: number;
+  /** Small-pond noise threshold (lower = more ponds); >= 1 means none. Swamps are dotted with them. */
+  puddles: number;
   /** Lava pool noise threshold (lower = more lava); >= 1 means the biome has no lava. */
   lavaLevel: number;
   /** Water is frozen into slippery ice. */
@@ -133,6 +135,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0.3,
     lake: 0,
     bank: 0.035,
+    puddles: 1,
     lavaLevel: 1,
     iceWater: false,
     lava: false,
@@ -177,6 +180,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0.35,
     lake: 0.02,
     bank: 0.03,
+    puddles: 1,
     lavaLevel: 1,
     iceWater: false,
     lava: false,
@@ -227,6 +231,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0.15,
     lake: 0.03,
     bank: 0.03,
+    puddles: 1,
     lavaLevel: 1,
     iceWater: false,
     lava: false,
@@ -277,6 +282,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0,
     lake: 0,
     bank: 0.03,
+    puddles: 1,
     lavaLevel: 1,
     iceWater: true,
     lava: false,
@@ -324,6 +330,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0,
     lake: 0.08, // rare oases
     bank: 0.07,
+    puddles: 1,
     lavaLevel: 0.8,
     iceWater: false,
     lava: true,
@@ -372,8 +379,9 @@ export const BIOMES: Record<BiomeId, Biome> = {
     cactusBase: 0,
     boulderBonus: 0,
     flowers: 0.12,
-    lake: -0.12,
+    lake: -0.07,
     bank: 0.015,
+    puddles: 0.64,
     lavaLevel: 1,
     iceWater: false,
     lava: false,
@@ -421,6 +429,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0.25,
     lake: -0.03,
     bank: 0.025,
+    puddles: 0.82,
     lavaLevel: 1,
     iceWater: false,
     lava: false,
@@ -471,7 +480,8 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0,
     lake: 1, // no lakes, only lava
     bank: 0,
-    lavaLevel: 0.76,
+    puddles: 1,
+    lavaLevel: 0.785,
     iceWater: false,
     lava: true,
     snow: false,
@@ -514,6 +524,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0.6,
     lake: -0.02,
     bank: 0.03,
+    puddles: 1,
     lavaLevel: 1,
     iceWater: false,
     lava: false,
@@ -564,6 +575,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0.5,
     lake: -0.04,
     bank: 0.03,
+    puddles: 0.8,
     lavaLevel: 1,
     iceWater: false,
     lava: false,
@@ -609,6 +621,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     flowers: 0,
     lake: 1,
     bank: 0,
+    puddles: 1,
     lavaLevel: 1,
     iceWater: false,
     lava: true,

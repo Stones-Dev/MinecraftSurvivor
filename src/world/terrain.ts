@@ -1,5 +1,5 @@
 /** Pure terrain generation: every tile is a stateless function of (x, y, seed). */
-import { fbm } from '../core/noise';
+import { fbm, valueNoise } from '../core/noise';
 import { biomeIndexAtTile } from './biomeMap';
 import { BIOME_IDS, BIOMES } from './biomes';
 
@@ -26,6 +26,7 @@ function clamp01(v: number): number {
 const LAKE = Float32Array.from(BIOME_IDS, (b) => BIOMES[b].lake);
 const BANK = Float32Array.from(BIOME_IDS, (b) => BIOMES[b].bank);
 const LAVA_LEVEL = Float32Array.from(BIOME_IDS, (b) => BIOMES[b].lavaLevel);
+const PUDDLES = Float32Array.from(BIOME_IDS, (b) => BIOMES[b].puddles);
 const HAS_LAVA = Uint8Array.from(BIOME_IDS, (b) => (BIOMES[b].lava ? 1 : 0));
 
 /** Spacing (tiles) of the grid the terrain parameters are blended over, so lakes bend across borders. */
@@ -67,17 +68,31 @@ export function tileAt(tx: number, ty: number, seed: number, arena?: Arena): Til
     (BANK[a] ?? 0) * wa + (BANK[b] ?? 0) * wb + (BANK[c] ?? 0) * wc + (BANK[e] ?? 0) * we;
 
   const ramp = clamp01((d - SPAWN_CLEAR) / 8);
-  const lake = fbm(tx * 0.045 + 100, ty * 0.045 - 50, seed + 101);
+  // Lake field with a small domain warp (value noise alone leaves straight, grid-aligned shores).
+  const lwx = tx + (valueNoise(tx * 0.07 + 7.3, ty * 0.07 - 3.1, seed + 131) - 0.5) * 12;
+  const lwy = ty + (valueNoise(tx * 0.07 - 11.7, ty * 0.07 + 5.9, seed + 137) - 0.5) * 12;
+  const lake = fbm(lwx * 0.045 + 100, lwy * 0.045 - 50, seed + 101);
   const water = 0.66 + lakeOff + (1 - ramp) * 0.4;
   if (lake > water) return TILE.WATER;
   if (lake > water - bank) return TILE.SAND;
+  // Small ponds (swamps, jungles, mushroom islands): a finer field, only where some biome nearby wants it.
+  const pond =
+    (PUDDLES[a] ?? 1) * wa +
+    (PUDDLES[b] ?? 1) * wb +
+    (PUDDLES[c] ?? 1) * wc +
+    (PUDDLES[e] ?? 1) * we;
+  if (pond < 1 && ramp >= 1) {
+    const p = fbm(tx * 0.13 - 300, ty * 0.13 + 200, seed + 211);
+    if (p > pond) return TILE.WATER;
+    if (p > pond - bank * 0.5) return TILE.SAND;
+  }
   if (d > 16 && HAS_LAVA[biomeIndexAtTile(tx, ty, seed)] === 1) {
     const level =
       (LAVA_LEVEL[a] ?? 1) * wa +
       (LAVA_LEVEL[b] ?? 1) * wb +
       (LAVA_LEVEL[c] ?? 1) * wc +
       (LAVA_LEVEL[e] ?? 1) * we;
-    if (fbm(tx * 0.07 + 500, ty * 0.07 - 300, seed + 777) > level) return TILE.LAVA;
+    if (fbm(lwx * 0.07 + 500, lwy * 0.07 - 300, seed + 777) > level) return TILE.LAVA;
   }
   return TILE.GRASS;
 }

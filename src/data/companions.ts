@@ -119,6 +119,8 @@ export interface HeroDef extends CompanionBase {
   tint?: string;
   /** Sprite heroes: animation played while the ability is being cast (first one that exists wins). */
   castAnims?: readonly string[];
+  /** Only the first N frames of the cast animation are used (the creeper's later frames are the blast puff). */
+  castFrames?: number;
 }
 
 export interface PetDef extends CompanionBase {
@@ -238,7 +240,8 @@ export const HEROES: HeroDef[] = [
     dmg: 0.95,
     speed: 1,
     passiveName: 'Haggler',
-    passive: '+25% Emerald payout and +25% Emeralds from chests. Starts the run with a random item.',
+    passive:
+      '+25% Emerald payout and +25% Emeralds from chests. Starts the run with a random item.',
     castAnims: ['trading', 'talk'],
     quip: 'Sells you a bucket of fish for twelve emeralds. Somehow you say yes.',
   },
@@ -306,7 +309,8 @@ export const HEROES: HeroDef[] = [
     dmg: 1,
     speed: 1,
     passiveName: 'Sleight of Hand',
-    passive: '+10% speed. 20% of the hits you take leave a decoy behind that lures enemies for 1.5 s.',
+    passive:
+      '+10% speed. 20% of the hits you take leave a decoy behind that lures enemies for 1.5 s.',
     castAnims: ['magic', 'firing'],
     quip: 'There are four of him. None of them did the dishes.',
   },
@@ -344,6 +348,7 @@ export const HEROES: HeroDef[] = [
     passiveName: 'Short Fuse',
     passive: 'Explosion damage taken -50%. 10% of his hits set off a mini explosion.',
     castAnims: ['explode'],
+    castFrames: 5,
     quip: 'Finally found a hug that lasts. Everyone else keeps running away.',
   },
 ];

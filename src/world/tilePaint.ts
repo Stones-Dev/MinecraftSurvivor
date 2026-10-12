@@ -17,12 +17,16 @@ const PAL_SAND = 6; // base, dark
 const PAL_WATER = 8; // base, light, dark, foam
 const PALETTES = new Uint32Array(BIOME_IDS.length * PAL_STRIDE);
 const DIRT_THRESHOLD = new Float32Array(BIOME_IDS.length);
+const ICE = Uint8Array.from(BIOME_IDS, (id) => (BIOMES[id].iceWater ? 1 : 0));
 BIOME_IDS.forEach((id, i) => {
   const b = BIOMES[id];
   const cols = [...b.grass, ...b.dirt, ...b.sand, ...b.water];
   cols.forEach((c, k) => (PALETTES[i * PAL_STRIDE + k] = pack(c)));
   DIRT_THRESHOLD[i] = b.dirtThreshold;
 });
+
+/** Scratch: the chunk's dirt/grass noise field on a 2 px grid (reused by every bake). */
+const FIELD = new Float32Array((CHUNK_PX >> 1) * (CHUNK_PX >> 1));
 
 /** How far (art px) the biome lookup of a ground pixel is jittered: the width of a soft border. */
 const BORDER_WARP = 44;
@@ -86,6 +90,11 @@ export function paintChunk(
   };
   const at = (tx: number, ty: number): number => terrain[(ty + 1) * side + tx + 1] ?? TILE.GRASS;
   const reach = Math.ceil((BORDER_WARP + BORDER_GRAIN) / 2 / TILE_PX);
+  // The dirt/grass field is smooth at a 10 px scale: sample it on a 2 px grid once per chunk.
+  const half = CHUNK_PX >> 1;
+  for (let y = 0; y < half; y++)
+    for (let x = 0; x < half; x++)
+      FIELD[y * half + x] = noiseAt(lat, cx * CHUNK_PX + x * 2 + 1, cy * CHUNK_PX + y * 2 + 1);
   const warpX = new Float32Array(16);
   const warpY = new Float32Array(16);
   const minT = -BIOME_BORDER;
@@ -125,7 +134,7 @@ export function paintChunk(
           warpY[k] = (noiseAt(latWy, X, Y) - 0.5) * BORDER_WARP;
         }
       }
-      const iceWater = BIOMES[BIOME_IDS[own] ?? 'plains'].iceWater;
+      const iceWater = ICE[own] === 1;
       const wBase = PALETTES[ownPal + PAL_WATER] ?? 0;
       const wLight = PALETTES[ownPal + PAL_WATER + 1] ?? 0;
       const wDark = PALETTES[ownPal + PAL_WATER + 2] ?? 0;
@@ -142,8 +151,6 @@ export function paintChunk(
         for (let lx = 0; lx < TILE_PX; lx++) {
           const px = tx * TILE_PX + lx;
           const py = ty * TILE_PX + ly;
-          const X = cx * CHUNK_PX + px;
-          const Y = cy * CHUNK_PX + py;
           const j = (NOISE[(((py + oy) & 255) << 8) | ((px + ox) & 255)] ?? 0) / 256;
           let c: number;
           if (t === TILE.WALL) {
@@ -164,6 +171,34 @@ export function paintChunk(
             else if (j < 0.22) c = lDark;
             else c = lBase;
           } else if (t === TILE.WATER) {
+            // Near a border, open water takes the palette of a warped neighbour (like the ground) as
+            // long as both agree on frozen or not, so ice always matches the tile's own biome.
+            let wb = wBase;
+            let wl = wLight;
+            let wd = wDark;
+            let wf = wFoam;
+            if (mixed && !iceWater) {
+              const sub = (ly >> 2) * 4 + (lx >> 2);
+              const sx = Math.max(
+                minT,
+                Math.min(
+                  maxT,
+                  Math.floor((px + (warpX[sub] ?? 0) + (j - 0.5) * BORDER_GRAIN) / TILE_PX),
+                ),
+              );
+              const sy = Math.max(
+                minT,
+                Math.min(maxT, Math.floor((py + (warpY[sub] ?? 0)) / TILE_PX)),
+              );
+              const wbi = biomeAt(sx, sy);
+              if (ICE[wbi] === 0) {
+                const o = wbi * PAL_STRIDE + PAL_WATER;
+                wb = PALETTES[o] ?? wBase;
+                wl = PALETTES[o + 1] ?? wLight;
+                wd = PALETTES[o + 2] ?? wDark;
+                wf = PALETTES[o + 3] ?? wFoam;
+              }
+            }
             const dist = Math.min(
               openL ? lx : 99,
               openR ? TILE_PX - 1 - lx : 99,
@@ -172,18 +207,17 @@ export function paintChunk(
             );
             if (iceWater) {
               // Frozen water: pale ice with thin cracks.
-              if (dist === 0) c = wFoam;
-              else if ((px + py * 2 + ox) % 29 === 0 || (px * 2 - py + oy + 512) % 31 === 0)
-                c = wDark;
-              else c = j < 0.18 ? wLight : wBase;
-            } else if (dist === 0) c = wFoam;
-            else if (dist < 3) c = j < 0.5 ? wLight : wBase;
+              if (dist === 0) c = wf;
+              else if ((px + py * 2 + ox) % 29 === 0 || (px * 2 - py + oy + 512) % 31 === 0) c = wd;
+              else c = j < 0.18 ? wl : wb;
+            } else if (dist === 0) c = wf;
+            else if (dist < 3) c = j < 0.5 ? wl : wb;
             else if (
               (NOISE[(((py + oy + 91) & 255) << 8) | (((px >> 2) + ox + 17) & 255)] ?? 255) < 13
             )
-              c = wLight;
-            else if (j < 0.05) c = wDark;
-            else c = wBase;
+              c = wl;
+            else if (j < 0.05) c = wd;
+            else c = wb;
           } else {
             // Ground: the biome is looked up at a warped position near borders (soft, dithered edge).
             let pal = ownPal;
@@ -201,7 +235,7 @@ export function paintChunk(
             if (t === TILE.SAND) {
               c = (j < 0.2 ? PALETTES[pal + PAL_SAND + 1] : PALETTES[pal + PAL_SAND]) ?? 0;
             } else {
-              const n = noiseAt(lat, X, Y);
+              const n = FIELD[(py >> 1) * half + (px >> 1)] ?? 0;
               if (n + (j - 0.5) * 0.14 > (DIRT_THRESHOLD[bi] ?? 1)) {
                 c = PALETTES[pal + PAL_DIRT + (j < 0.1 ? 1 : j < 0.3 ? 2 : 0)] ?? 0;
               } else {

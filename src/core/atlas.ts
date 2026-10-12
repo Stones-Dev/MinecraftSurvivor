@@ -94,6 +94,50 @@ export class Atlas {
     }
   }
 
+  private readonly tintCache = new Map<string, Map<string, HTMLCanvasElement>>();
+
+  /**
+   * Like `draw`, with `color` (css, use a low alpha) washed over the frame's opaque pixels. The tinted copy of
+   * each frame is built once and cached per colour.
+   */
+  drawTinted(
+    ctx: CanvasRenderingContext2D,
+    key: string,
+    x: number,
+    y: number,
+    flip: boolean,
+    scale: number,
+    color: string,
+  ): void {
+    const f = this.data.frames[key];
+    const page = f ? this.pages[f.page] : undefined;
+    if (!f || !page) return;
+    let byKey = this.tintCache.get(color);
+    if (!byKey) {
+      byKey = new Map();
+      this.tintCache.set(color, byKey);
+    }
+    let c = byKey.get(key);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = f.w;
+      c.height = f.h;
+      const g = c.getContext('2d');
+      if (g) {
+        g.drawImage(page, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+        g.globalCompositeOperation = 'source-atop';
+        g.fillStyle = color;
+        g.fillRect(0, 0, f.w, f.h);
+      }
+      byKey.set(key, c);
+    }
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    ctx.scale(flip ? -scale : scale, scale);
+    ctx.drawImage(c, Math.round(-f.ox), -f.oy);
+    ctx.restore();
+  }
+
   /** Draw a frame with its feet anchor at (x, y); flip mirrors around the anchor; scale grows it from the feet. */
   draw(
     ctx: CanvasRenderingContext2D,

@@ -23,6 +23,15 @@ export class Ally {
   atkT = 0;
   /** Seconds since the last time this ally was used in a stat computation (unused, keeps shape). */
   t = 0;
+  /** Multi-step attacks (Goat ram): 0 idle, 1 wind-up, 2 charging; seconds left and unit direction. */
+  phase: 0 | 1 | 2 = 0;
+  phaseT = 0;
+  chargeX = 0;
+  chargeY = 0;
+  /** Enemy ids already hit by the current charge. */
+  readonly struck = new Set<number>();
+  /** Shepherd wool decoy: where it sits and seconds left (0 = none). */
+  readonly decoy = { x: 0, y: 0, t: 0 };
 
   constructor(
     readonly def: AllyDef,

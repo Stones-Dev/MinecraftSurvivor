@@ -13,7 +13,9 @@ export type ProjStyle =
   | 'skull_blue'
   | 'hook'
   | 'spit'
-  | 'bubble';
+  | 'bubble'
+  | 'seed'
+  | 'soul';
 
 /**
  * A moving damage source. Plain projectiles fly straight and are swept against enemies (friendly)
