@@ -74,6 +74,7 @@ export class AuthService {
   private backendLoad: Promise<CloudBackend | null> | null = null;
   private loadFailed = false;
   private unsubBackend: (() => void) | null = null;
+  private signOutHooks: (() => Promise<unknown>)[] = [];
   private readonly cbs = new Set<(u: SessionUser | null, s: AuthState) => void>();
   private readonly storage: StorageLike | null;
   private readonly configured: boolean;
@@ -283,9 +284,23 @@ export class AuthService {
     return this.current as SessionUser;
   }
 
+  /**
+   * Register work to finish while the cloud account is still signed in (e.g. flushing the save).
+   * Hooks run, in order, at the start of `signOut`; their failures are ignored.
+   */
+  addSignOutHook(fn: () => Promise<unknown>): () => void {
+    this.signOutHooks.push(fn);
+    return () => {
+      this.signOutHooks = this.signOutHooks.filter((h) => h !== fn);
+    };
+  }
+
   /** Leave the current session (the local profile stays stored for "Continue as"). */
   async signOut(): Promise<void> {
     const wasCloud = this.stateValue === 'cloud';
+    if (wasCloud) {
+      for (const hook of [...this.signOutHooks]) await hook().catch(() => undefined);
+    }
     this.clearSession();
     if (wasCloud && this.backendValue) {
       try {

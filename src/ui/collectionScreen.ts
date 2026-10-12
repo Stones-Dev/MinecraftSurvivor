@@ -17,39 +17,7 @@ import { maxAllySlots } from '../systems/meta';
 import { drawIcon } from './icons';
 import { drawPanel, drawText, fitText, inRect, wrap, type Rect } from './panel';
 import type { Screen } from './router';
-import { Buttons, drawCompanion, drawTitle } from './widgets';
-
-/** First idle frame size (w, h) of every companion sprite, used to fit portraits into boxes. */
-const SIZE: Record<string, readonly [number, number]> = {
-  steve: [19, 35],
-  alex: [18, 35],
-  rana: [18, 34],
-  chicken: [19, 17],
-  pig: [37, 21],
-  cow: [43, 28],
-  sheep: [35, 24],
-  rabbit: [22, 23],
-  cat: [53, 20],
-  parrot: [21, 21],
-  bee: [25, 16],
-  frog: [22, 17],
-  fox: [38, 22],
-  turtle: [53, 21],
-  axolotl: [47, 15],
-  wolf_pup: [21, 12],
-  panda: [31, 19],
-  strider: [26, 37],
-  wolf: [37, 22],
-  snow_golem: [33, 51],
-  trader_llama: [40, 40],
-  fletcher: [17, 39],
-  cleric: [17, 38],
-  weaponsmith: [17, 38],
-  armorer: [17, 38],
-  librarian: [17, 40],
-  horse: [48, 39],
-  iron_golem: [44, 60],
-};
+import { Buttons, companionFrame, drawCompanion, drawTitle } from './widgets';
 
 /** Draw a companion centred on `cx` with its feet at `feetY`, shrunk to fit a boxW x boxH box. */
 export function drawPortrait(
@@ -64,8 +32,10 @@ export function drawPortrait(
   maxScale = 1,
   alpha = 1,
 ): void {
-  const [w, h] = SIZE[def.id] ?? [32, 32];
-  const scale = Math.min(maxScale, boxW / w, boxH / h);
+  // Size comes from the sprite's own first frame, so any new companion fits its box automatically.
+  const key = companionFrame(atlas, def, 0);
+  const size = key ? atlas.frameSize(key) : null;
+  const scale = size ? Math.min(maxScale, boxW / size.w, boxH / size.h) : maxScale;
   drawCompanion(ctx, atlas, def, cx, feetY, t, scale, alpha);
 }
 

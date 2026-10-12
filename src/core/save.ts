@@ -233,6 +233,9 @@ const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const ID_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
 const safeId = (k: unknown): k is string =>
   typeof k === 'string' && ID_RE.test(k) && !UNSAFE_KEYS.has(k);
+/** Keys of free-form maps: not empty, short, prototype-safe and valid Firestore field names. */
+const badKey = (k: string): boolean =>
+  !k || k.length > 64 || UNSAFE_KEYS.has(k) || /^__.*__$/.test(k);
 const num = (v: unknown, fallback: number, min = -Infinity, max = Infinity): number =>
   typeof v === 'number' && Number.isFinite(v) && v >= min ? Math.min(max, v) : fallback;
 const count = (v: unknown, fallback = 0, max = MAX_COUNT): number =>
@@ -278,7 +281,7 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const owned: SaveData['owned'] = {};
   if (isRecord(data.owned)) {
     for (const [id, o] of Object.entries(data.owned)) {
-      if (!isRecord(o) || UNSAFE_KEYS.has(id)) continue;
+      if (!isRecord(o) || badKey(id)) continue;
       owned[id] = {
         level: Math.min(5, Math.max(1, Math.floor(num(o.level, 1)))),
         shards: count(o.shards),
@@ -290,12 +293,12 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const pity: SaveData['pity'] = {};
   if (isRecord(data.pity)) {
     for (const [k, v] of Object.entries(data.pity))
-      if (!UNSAFE_KEYS.has(k)) pity[k] = num(v, 0, 0, MAX_COUNT);
+      if (!badKey(k)) pity[k] = num(v, 0, 0, MAX_COUNT);
   }
   const upgrades: SaveData['upgrades'] = {};
   if (isRecord(data.upgrades)) {
     for (const [hero, ranks] of Object.entries(data.upgrades)) {
-      if (!isRecord(ranks) || UNSAFE_KEYS.has(hero)) continue;
+      if (!isRecord(ranks) || badKey(hero)) continue;
       const out: Record<string, number> = {};
       for (const [id, r] of Object.entries(ranks)) {
         const def = META_BY_ID.get(id);
@@ -309,11 +312,7 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const controls: SaveData['settings']['controls'] = {};
   if (isRecord(set.controls)) {
     for (const [action, keys] of Object.entries(set.controls)) {
-      if (
-        !UNSAFE_KEYS.has(action) &&
-        Array.isArray(keys) &&
-        keys.every((k) => typeof k === 'string')
-      ) {
+      if (!badKey(action) && Array.isArray(keys) && keys.every((k) => typeof k === 'string')) {
         (controls as Record<string, string[]>)[action] = keys as string[];
       }
     }

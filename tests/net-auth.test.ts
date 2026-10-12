@@ -219,8 +219,12 @@ describe('bindSaveToAuth', () => {
     expect(store.load().profile).toMatchObject({ name: 'AnaCraft', avatar: 'rana' });
     expect(leaderboardFor(auth, store).online).toBe(true);
 
+    const d = store.load();
+    d.currencies.emeralds = 777;
+    store.save(d); // pending (debounced) when the player signs out
     await auth.signOut();
-    await store.flush();
+    const remote = backend.server.state.saves[u.id]?.save as { currencies: { emeralds: number } };
+    expect(remote.currencies.emeralds).toBe(777); // flushed before signing out
     await new Promise((r) => setTimeout(r, 0));
     expect(store.key).toBe('minesurvive.save');
     expect(store.load().profile.name).toBe('Ana');

@@ -171,6 +171,18 @@ describe('save v2 sanitize hardening', () => {
     expect(({} as Record<string, unknown>).at).toBeUndefined();
   });
 
+  it('drops map keys Firestore cannot store (empty or reserved)', () => {
+    const s = migrate({
+      saveVersion: 2,
+      owned: { '': { level: 1 }, __x__: { level: 1 }, alex: { level: 1 } },
+      pity: { '': 3, overworld: 2 },
+      settings: { controls: { '': ['KeyA'], up: ['KeyW'] } },
+    });
+    expect(Object.keys(s.owned).sort()).toEqual(['alex', 'steve']);
+    expect(s.pity).toEqual({ overworld: 2 });
+    expect(s.settings.controls).toEqual({ up: ['KeyW'] });
+  });
+
   it('keeps stats at least as high as the legacy records that older code still writes', () => {
     const s = migrate({
       saveVersion: 2,

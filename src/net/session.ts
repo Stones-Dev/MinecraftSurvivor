@@ -46,6 +46,8 @@ export function bindSaveToAuth(auth: AuthService, store: CloudSaveStore): () => 
     });
   };
   const unsubAuth = auth.onChange((u) => onChange(u));
+  // Push pending progress while the account is still signed in.
+  const unsubHook = auth.addSignOutHook(() => store.flush());
   const unsubData = store.onDataReplaced(() => {
     const cur = auth.user();
     if (cur && cur.kind !== 'guest' && store.status !== 'conflict') applyProfile(cur);
@@ -54,6 +56,7 @@ export function bindSaveToAuth(auth: AuthService, store: CloudSaveStore): () => 
   return () => {
     unsubAuth();
     unsubData();
+    unsubHook();
   };
 }
 
