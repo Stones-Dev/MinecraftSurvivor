@@ -7,3 +7,22 @@ assets-work/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
 __pycache__/
+
+# Local agent instructions and tooling: kept only in the owner's vault, never in the repo
+CLAUDE.md
+.claude/
+
+# Secrets and local configuration (copy .env.example to .env.local and fill it in)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+serviceAccount*.json
+firebase-adminsdk*.json
+.firebase/
+firebase-debug.log
+
+# Scratch
+.playwright/
+*.local
