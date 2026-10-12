@@ -280,3 +280,23 @@ SFX: hit, hurt, sword swing, bow, potion smash, TNT, snowball, lightning, level-
 - `tools/balance_sim.ts`: headless autoplay (simple bot: kite nearest, pick highest-value card) running N seeded runs at 10× speed in Node; outputs survival time distribution, kills, bosses reached, weapon pick rates. Use it to tune spawn curves so a new player with Steve survives ~4–6 min, and a decent build reaches the Wither.
 - Enemy HP/damage curves: HP = base × (1 + 0.12 × minute) × tier, dmg = base × (1 + 0.06 × minute). Tune from the sim, log results in `docs/BALANCE.md`.
 - Level XP curve: `xpToNext = 10 + level × 8`, orbs scale with tier.
+
+---
+
+## 16. As shipped (v1.0)
+
+This section is the source of truth where it differs from the brief text above; every deviation is explained in `docs/DECISIONS.md`.
+
+**Content counts.** 14 weapons (Sword, Bow, TNT, Crossbow, Trident, Snowball, Fishing Rod, Harming and Poison potions, Lava Bucket, Lightning Rod, Blaze Rods, Axe, Shield), each with 5 levels and an evolution (14 evolutions); 24 passives (enchantments and potion effects); 7 armor tiers and 7 sword tiers (the sprite swaps; the top tier glints); 8 items; about 30 regular enemy types over 11 AI archetypes plus 3 bosses (Raid Captain at 5:00 replacing the Ravager, Wither at 10:00, Warden at 15:00) and 4 mini-bosses; 4 biomes (Plains, Dark Forest, Snowy Taiga, Desert) rotating every 4 minutes plus the Nether rift arena; 3 heroes, 15 pets, 10 allies; 8 procedural music themes and about 30 sound effects.
+
+**Run rules.** Fixed 60 Hz simulation, all randomness from seeded streams. Base hero regeneration is 0.4 HP/s (added after balance simulation). Level-up offers 3 cards (4 with the Librarian), 1 reroll (+ Reroll upgrade), skip pays 25 Emeralds. The soft enemy cap is 64 (+10 overflow for tides and raids); pickups are capped at 300 (oldest XP orbs are banked automatically). Golden Hour, Raids, Thunderstorms, the trader and the lost villager are suppressed while a boss is alive. Winning means killing the Warden; Endless then sends a stronger boss every 5 minutes.
+
+**Heroes.** Steve: 110 HP (Builder's Grit +10%), free Leather armor at minute 1 (the "one fewer card for armor tiers" clause was not implemented). Alex: 90 HP, +5% damage, +8% speed, projectiles +15% speed and +1 pierce, starts with the Sword and a level-2 Bow. Rana: 85 HP, +4% speed, +10% luck, water immunity, double XP from slimes and magma cubes, slimes split only once.
+
+**Companions.** Pets follow with a lazy spring and are invulnerable; allies fight, take contact damage and return 20 s after being downed at 50% HP. Levels 2-5 need 1/2/3/4 more duplicates; further duplicates refund Emeralds (30/60/120/250/500 by rarity). Kennel multiplies pet buffs by 1 + 10% per rank; Leadership adds the second ally slot. Ally HP and damage grow 20% per level.
+
+**Economy.** Run reward = (time/5 + kills/4 + 80 per boss + 40 per mini-boss + Emeralds picked) x (Looting upgrade x Pig); Looting and Pig apply to the payout only, so in-run drop rates are unaffected. Spawn Egg: 1/400 per kill, locked chests 1-3, events, Charged mobs; Rare Spawn Egg: bosses, rift wins, 15% of locked chests, 5% of diamond ore. New saves start with 500 Emeralds.
+
+**Gacha.** One banner ("Overworld Spawner") with rates 50 / 28 / 15 / 5.5 / 1.5, a x10 that always contains a Rare or better, Legendary pity at 60, seeded per save (`gachaSeed` + pull index). Banners are data (`systems/gacha.ts`).
+
+**Platform.** Installable PWA with a service worker (offline after the first load), saves in `localStorage` behind a versioned `SaveStore` (corrupt or newer saves are kept under `.bak`), controls remappable, quality tiers (auto adapts to frame time), GitHub Pages deploy through `.github/workflows/deploy.yml`.

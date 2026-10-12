@@ -1,0 +1,16 @@
+{
+  "saveVersion": 1,
+  "createdAt": 1700000100000,
+  "gachaSeed": 99,
+  "pullCount": 12,
+  "pity": { "overworld": 12 },
+  "currencies": { "emeralds": 800, "spawnEggs": 2, "rareSpawnEggs": 1 },
+  "owned": {
+    "steve": { "level": 1, "shards": 0, "obtainedAt": 1 },
+    "wolf": { "level": 2, "shards": 1, "obtainedAt": 2 }
+  },
+  "loadout": { "hero": "steve", "pet": null, "allies": ["wolf"] },
+  "upgrades": { "steve": { "vitality": 3 } },
+  "records": { "bestTimeSec": 500, "bestKills": 300, "wins": 1, "runs": 7 },
+  "settings": { "musicVolume": 0.3, "sfxVolume": 0.9, "muted": false }
+}
