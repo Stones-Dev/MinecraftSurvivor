@@ -87,24 +87,24 @@ Runtime skeleton
 - [x] P3-12 — Bosses Ravager, Wither, Warden + boss HP bar + boss theme hook (deps: P3-06)
 - [x] P3-13 — Mini-bosses (4) + Charged mobs (deps: P3-06)
 - [x] P3-14 — Win at 15:00 + Endless scaling + records (deps: P3-12)
-- [ ] P3-15 — `tools/balance_sim.ts` headless bot + `docs/BALANCE.md`; tune curves (deps: P3-14)
-- [ ] P3-16 — ⛔ CHECKPOINT 3 (deps: P3-01…P3-15)
+- [x] P3-15 — `tools/balance_sim.ts` headless bot + `docs/BALANCE.md`; tune curves (deps: P3-14)
+- [x] P3-16 — ⛔ CHECKPOINT 3 (deps: P3-01…P3-15)
 
 ## Phase 4 — Meta
 
 - [x] P4-01 — `systems/economy`: run rewards, Spawn Egg / Rare Egg drops; tests (deps: P3-16)
 - [x] P4-02 — `systems/gacha` data-driven banners, rates, ×10 guarantee, pity 60, dupes; tests (±1% over 1e6, pity) (deps: P3-16)
-- [ ] P4-03 — Spawner screen with cage animation, rarity flames, ×1/×10, skip (deps: P4-02)
+- [x] P4-03 — Spawner screen with cage animation, rarity flames, ×1/×10, skip (deps: P4-02)
 - [x] P4-04 — Companions data: ≥ 15 pets, ≥ 10 allies, lore quips [haiku] (deps: P3-16)
-- [ ] P4-05 — Pets in run (lazy spring follow, buffs by level) (deps: P4-04)
-- [ ] P4-06 — Allies in run (AI, HP, downed/respawn, villager side frames, special roles) (deps: P4-04)
-- [ ] P4-07 — Heroes Alex & Rana with passives (deps: P3-16)
-- [ ] P4-08 — Permanent upgrades screen + effects (per hero + Leadership/Kennel) (deps: P4-01)
-- [ ] P4-09 — Collection screen (tabs, levels, equip) (deps: P4-04)
-- [ ] P4-10 — Run setup screen (hero, pet, allies) (deps: P4-05, P4-06, P4-07)
-- [ ] P4-11 — Settings screen (audio, graphics, controls remap, data export/import/reset) (deps: P2-12)
-- [ ] P4-12 — First-run tutorial overlay (deps: P4-10)
-- [ ] P4-13 — ⛔ CHECKPOINT 4 (deps: P4-01…P4-12)
+- [x] P4-05 — Pets in run (lazy spring follow, buffs by level) (deps: P4-04)
+- [x] P4-06 — Allies in run (AI, HP, downed/respawn, villager side frames, special roles) (deps: P4-04)
+- [x] P4-07 — Heroes Alex & Rana with passives (deps: P3-16)
+- [x] P4-08 — Permanent upgrades screen + effects (per hero + Leadership/Kennel) (deps: P4-01)
+- [x] P4-09 — Collection screen (tabs, levels, equip) (deps: P4-04)
+- [x] P4-10 — Run setup screen (hero, pet, allies) (deps: P4-05, P4-06, P4-07)
+- [x] P4-11 — Settings screen (audio, graphics, controls remap, data export/import/reset) (deps: P2-12)
+- [x] P4-12 — First-run tutorial overlay (deps: P4-10)
+- [x] P4-13 — ⛔ CHECKPOINT 4 (deps: P4-01…P4-12)
 
 ## Phase 5 — Polish & release
 

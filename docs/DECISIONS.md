@@ -35,3 +35,15 @@ Dated entries; newest last. Anything that deviates from `docs/BRIEF.md` is marke
 - **Balance sim:** `npm run balance` (Vitest used as a TS runner via `vitest.balance.config.ts`; `tools/node-shim.d.ts` supplies minimal Node typings so no `@types/node` dependency is added). The bot (`tools/balance/bot.ts`) has two policies, `smart` (kites, sidesteps projectiles, avoids TNT traps and creepers, picks evolutions > weapon levels > tiers > passives) and `newbie` (late reactions, random cards).
 - **Balance change: base regeneration 0.4 HP/s** (`baseMods().regen`). With no baseline regen every early hit was permanent, so even a competent bot spent minutes fleeing at low HP without killing anything (the sim made this obvious: median 4:20 with 19 kills). The shield test was made independent of regen.
 - **Balance change: Sword levels buffed** (L1 14 dmg / 0.85 s / 38 reach, up to 32 dmg / 0.6 s / 54 at L5). The starting weapon could not kill a 20 HP zombie before contact (10 dmg per 1.0 s), which made the new-player experience a coin flip.
+
+## 2026-10-12 — Phase 4 decisions (taken alone)
+
+- **Pet roster is 15 and ally roster is 10** (Allay, Sniffer and the adult Polar Bear were dropped at Checkpoint 0). Trader Llama uses the wandering-trader llama sprites.
+- **Alex starts with the Sword and a level-2 Bow** (the brief says "bow starts at level 2"; it does not say Alex loses the sword, and the sword drives the swing animation and tiers). Her lower HP (90) is the counterweight.
+- **Deviation: Steve's "armor tier upgrades cost one fewer card" is not implemented**; only the free Leather tier at minute 1 and +10% HP (he starts at 110 HP).
+- **Deviation: Rana's slimes "never split more than once"** is implemented as one split level (a big slime yields two mediums that do not split again); she gets double XP from slimes and magma cubes.
+- **Ally strength scales with companion level** (+20% HP and damage per level above 1); pet buff tables are in `data/companions.ts` and Kennel multiplies them by 1 + 10% per rank.
+- **Permanent upgrade costs:** rank n costs `base x (1 + 0.7 n)`; Repertoire (second starting weapon, random from TNT/Crossbow/Snowball/Trident/Axe) and Leadership are single-rank and expensive (600 / 900).
+- **Gacha seeding:** pull `n` uses `Rng(hash(gachaSeed, n))`. The x10 guarantee only applies to exactly ten pulls; pity is checked before it.
+- **Atlas size:** adding the pet/ally/villager sprites brought the atlas to ~1.16 MiB PNG + 0.55 MiB JSON. Still a single page; a smaller shipped subset can be chosen in Phase 5 if load time matters.
+- **Debug URL params added:** `?screen=collection|spawner|upgrades|settings|setup`, `?hero=&pet=&ally=a,b&lv=&kennel=`. `?t=` only works together with `debug`.
