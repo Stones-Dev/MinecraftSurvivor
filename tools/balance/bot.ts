@@ -56,6 +56,36 @@ class BotInput implements InputSource {
 
 const MELEE = new Set<string>(['sword', 'axe', 'shield', 'trident']);
 
+/**
+ * Steering decisions per policy, in simulation steps (60 Hz). The hero now accelerates and brakes (full
+ * speed in ~0.1 s), so a smart player has to commit to a direction sooner than a 10 Hz poll allows:
+ * with 6 steps between decisions the kiting bot lost about 40 s of median survival against the old
+ * instant-velocity movement. The newbie keeps its slow 10 Hz reactions on purpose.
+ */
+const STEER_EVERY: Record<Policy, number> = { smart: 2, newbie: 6 };
+
+/** Directions and distances (art px) probed around the hero for lava. */
+const LAVA_PROBES = [10, 22] as const;
+
+/** Unit-ish vector pointing away from nearby lava tiles (zero when there is none). */
+function lavaRepulsion(run: RunState): { x: number; y: number } {
+  const p = run.player;
+  let hx = 0;
+  let hy = 0;
+  for (let k = 0; k < 8; k++) {
+    const a = (k * Math.PI) / 4;
+    const cx = Math.cos(a);
+    const cy = Math.sin(a);
+    for (const r of LAVA_PROBES) {
+      if (run.world.surface(p.x + cx * r, p.y + cy * r) !== 'lava') continue;
+      const w = r === LAVA_PROBES[0] ? 2 : 1;
+      hx -= cx * w;
+      hy -= cy * w;
+    }
+  }
+  return { x: hx, y: hy };
+}
+
 function steer(run: RunState, bot: BotInput, policy: Policy, wander: number, melee: boolean): void {
   const p = run.player;
   const hpFrac = p.hp / Math.max(1, p.maxHp);
@@ -133,6 +163,15 @@ function steer(run: RunState, bot: BotInput, policy: Policy, wander: number, mel
       fy += Math.sin(wander);
     }
   }
+  if (policy === 'smart') {
+    // Lava burns for as long as the hero stands in it; the v1.1 biomes (badlands, desert) are full of it.
+    const lava = lavaRepulsion(run);
+    if (lava.x !== 0 || lava.y !== 0) {
+      const l0 = Math.hypot(fx, fy) || 1;
+      fx = fx / l0 + lava.x;
+      fy = fy / l0 + lava.y;
+    }
+  }
   const l = Math.hypot(fx, fy);
   bot.x = l > 0 ? fx / l : 0;
   bot.y = l > 0 ? fy / l : 0;
@@ -187,7 +226,7 @@ export function playRun(opts: PlayOptions): BotResult {
   let step = 0;
   const dt = 1 / 60;
   while (run.time < cap && run.status !== 'dead') {
-    if (step % 6 === 0) {
+    if (step % STEER_EVERY[policy] === 0) {
       if (step % 180 === 0) wander += rng.range(-1, 1);
       steer(run, input, policy, wander, MELEE.has(start));
       if (policy === 'smart' && run.item && run.itemCd <= 0 && run.enemies.length > 12) {
