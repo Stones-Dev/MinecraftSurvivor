@@ -1,4 +1,6 @@
 /** Procedural Web Audio synth: square/triangle/noise voices with simple envelopes. No audio files. */
+import type { ThemeId } from '../data/music';
+import { MusicEngine } from './music';
 export type SfxName =
   | 'hit'
   | 'hurt'
@@ -11,7 +13,12 @@ export type SfxName =
   | 'click'
   | 'death'
   | 'tnt'
-  | 'hiss';
+  | 'hiss'
+  | 'legendary'
+  | 'victory'
+  | 'boss'
+  | 'portal'
+  | 'trade';
 
 /** Minimum seconds between two plays of the same effect (keeps crowds from clipping). */
 const SPACING: Record<SfxName, number> = {
@@ -27,6 +34,11 @@ const SPACING: Record<SfxName, number> = {
   death: 0.3,
   tnt: 0.1,
   hiss: 0.3,
+  legendary: 1,
+  victory: 2,
+  boss: 1,
+  portal: 0.5,
+  trade: 0.3,
 };
 
 const MAX_VOICES = 18;
@@ -37,6 +49,8 @@ export class AudioEngine {
   muted = false;
   private ctx: AudioContext | null = null;
   private sfxBus: GainNode | null = null;
+  private music: MusicEngine | null = null;
+  private pendingTheme: ThemeId | null = null;
   private noiseBuf: AudioBuffer | null = null;
   private last = new Map<SfxName, number>();
   private voices = 0;
@@ -56,6 +70,8 @@ export class AudioEngine {
     this.ctx = new Ctor();
     this.sfxBus = this.ctx.createGain();
     this.sfxBus.connect(this.ctx.destination);
+    const musicBus = this.ctx.createGain();
+    musicBus.connect(this.ctx.destination);
     const len = this.ctx.sampleRate;
     this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = this.noiseBuf.getChannelData(0);
@@ -65,6 +81,25 @@ export class AudioEngine {
       s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
       data[i] = (s / 4294967296) * 2 - 1;
     }
+    this.music = new MusicEngine(this.ctx, musicBus, this.noiseBuf);
+    this.refresh();
+    if (this.pendingTheme) this.music.set(this.pendingTheme);
+  }
+
+  /** Push the volume and mute fields to the audio graph (call after changing them). */
+  refresh(): void {
+    if (this.sfxBus) this.sfxBus.gain.value = this.muted ? 0 : this.sfxVolume;
+    if (this.music) this.music.bus.gain.value = this.muted ? 0 : this.musicVolume * 0.55;
+  }
+
+  /** Switch the background theme (null = silence). Safe before the first user gesture: it starts on unlock. */
+  setTheme(id: ThemeId | null): void {
+    this.pendingTheme = id;
+    this.music?.set(id);
+  }
+
+  get theme(): ThemeId | null {
+    return this.pendingTheme;
   }
 
   private tone(
@@ -173,6 +208,32 @@ export class AudioEngine {
         break;
       case 'death':
         this.tone(330, 0.7, 'sawtooth', 0.2, 55);
+        break;
+      case 'legendary':
+        // Rising shimmer over a held chord, with a thunder crack underneath.
+        [392, 494, 587, 784, 988, 1175].forEach((f, i) =>
+          this.tone(f, 0.5, 'triangle', 0.14, f * 1.01, i * 0.07),
+        );
+        this.noise(0.5, 0.25, 2500);
+        this.tone(196, 0.9, 'square', 0.1, 196, 0.1);
+        break;
+      case 'victory':
+        [523, 523, 523, 659, 784, 659, 784, 1047].forEach((f, i) =>
+          this.tone(f, i === 7 ? 0.7 : 0.16, 'square', 0.12, f, i * 0.14),
+        );
+        break;
+      case 'boss':
+        this.tone(110, 0.8, 'sawtooth', 0.22, 55);
+        this.tone(116, 0.8, 'sawtooth', 0.18, 58, 0.02);
+        this.noise(0.6, 0.18, 900);
+        break;
+      case 'portal':
+        this.tone(220, 0.6, 'sine', 0.14, 660);
+        this.tone(330, 0.6, 'triangle', 0.08, 990, 0.05);
+        break;
+      case 'trade':
+        this.tone(784, 0.08, 'triangle', 0.12, 784);
+        this.tone(1175, 0.14, 'triangle', 0.12, 1175, 0.07);
         break;
     }
   }

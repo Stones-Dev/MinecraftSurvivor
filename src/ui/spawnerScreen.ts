@@ -142,8 +142,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
     if (!cur) return;
     const r = cur;
     const hi = RARITY_ORDER.indexOf(r.rarity);
-    app.audio.play(hi >= 4 ? 'levelup' : hi >= 2 ? 'emerald' : 'xp');
-    if (hi >= 4) app.audio.play('explode');
+    app.audio.play(hi >= 4 ? 'legendary' : hi >= 3 ? 'levelup' : hi >= 2 ? 'emerald' : 'xp');
     if (tenMode) {
       shown.push(r);
       nextSpin();

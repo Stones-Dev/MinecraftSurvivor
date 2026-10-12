@@ -133,7 +133,7 @@ export function updateNpcs(run: RunState, dt: number): void {
             run.fx.push(
               makeFx('text', n.x, n.y - 30, 1.2, { text: 'Trade!', vy: -14, color: '#7dff9a' }),
             );
-            run.emit('emerald');
+            run.emit('trade');
             n.state = 'flee';
           } else if (n.t > 1) {
             n.t = 0;

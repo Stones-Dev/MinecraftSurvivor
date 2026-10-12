@@ -25,6 +25,7 @@ import {
 import { drawNight, nightFactor } from '../systems/daynight';
 import { type Npc, spawnTrader, spawnVillager } from '../systems/npcs';
 import type { RunLoadout } from '../systems/meta';
+import type { ThemeId } from '../data/music';
 import type { Ally, PetState } from '../entities/ally';
 import { useItem } from '../systems/items';
 import { gainXp } from '../systems/levelup';
@@ -111,6 +112,14 @@ function drawWeather(
   }
 }
 
+/** Which music theme fits the moment: boss fight, Nether rift, night, or the current biome. */
+function runTheme(run: RunState): ThemeId {
+  if (run.enemies.some((e) => e.boss === 'boss' && !e.dying)) return 'boss';
+  if (run.rift.active) return 'nether';
+  if (nightFactor(run.time) > 0.55) return 'night';
+  return run.biome() as ThemeId;
+}
+
 /** The 20-second first-run hints (BRIEF section 5). */
 function drawTutorial(ctx: CanvasRenderingContext2D, w: number, h: number, t: number): void {
   const steps = [
@@ -193,6 +202,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         return;
       }
       run.update(dt, input);
+      app.audio.setTheme(run.status === 'dead' ? null : runTheme(run));
       for (const ev of new Set(run.events)) app.audio.play(ev);
       run.events.length = 0;
       if (run.status === 'dead' && run.deadT > 1.4) router.replace(resultsScreen(app, run));

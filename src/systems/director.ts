@@ -75,7 +75,7 @@ function spawnBoss(run: RunState, id: string, power: number): void {
   e.cd = 2;
   run.enemies.push(e);
   run.announce(`${e.def.name} approaches!`, '#ff6b6b', 4);
-  run.emit('hiss');
+  run.emit('boss');
 }
 
 /** Called when anything dies with a reward. */

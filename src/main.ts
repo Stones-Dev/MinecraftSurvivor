@@ -83,6 +83,7 @@ async function boot(): Promise<void> {
       audio.sfxVolume = s.sfxVolume;
       audio.muted = s.muted;
       input.setBindings(s.controls);
+      audio.refresh();
     },
     startRun: (loadout?: RunLoadout) =>
       router.reset(

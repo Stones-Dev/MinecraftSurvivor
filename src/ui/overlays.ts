@@ -190,6 +190,7 @@ export function itemChoiceScreen(app: App, run: RunState): Screen {
 
 /** Shown once when the Warden falls: carry on into Endless or finish the run. */
 export function victoryScreen(app: App, run: RunState): Screen {
+  app.audio.play('victory');
   let hover = -1;
   let lastView: View | null = null;
   const btns = (view: View): Rect[] => {

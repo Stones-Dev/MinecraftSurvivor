@@ -176,7 +176,7 @@ export function updateRift(run: RunState, dt: number): void {
       if (pt) {
         r.portal = { x: pt.x * 0.55 + p.x * 0.45, y: pt.y * 0.55 + p.y * 0.45, left: PORTAL_LIFE };
         run.announce('A Nether rift has opened!', '#b06bff', 4);
-        run.emit('hiss');
+        run.emit('portal');
       }
     }
   }

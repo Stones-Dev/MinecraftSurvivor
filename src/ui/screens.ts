@@ -75,6 +75,7 @@ export function titleScreen(router: Router, hub: () => Screen): Screen {
 
 /** Main menu: the equipped hero idling at dusk plus the entry points to every meta screen. */
 export function hubScreen(app: App): Screen {
+  app.audio.setTheme('hub');
   const { atlas, router } = app;
   const buttons = new Buttons();
   let time = 0;
