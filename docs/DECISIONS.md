@@ -47,3 +47,7 @@ Dated entries; newest last. Anything that deviates from `docs/BRIEF.md` is marke
 - **Gacha seeding:** pull `n` uses `Rng(hash(gachaSeed, n))`. The x10 guarantee only applies to exactly ten pulls; pity is checked before it.
 - **Atlas size:** adding the pet/ally/villager sprites brought the atlas to ~1.16 MiB PNG + 0.55 MiB JSON. Still a single page; a smaller shipped subset can be chosen in Phase 5 if load time matters.
 - **Debug URL params added:** `?screen=collection|spawner|upgrades|settings|setup`, `?hero=&pet=&ally=a,b&lv=&kennel=`. `?t=` only works together with `debug`.
+
+## 2026-10-12 — Release tag
+
+- **`v1.0.0` is created locally but could not be pushed from the build session:** the session's git proxy answers HTTP 403 to tag pushes (branch pushes to `claude/sleepy-bardeen-wme7gt` work). It was not worked around. The tag points at the commit that carries this note's parent state; to publish it run `git fetch origin claude/sleepy-bardeen-wme7gt && git tag -a v1.0.0 -m "MineSurvive v1.0.0" origin/claude/sleepy-bardeen-wme7gt && git push origin v1.0.0` (or create the release in GitHub). The Pages workflow also runs on pushes to `main`, so merging the branch deploys the game.
