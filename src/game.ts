@@ -12,6 +12,7 @@ import { Player } from './entities/player';
 import type { Pickup } from './entities/pickup';
 import type { Projectile } from './entities/projectile';
 import { applyStatus } from './systems/status';
+import { nightFactor } from './systems/daynight';
 import { updateMines, updateOrbiters, updateProjectiles, updateZones } from './systems/combat';
 import { updateEnemies } from './systems/enemyAI';
 import { DirectorState, initDirector, onEnemyKilled, updateDirector } from './systems/director';
@@ -244,6 +245,8 @@ export class RunState {
   /** Hostile-free companions: allies (fight, can be downed) and the pet. */
   allies: Ally[] = [];
   pet: PetState | null = null;
+  /** Whether the Wisp's once-per-run revive has been used. */
+  revived = false;
   /** Biome banner state: the biome last announced (or started in), a candidate and its dwell time. */
   private shownBiome: BiomeId = 'plains';
   private biomeCand: BiomeId = 'plains';
@@ -467,6 +470,7 @@ export class RunState {
     const p = this.player;
     updateRift(this, dt);
     updateItems(this, dt);
+    this.petHooks();
     p.update(dt, input, this.world, this.biome(), this.mods.waterImmune);
     if (p.dead) {
       if (this.status !== 'dead') this.emit('death');
@@ -602,6 +606,27 @@ export class RunState {
     }
   }
 
+  /** Wisp revive (once per run) and the Bat's night speed; runs before the hero moves. */
+  private petHooks(): void {
+    const p = this.player;
+    const m = this.mods;
+    if (m.nightBoost > 0) p.speedMult = m.speed * (1 + m.nightBoost * nightFactor(this.time));
+    if (p.dead && this.status !== 'dead' && m.revive > 0 && !this.revived) {
+      this.revived = true;
+      p.dead = false;
+      p.hp = Math.max(1, Math.round(p.maxHp * m.revive));
+      p.iframes = 2;
+      p.dotT = 0;
+      p.dotDps = 0;
+      const near: Enemy[] = [];
+      this.hash.query(p.x, p.y, 70, near);
+      for (const e of near) if (!e.dying) applyStatus(e, 'stun', 1.5);
+      this.fx.push(makeFx('ring', p.x, p.y - 8, 0.6, { r: 70, color: '#fff2a0' }));
+      this.announce('The Wisp pulls you back!', '#fff2a0', 2.5);
+      this.emit('levelup');
+    }
+  }
+
   /** Poison and wither ticks on the hero (every 0.5 s). */
   private updateDot(dt: number): void {
     const p = this.player;
@@ -610,7 +635,8 @@ export class RunState {
     this.dotAcc += dt;
     while (this.dotAcc >= 0.5) {
       this.dotAcc -= 0.5;
-      const dmg = p.dotDps * 0.5;
+      // Magma Cow: burning (lava included) hurts less.
+      const dmg = p.dotDps * 0.5 * (p.dotKind === 'burn' ? 1 - this.mods.fireResist : 1);
       p.hp -= dmg;
       if (p.dotKind === 'poison') p.hp = Math.max(1, p.hp);
       else if (p.hp <= 0) {
