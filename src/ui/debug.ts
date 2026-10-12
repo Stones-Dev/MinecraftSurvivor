@@ -14,13 +14,13 @@ export class FrameStats {
   }
 }
 
-export function drawDebug(ctx: CanvasRenderingContext2D, lines: string[]): void {
+export function drawDebug(ctx: CanvasRenderingContext2D, lines: string[], x0 = 2, y0 = 2): void {
   ctx.font = '8px "Pixelify Sans", monospace';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(2, 2, 150, lines.length * 9 + 3);
+  ctx.fillRect(x0, y0, 150, lines.length * 9 + 3);
   ctx.fillStyle = '#e6ffe6';
-  lines.forEach((line, i) => ctx.fillText(line, 4, 4 + i * 9));
+  lines.forEach((line, i) => ctx.fillText(line, x0 + 2, y0 + 2 + i * 9));
   ctx.textBaseline = 'alphabetic';
 }

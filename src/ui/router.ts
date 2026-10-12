@@ -6,6 +6,8 @@ export interface Screen {
   update(dt: number): void;
   render(view: View): void;
   onClick?(x: number, y: number): void;
+  onMove?(x: number, y: number): void;
+  onKey?(code: string): void;
 }
 
 /** Screen stack: push for overlays (pause, level-up), replace for flow changes. */
@@ -23,6 +25,12 @@ export class Router {
 
   pop(): void {
     this.stack.pop()?.exit?.();
+  }
+
+  /** Drop the whole stack and start from `screen`. */
+  reset(screen: Screen): void {
+    while (this.stack.length > 0) this.stack.pop()?.exit?.();
+    this.push(screen);
   }
 
   replace(screen: Screen): void {

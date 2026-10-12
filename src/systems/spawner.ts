@@ -1,0 +1,123 @@
+/** Enemy spawning: trickle + tides on a ring outside the view, soft cap with elites (BRIEF section 7). */
+import { dmgScale, ENEMIES, hpScale } from '../data/enemies';
+import { Enemy } from '../entities/enemy';
+import type { RunState } from '../game';
+import { nightFactor } from './daynight';
+
+export const ENEMY_CAP = 64;
+const ELITE_FROM = 0.85;
+const OVERFLOW = 10;
+/** Distance from the player where enemies appear (just outside the visible area). */
+export const SPAWN_RING = 270;
+
+/** Enemies per second from the continuous trickle at time t (seconds). */
+export function trickleRate(t: number): number {
+  return (1.6 + 0.028 * t + 0.5 * Math.pow(t / 60, 1.6)) * 0.24;
+}
+
+/** Enemies in one tide at time t. */
+export function tideCount(t: number): number {
+  return Math.max(3, Math.round((14 + Math.floor(t / 22)) * 0.4));
+}
+
+export class SpawnerState {
+  acc = 0;
+  tideT = 32;
+}
+
+export function makeEnemy(
+  run: RunState,
+  defId: string,
+  x: number,
+  y: number,
+  elite: boolean,
+): Enemy | null {
+  const def = ENEMIES[defId];
+  if (!def) return null;
+  const minute = run.time / 60;
+  const e = new Enemy(def);
+  e.x = x;
+  e.y = y;
+  e.elite = elite;
+  e.maxHp = def.hp * hpScale(minute) * (elite ? 1.6 : 1);
+  e.hp = e.maxHp;
+  e.dmg = def.dmg * dmgScale(minute) * (elite ? 1.25 : 1);
+  e.cd = run.rng.spawn.range(0.5, 2);
+  return e;
+}
+
+function pickType(run: RunState): string {
+  const minute = run.time / 60;
+  const pool = Object.values(ENEMIES).filter((d) => d.weight > 0 && d.fromMinute <= minute);
+  const total = pool.reduce((s, d) => s + d.weight, 0);
+  let r = run.rng.spawn.float() * total;
+  for (const d of pool) {
+    r -= d.weight;
+    if (r <= 0) return d.id;
+  }
+  return 'zombie';
+}
+
+/** A free point on the spawn ring at `angle`, or null if every attempt is blocked. */
+function ringPoint(run: RunState, angle: number, radius: number): { x: number; y: number } | null {
+  const p = run.player;
+  const biome = run.biome();
+  for (let i = 0; i < 6; i++) {
+    const a = angle + i * 0.35 * (i % 2 === 0 ? 1 : -1);
+    const x = p.x + Math.cos(a) * SPAWN_RING;
+    const y = p.y + Math.sin(a) * SPAN_Y * SPAWN_RING;
+    const r = run.world.collide(x, y, radius, biome);
+    if (Math.abs(r.x - x) < 3 && Math.abs(r.y - y) < 3) return { x, y };
+  }
+  return null;
+}
+
+const SPAN_Y = 0.9;
+
+function spawnOne(run: RunState, angle: number, limit: number): boolean {
+  if (run.enemies.length >= limit) return false;
+  const id = pickType(run);
+  const def = ENEMIES[id];
+  if (!def) return false;
+  const pt = ringPoint(run, angle, def.radius);
+  if (!pt) return false;
+  const elite = run.enemies.length >= ENEMY_CAP * ELITE_FROM;
+  const e = makeEnemy(run, id, pt.x, pt.y, elite);
+  if (e) run.enemies.push(e);
+  return e !== null;
+}
+
+export function updateSpawner(run: RunState, dt: number): void {
+  const s = run.spawner;
+  const t = run.time;
+  const rate = trickleRate(t) * (1 + 0.4 * nightFactor(t)) * run.spawnMult;
+  s.acc += rate * dt;
+  while (s.acc >= 1) {
+    s.acc -= 1;
+    if (run.enemies.length < ENEMY_CAP)
+      spawnOne(run, run.rng.spawn.range(0, Math.PI * 2), ENEMY_CAP);
+  }
+  s.tideT -= dt * run.spawnMult;
+  if (s.tideT <= 0) {
+    s.tideT = run.rng.spawn.range(38, 56);
+    const anchor = run.rng.spawn.range(0, Math.PI * 2);
+    const n = tideCount(t);
+    for (let i = 0; i < n; i++)
+      spawnOne(run, anchor + run.rng.spawn.range(-0.55, 0.55), ENEMY_CAP + OVERFLOW);
+  }
+  // Enemies left far behind are moved back onto the ring so the player never faces an empty field.
+  const p = run.player;
+  for (const e of run.enemies) {
+    if (e.dying) continue;
+    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    e.farT = d > SPAWN_RING * 1.6 ? e.farT + dt : 0;
+    if (e.farT > 2.5 || d > SPAWN_RING * 2.6) {
+      const pt = ringPoint(run, run.rng.spawn.range(0, Math.PI * 2), e.radius);
+      if (pt) {
+        e.x = pt.x;
+        e.y = pt.y;
+        e.farT = 0;
+      }
+    }
+  }
+}

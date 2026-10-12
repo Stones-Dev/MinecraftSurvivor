@@ -51,27 +51,77 @@ export class World {
     return out;
   }
 
+  private readonly solidCache = new Map<string, Prop[]>();
+
+  /** Solid props of a chunk (cached; the collision hot path iterates these directly). */
+  private chunkSolids(cx: number, cy: number, biome: BiomeId): Prop[] {
+    const key = `${cx},${cy},${biome}`;
+    let solids = this.solidCache.get(key);
+    if (!solids) {
+      solids = this.chunkProps(cx, cy, biome).filter((p) => p.solid);
+      this.solidCache.set(key, solids);
+      if (this.solidCache.size > MAX_PROP_CHUNKS) {
+        const oldest = this.solidCache.keys().next().value;
+        if (oldest !== undefined) this.solidCache.delete(oldest);
+      }
+    }
+    return solids;
+  }
+
+  /** Does a circle overlap any solid prop? (used for cover against enemy projectiles) */
+  overlapsSolid(x: number, y: number, r: number, biome: BiomeId): boolean {
+    const reach = r + 8;
+    for (
+      let cy = Math.floor((y - reach) / CHUNK_PX);
+      cy <= Math.floor((y + reach) / CHUNK_PX);
+      cy++
+    ) {
+      for (
+        let cx = Math.floor((x - reach) / CHUNK_PX);
+        cx <= Math.floor((x + reach) / CHUNK_PX);
+        cx++
+      ) {
+        for (const p of this.chunkSolids(cx, cy, biome)) {
+          const dx = x - p.x;
+          const dy = y - p.y;
+          const min = r + p.radius;
+          if (dx * dx + dy * dy < min * min) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /** Push a circle out of solid props (two passes so corners settle). */
   collide(x: number, y: number, r: number, biome: BiomeId): { x: number; y: number } {
-    const reach = r + 16;
-    const solids = this.propsInRect(x - reach, y - reach, x + reach, y + reach, biome).filter(
-      (p) => p.solid,
-    );
+    const reach = r + 8;
     let px = x;
     let py = y;
     for (let pass = 0; pass < 2; pass++) {
-      for (const p of solids) {
-        const dx = px - p.x;
-        const dy = py - p.y;
-        const min = r + p.radius;
-        const d2 = dx * dx + dy * dy;
-        if (d2 >= min * min) continue;
-        const d = Math.sqrt(d2);
-        if (d < 1e-6) {
-          px += min;
-        } else {
-          px = p.x + (dx / d) * min;
-          py = p.y + (dy / d) * min;
+      for (
+        let cy = Math.floor((py - reach) / CHUNK_PX);
+        cy <= Math.floor((py + reach) / CHUNK_PX);
+        cy++
+      ) {
+        for (
+          let cx = Math.floor((px - reach) / CHUNK_PX);
+          cx <= Math.floor((px + reach) / CHUNK_PX);
+          cx++
+        ) {
+          for (const p of this.chunkSolids(cx, cy, biome)) {
+            const dx = px - p.x;
+            const dy = py - p.y;
+            const min = r + p.radius;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= min * min) continue;
+            const d = Math.sqrt(d2);
+            if (d < 1e-6) {
+              px += min;
+            } else {
+              px = p.x + (dx / d) * min;
+              py = p.y + (dy / d) * min;
+            }
+          }
         }
       }
     }

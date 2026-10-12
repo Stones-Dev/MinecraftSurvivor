@@ -56,20 +56,20 @@ Runtime skeleton
 
 ## Phase 2 — Combat core
 
-- [ ] P2-01 — Entity pools; spatial hash (deps: P1-12)
-- [ ] P2-02 — `world/pathing` BFS distance field (200 ms) + LOS shortcut (deps: P2-01)
-- [ ] P2-03 — Enemy base + archetypes `chaser`, `ranged-kiter`, `kamikaze`, `splitter`, leap; telegraph system (deps: P2-02)
-- [ ] P2-04 — Enemies data: zombie, skeleton, spider, creeper, slime [haiku] (deps: P2-03)
-- [ ] P2-05 — `systems/spawner`: trickle + tides, ring spawn, cap/elites, despawn-behind/respawn-ahead, HP/dmg curves (deps: P2-04)
-- [ ] P2-06 — `systems/combat`: damage/armor formula, knockback, status effects, swept projectiles; tests (deps: P2-01)
-- [ ] P2-07 — Weapons framework (levels, cooldowns, data-driven) + Sword (arc, swing anim), Bow, TNT (deps: P2-06)
-- [ ] P2-08 — Procedural VFX: arrows, sweep arc, TNT + explosion, hit sparks, damage numbers [haiku drafts] (deps: P2-07)
-- [ ] P2-09 — XP orbs, magnet, level curve; `systems/levelup` card offers (seeded, luck weights), reroll/skip; tests (deps: P2-06)
-- [ ] P2-10 — Player hurt/death, i-frames, white flash, screen shake, low-HP vignette (deps: P2-06)
-- [ ] P2-11 — Canvas HUD (hearts, XP bar, timer, kills, slots) + code-drawn icons (`ui/icons`) [haiku for icon maps] (deps: P2-09)
-- [ ] P2-12 — Pause, level-up and results screens; `core/save` `SaveStore` v1 + records; migration tests (deps: P2-09, P2-10)
-- [ ] P2-13 — Placeholder SFX (hit, hurt, swing, bow, TNT, pickup, level-up) with the synth core (deps: P2-07)
-- [ ] P2-14 — ⛔ CHECKPOINT 2: game feel review (deps: P2-05, P2-08, P2-11, P2-12, P2-13)
+- [x] P2-01 — Entity pools; spatial hash (deps: P1-12)
+- [x] P2-02 — `world/pathing` BFS distance field (200 ms) + LOS shortcut (deps: P2-01)
+- [x] P2-03 — Enemy base + archetypes `chaser`, `ranged-kiter`, `kamikaze`, `splitter`, leap; telegraph system (deps: P2-02)
+- [x] P2-04 — Enemies data: zombie, skeleton, spider, creeper, slime [haiku] (deps: P2-03)
+- [x] P2-05 — `systems/spawner`: trickle + tides, ring spawn, cap/elites, despawn-behind/respawn-ahead, HP/dmg curves (deps: P2-04)
+- [x] P2-06 — `systems/combat`: damage/armor formula, knockback, status effects, swept projectiles; tests (deps: P2-01)
+- [x] P2-07 — Weapons framework (levels, cooldowns, data-driven) + Sword (arc, swing anim), Bow, TNT (deps: P2-06)
+- [x] P2-08 — Procedural VFX: arrows, sweep arc, TNT + explosion, hit sparks, damage numbers [haiku drafts] (deps: P2-07)
+- [x] P2-09 — XP orbs, magnet, level curve; `systems/levelup` card offers (seeded, luck weights), reroll/skip; tests (deps: P2-06)
+- [x] P2-10 — Player hurt/death, i-frames, white flash, screen shake, low-HP vignette (deps: P2-06)
+- [x] P2-11 — Canvas HUD (hearts, XP bar, timer, kills, slots) + code-drawn icons (`ui/icons`) [haiku for icon maps] (deps: P2-09)
+- [x] P2-12 — Pause, level-up and results screens; `core/save` `SaveStore` v1 + records; migration tests (deps: P2-09, P2-10)
+- [x] P2-13 — Placeholder SFX (hit, hurt, swing, bow, TNT, pickup, level-up) with the synth core (deps: P2-07)
+- [x] P2-14 — ⛔ CHECKPOINT 2: game feel review (deps: P2-05, P2-08, P2-11, P2-12, P2-13)
 
 ## Phase 3 — Content
 

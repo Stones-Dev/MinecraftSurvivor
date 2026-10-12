@@ -57,6 +57,9 @@ export function titleScreen(router: Router, hub: () => Screen): Screen {
     onClick() {
       router.replace(hub());
     },
+    onKey(code) {
+      if (code === 'Enter' || code === 'Space') router.replace(hub());
+    },
   };
 }
 
@@ -79,6 +82,9 @@ export function hubScreen(atlas: Atlas, onPlay: () => void): Screen {
     },
     onClick() {
       onPlay();
+    },
+    onKey(code) {
+      if (code === 'Enter' || code === 'Space') onPlay();
     },
   };
 }

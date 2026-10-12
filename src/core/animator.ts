@@ -33,3 +33,12 @@ export class Animator {
     return key;
   }
 }
+
+/** Frame key of an animation at time t (seconds), without needing an Animator instance. */
+export function frameAt(def: AnimDef, t: number): string {
+  const n = def.frames.length;
+  const i = Math.floor(t * def.fps);
+  const key = def.frames[def.loop ? i % n : Math.min(i, n - 1)];
+  if (key === undefined) throw new Error('Animation has no frames');
+  return key;
+}
