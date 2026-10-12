@@ -7,6 +7,7 @@ import { Loop } from './core/loop';
 import { LocalSaveStore } from './core/save';
 import { loadoutFromSave, type RunLoadout } from './systems/meta';
 import type { WeaponId } from './weapons/types';
+import { aboutScreen } from './ui/aboutScreen';
 import { collectionScreen } from './ui/collectionScreen';
 import { galleryScreen } from './ui/gallery';
 import { runSetupScreen } from './ui/runSetupScreen';
@@ -104,6 +105,15 @@ async function boot(): Promise<void> {
   };
 
   app.applySettings();
+  if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    // Offline after the first load; failures (private mode, file://) are harmless. The `load` event has
+    // usually fired already (the atlas is awaited above), so register right away in that case.
+    const register = (): void => {
+      navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined);
+    };
+    if (document.readyState === 'complete') register();
+    else window.addEventListener('load', register);
+  }
   if (params.has('gallery')) {
     router.push(galleryScreen(new WorldRenderer(new World(num('seed', 1337))), num('gallery', 0)));
   } else if (params.has('screen')) {
@@ -115,6 +125,7 @@ async function boot(): Promise<void> {
     else if (which === 'spawner') router.push(spawnerScreen(app, back));
     else if (which === 'upgrades') router.push(upgradesScreen(app, back));
     else if (which === 'settings') router.push(settingsScreen(app, back));
+    else if (which === 'about') router.push(aboutScreen(app, back));
     else if (which === 'setup') router.push(runSetupScreen(app, (l) => app.startRun(l), back));
   } else if (params.has('run')) {
     app.startRun();

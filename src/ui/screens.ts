@@ -4,6 +4,7 @@ import { t } from '../core/i18n';
 import type { App } from '../app';
 import { allyById, heroById, petById } from '../data/companions';
 import { loadoutFromSave } from '../systems/meta';
+import { aboutScreen } from './aboutScreen';
 import { collectionScreen } from './collectionScreen';
 import { drawIcon } from './icons';
 import { drawText } from './panel';
@@ -140,16 +141,19 @@ export function hubScreen(app: App): Screen {
       buttons.begin();
       const bw = 96;
       const bx = Math.floor(width * 0.66 - bw / 2);
-      let by = Math.floor(height * 0.28);
+      // Six buttons plus the resource line must fit even at the smallest canvas (320x180).
+      const step = Math.min(23, Math.floor((height - 64) / 6.5));
+      let by = Math.max(46, Math.floor(height * 0.26));
       const add = (label: string, fn: () => void): void => {
-        buttons.add({ x: bx, y: by, w: bw, h: 18 }, label, fn);
-        by += 23;
+        buttons.add({ x: bx, y: by, w: bw, h: step - 4 }, label, fn);
+        by += step;
       };
       add('PLAY', play);
       add('COLLECTION', () => router.push(collectionScreen(app, back)));
       add('SPAWNER', () => router.push(spawnerScreen(app, back)));
       add('UPGRADES', () => router.push(upgradesScreen(app, back)));
       add('SETTINGS', () => router.push(settingsScreen(app, back)));
+      add('ABOUT', () => router.push(aboutScreen(app, back)));
       buttons.draw(view);
       drawIcon(ctx, 'emerald', bx, by + 2);
       drawText(ctx, String(data.currencies.emeralds), bx + 15, by + 11, '#7dff9a');

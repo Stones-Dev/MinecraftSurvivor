@@ -53,12 +53,12 @@ self.addEventListener('fetch', (event) => {
           caches.open(VERSION).then((c) => c.put('./index.html', copy));
           return res;
         })
-        .catch(async () => (await caches.match('./index.html')) ?? (await caches.match('./'))),
+        .catch(async () => (await caches.match('./index.html', { ignoreSearch: true })) ?? (await caches.match('./'))),
     );
     return;
   }
   event.respondWith(
-    caches.match(req).then(
+    caches.match(req, { ignoreVary: true, ignoreSearch: false }).then(
       (hit) =>
         hit ??
         fetch(req).then((res) => {
