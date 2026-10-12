@@ -61,7 +61,7 @@ export function titleScreen(router: Router, hub: () => Screen): Screen {
 }
 
 /** Hub placeholder: Steve idling at the art resolution (the zoom is applied by the canvas). */
-export function hubScreen(atlas: Atlas): Screen {
+export function hubScreen(atlas: Atlas, onPlay: () => void): Screen {
   const anim = new Animator(atlas.anim('hero.steve.none.none.idle'));
   return {
     update(dt) {
@@ -74,7 +74,11 @@ export function hubScreen(atlas: Atlas): Screen {
       ctx.fillStyle = '#4b6b3a';
       ctx.fillRect(0, Math.floor(height * 0.7), width, height);
       text(view, t('screen.hub'), width / 2, 16);
+      text(view, 'Click or press Enter to play', width / 2, 30, '#ffd84a');
       atlas.draw(ctx, anim.frameKey, width / 2, height * 0.7 + 8);
+    },
+    onClick() {
+      onPlay();
     },
   };
 }

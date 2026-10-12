@@ -41,18 +41,18 @@ Runtime skeleton
 
 ## Phase 1 — World & movement
 
-- [ ] P1-01 — `world/noise` hash2 + value noise + fbm, seed layer offsets; determinism tests (deps: P0-22)
-- [ ] P1-02 — Tile codes & flags; biome table (Plains, Dark Forest) with palettes [haiku for palette tables] (deps: P1-01)
-- [ ] P1-03 — `world/chunks`: chunk records (terrain + props), LRU caches, bake queue with ≤ 4 ms budget (deps: P1-02)
-- [ ] P1-04 — `world/tiles` procedural painters: grass, dirt, stone, water (shore bands), paths; 8-neighbour autotiling (deps: P1-03)
-- [ ] P1-05 — `core/pixelart` helpers + prop painters: oak/birch/dark oak trees, boulders, tall grass/flowers, ores, chests (deps: P1-04)
-- [ ] P1-06 — Tile/prop gallery debug screen for look reviews (deps: P1-05)
-- [ ] P1-07 — `world/collision`: circle vs tile flags and solid props, push-out (deps: P1-03)
-- [ ] P1-08 — `core/camera` follow + clamp to integer pixels (deps: P0-16)
-- [ ] P1-09 — Player movement 8-dir, flip, idle/walk anim, water slow (deps: P1-07, P1-08, P0-18)
-- [ ] P1-10 — `systems/daynight` tint/vignette, 5-min cycle; biome crossfade 2.5 s (deps: P1-04)
-- [ ] P1-11 — F3 debug overlay: FPS, frame ms, chunks baked/cached, entities [haiku] (deps: P1-03)
-- [ ] P1-12 — ⛔ CHECKPOINT 1: owner walks around and judges tiles (deps: P1-06, P1-09, P1-10, P1-11)
+- [x] P1-01 — `world/noise` hash2 + value noise + fbm, seed layer offsets; determinism tests (deps: P0-22)
+- [x] P1-02 — Tile codes & flags; biome table (Plains, Dark Forest) with palettes [haiku for palette tables] (deps: P1-01)
+- [x] P1-03 — `world/chunks`: chunk records (terrain + props), LRU caches, bake queue with ≤ 4 ms budget (deps: P1-02)
+- [x] P1-04 — `world/tiles` procedural painters: grass, dirt, stone, water (shore bands), paths; 8-neighbour autotiling (deps: P1-03)
+- [x] P1-05 — `core/pixelart` helpers + prop painters: oak/birch/dark oak trees, boulders, tall grass/flowers, ores, chests (deps: P1-04)
+- [x] P1-06 — Tile/prop gallery debug screen for look reviews (deps: P1-05)
+- [x] P1-07 — `world/collision`: circle vs tile flags and solid props, push-out (deps: P1-03)
+- [x] P1-08 — `core/camera` follow + clamp to integer pixels (deps: P0-16)
+- [x] P1-09 — Player movement 8-dir, flip, idle/walk anim, water slow (deps: P1-07, P1-08, P0-18)
+- [x] P1-10 — `systems/daynight` tint/vignette, 5-min cycle; biome crossfade 2.5 s (deps: P1-04)
+- [x] P1-11 — F3 debug overlay: FPS, frame ms, chunks baked/cached, entities [haiku] (deps: P1-03)
+- [x] P1-12 — ⛔ CHECKPOINT 1: owner walks around and judges tiles (deps: P1-06, P1-09, P1-10, P1-11)
 
 ## Phase 2 — Combat core
 
