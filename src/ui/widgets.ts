@@ -2,6 +2,7 @@
  * Shared widgets for the hub screens: button lists with hover, keyboard / gamepad focus and tooltips,
  * gamepad menu navigation, toasts, resource pills, screen headers and companion / hero drawing.
  */
+import { cb } from '../core/accessibility';
 import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
 import type { View } from '../core/canvas';
@@ -509,5 +510,5 @@ export function drawRarity(
   y: number,
   align: CanvasTextAlign = 'left',
 ): void {
-  drawText(ctx, def.rarity.toUpperCase(), x, y, RARITY_COLOR[def.rarity], align);
+  drawText(ctx, def.rarity.toUpperCase(), x, y, cb(RARITY_COLOR[def.rarity]), align);
 }

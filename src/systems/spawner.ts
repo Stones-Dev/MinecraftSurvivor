@@ -1,5 +1,6 @@
 /** Enemy spawning: trickle + tides on a ring outside the view, soft cap with elites (BRIEF section 7). */
 import { dmgScale, ENEMIES, hpScale } from '../data/enemies';
+import { biomeDensity, biomeHpMult, pickEnemyId } from '../data/rosters';
 import { Enemy } from '../entities/enemy';
 import type { RunState } from '../game';
 import { TILE } from '../world/terrain';
@@ -73,25 +74,13 @@ function waterNear(run: RunState): boolean {
 }
 
 function pickType(run: RunState): string {
-  const minute = run.time / 60;
-  const night = nightFactor(run.time) > 0.6;
-  const biome: string = run.biome();
-  const water = waterNear(run);
-  const pool = Object.values(ENEMIES).filter(
-    (d) =>
-      d.weight > 0 &&
-      d.fromMinute <= minute &&
-      (!d.nightOnly || night) &&
-      (!d.biomes || d.biomes.includes(biome)) &&
-      (!d.nearWater || water),
+  return pickEnemyId(
+    run.biome(),
+    run.time / 60,
+    nightFactor(run.time) > 0.6,
+    waterNear(run),
+    run.rng.spawn.float(),
   );
-  const total = pool.reduce((sum, d) => sum + d.weight, 0);
-  let r = run.rng.spawn.float() * total;
-  for (const d of pool) {
-    r -= d.weight;
-    if (r <= 0) return d.id;
-  }
-  return 'zombie';
 }
 
 /** A free point on the spawn ring at `angle`, or null if every attempt is blocked. */
@@ -122,6 +111,7 @@ function spawnOne(run: RunState, angle: number, limit: number): boolean {
   if (!pt) return false;
   const elite = run.enemies.length >= ENEMY_CAP * ELITE_FROM;
   const n = def.pack ?? 1;
+  const hpMult = biomeHpMult(run.biome());
   for (let i = 0; i < n; i++) {
     const e = makeEnemy(
       run,
@@ -131,6 +121,11 @@ function spawnOne(run: RunState, angle: number, limit: number): boolean {
       elite,
     );
     if (!e) continue;
+    // The biome's danger: tougher mobs in the dark forest and badlands, softer ones in the mushroom fields.
+    if (hpMult !== 1) {
+      e.maxHp *= hpMult;
+      e.hp = e.maxHp;
+    }
     if (run.rng.spawn.chance(CHARGED_CHANCE + run.chargedBonus)) {
       e.charged = true;
       e.maxHp *= 2;
@@ -145,7 +140,8 @@ export function updateSpawner(run: RunState, dt: number): void {
   if (run.rift.active) return;
   const s = run.spawner;
   const t = run.time;
-  const rate = trickleRate(t) * (1 + 0.4 * nightFactor(t)) * run.spawnMult;
+  const density = biomeDensity(run.biome());
+  const rate = trickleRate(t) * (1 + 0.4 * nightFactor(t)) * run.spawnMult * density;
   s.acc += rate * dt;
   while (s.acc >= 1) {
     s.acc -= 1;
@@ -156,7 +152,7 @@ export function updateSpawner(run: RunState, dt: number): void {
   if (s.tideT <= 0) {
     s.tideT = run.rng.spawn.range(38, 56);
     const anchor = run.rng.spawn.range(0, Math.PI * 2);
-    const n = tideCount(t);
+    const n = Math.max(2, Math.round(tideCount(t) * density));
     for (let i = 0; i < n; i++)
       spawnOne(run, anchor + run.rng.spawn.range(-0.55, 0.55), ENEMY_CAP + OVERFLOW);
   }

@@ -26,9 +26,12 @@ export type BiomeId =
 export type GroundFamily =
   'grass' | 'podzol' | 'sand' | 'red_sand' | 'snow' | 'mud' | 'mycelium' | 'netherrack';
 
-/** Screen-space ambience the biome asks for (only 'snow' is drawn today; the rest are seams). */
+/**
+ * Screen-space ambience the biome asks for (drawn by render/ambient.ts, which also mixes in night
+ * fireflies and a few extras per biome; `ambient` is the biome's main particle kind).
+ */
 export type Ambient =
-  'none' | 'snow' | 'petals' | 'fireflies' | 'dust' | 'spores' | 'leaves' | 'rain-ish';
+  'none' | 'snow' | 'petals' | 'fireflies' | 'dust' | 'spores' | 'leaves' | 'pollen' | 'embers';
 
 /** Which tree mix grows (see props.ts genProps for the sprite types each one maps to). */
 export type TreeKind =
@@ -46,7 +49,7 @@ export interface Biome {
   name: string;
   ground: GroundFamily;
   ambient: Ambient;
-  /** Music theme while the hero is in this biome (existing themes until biome themes exist). */
+  /** Music theme while the hero is in this biome. */
   theme: ThemeId;
   /** Relative danger (1 = baseline). Data for the spawner / director; not applied yet. */
   danger: number;
@@ -341,7 +344,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     name: 'Swamp',
     ground: 'mud',
     ambient: 'fireflies',
-    theme: 'dark_forest',
+    theme: 'swamp',
     danger: 1.1,
     grass: [
       [106, 112, 57],
@@ -391,8 +394,8 @@ export const BIOMES: Record<BiomeId, Biome> = {
     id: 'jungle',
     name: 'Jungle',
     ground: 'grass',
-    ambient: 'rain-ish',
-    theme: 'dark_forest',
+    ambient: 'pollen',
+    theme: 'jungle',
     danger: 1.1,
     grass: [
       [86, 170, 44],
@@ -440,7 +443,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     name: 'Badlands',
     ground: 'red_sand',
     ambient: 'dust',
-    theme: 'desert',
+    theme: 'badlands',
     danger: 1.15,
     grass: [
       [190, 102, 50],
@@ -491,7 +494,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     name: 'Cherry Grove',
     ground: 'grass',
     ambient: 'petals',
-    theme: 'plains',
+    theme: 'cherry',
     danger: 0.9,
     grass: [
       [116, 182, 80],
@@ -535,7 +538,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     name: 'Mushroom Fields',
     ground: 'mycelium',
     ambient: 'spores',
-    theme: 'dark_forest',
+    theme: 'mushroom',
     danger: 0.6,
     grass: [
       [122, 104, 118],
@@ -585,7 +588,7 @@ export const BIOMES: Record<BiomeId, Biome> = {
     id: 'nether',
     name: 'Nether',
     ground: 'netherrack',
-    ambient: 'spores',
+    ambient: 'embers',
     theme: 'nether',
     danger: 1.3,
     grass: [

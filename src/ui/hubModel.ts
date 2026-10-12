@@ -79,19 +79,6 @@ export function rankOf(level: number): RankDef {
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Missions badge.
-
-/**
- * How many mission entries look worth a visit (started and not claimed yet), shown as the red "!" on the
- * hub's Missions button. TODO(meta agent): replace with the real "completed and claimable" count once the
- * mission definitions (targets) exist; progress > 0 is only a hint until then.
- */
-export function missionsClaimable(data: SaveData): number {
-  const all = [...data.missions.daily, ...data.missions.weekly];
-  return all.filter((m) => !m.claimed && m.progress > 0).length;
-}
-
-// ---------------------------------------------------------------------------------------------------
 // Splash texts (title screen).
 
 export const SPLASHES: readonly string[] = [
@@ -565,7 +552,7 @@ export function setupLayout(w: number, h: number): SetupLayout {
   const px = m + slotW + 6;
   const picker = { x: px, y: top, w: w - m - px, h: bottom - top };
   const [cw, ch, gap] =
-    tier === 'compact' ? [28, 32, 2] : tier === 'normal' ? [34, 40, 3] : [44, 52, 3];
+    tier === 'compact' ? [28, 32, 2] : tier === 'normal' ? [34, 40, 3] : [58, 70, 4];
   const detailH = tier === 'compact' ? 46 : tier === 'normal' ? 60 : 78;
   const gridTop = picker.y + 12;
   const gridH = picker.h - 12 - detailH - 3;

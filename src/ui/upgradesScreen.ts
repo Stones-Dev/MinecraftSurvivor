@@ -1,4 +1,5 @@
 /** Permanent upgrades (BRIEF 12.1): spend Emeralds on per-hero ranks plus the two account-wide upgrades. */
+import { cb } from '../core/accessibility';
 import type { App } from '../app';
 import type { View } from '../core/canvas';
 import type { SaveData } from '../core/save';
@@ -169,7 +170,7 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
         const owned = !!data.owned[h.id];
         stripHits.push({ r, key: h.id, owned, name: owned ? h.name : '???' });
         drawSlot(ctx, r, {
-          color: owned ? RARITY_COLOR[h.rarity] : null,
+          color: owned ? cb(RARITY_COLOR[h.rarity]) : null,
           selected: h.id === key,
           hover: owned && inRect(r, mx, my),
           locked: !owned,

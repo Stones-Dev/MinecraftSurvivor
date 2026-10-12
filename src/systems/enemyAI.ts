@@ -83,6 +83,7 @@ function contact(run: RunState, e: Enemy, dist: number): void {
   const cs = e.def.contactStatus;
   if (dealt > 0 && cs) {
     if (cs.kind === 'hunger') p.hungerT = Math.max(p.hungerT, cs.dur);
+    else if (cs.kind === 'slow') p.slowT = Math.max(p.slowT, cs.dur);
     else {
       p.dotKind = cs.kind;
       p.dotT = Math.max(p.dotT, cs.dur);

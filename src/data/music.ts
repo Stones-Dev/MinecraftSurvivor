@@ -2,7 +2,19 @@
 import { BIOMES, type BiomeId } from '../world/biomes';
 
 export type ThemeId =
-  'hub' | 'plains' | 'night' | 'dark_forest' | 'snowy_taiga' | 'desert' | 'nether' | 'boss';
+  | 'hub'
+  | 'plains'
+  | 'night'
+  | 'dark_forest'
+  | 'snowy_taiga'
+  | 'desert'
+  | 'jungle'
+  | 'swamp'
+  | 'cherry'
+  | 'mushroom'
+  | 'badlands'
+  | 'nether'
+  | 'boss';
 
 export type Voice = 'bass' | 'arp' | 'lead' | 'kick' | 'snare' | 'hat';
 
@@ -34,6 +46,9 @@ const MINOR = [0, 2, 3, 5, 7, 8, 10] as const;
 const PHRYGIAN = [0, 1, 3, 5, 7, 8, 10] as const;
 const HARM_MINOR = [0, 2, 3, 5, 7, 8, 11] as const;
 const PHRYG_DOM = [0, 1, 4, 5, 7, 8, 10] as const;
+const DORIAN = [0, 2, 3, 5, 7, 9, 10] as const;
+const LYDIAN = [0, 2, 4, 6, 7, 9, 11] as const;
+const WHOLE_TONE = [0, 2, 4, 6, 8, 10] as const;
 
 const R = 0;
 
@@ -247,6 +262,115 @@ export const THEMES: Record<ThemeId, Theme> = {
     wave: { bass: 'triangle', arp: 'square', lead: 'triangle' },
     mix: { bass: 0.5, arp: 0.15, lead: 0.3, drums: 0.35 },
   },
+  jungle: {
+    id: 'jungle',
+    bpm: 118,
+    root: 55,
+    scale: DORIAN,
+    chords: [
+      [0, 2, 4],
+      [3, 5, 7],
+      [0, 2, 4],
+      [6, 1, 3],
+    ],
+    bass: [1, R, R, 1, R, R, 2, R, 1, R, R, 1, R, 2, R, R],
+    arp: [1, R, 2, R, 3, R, 2, 3, 1, R, 2, R, 3, R, 4, R],
+    lead: [
+      5, R, R, 3, R, R, 5, R, 6, R, R, 5, R, R, 3, R, 2, R, R, 3, R, R, 5, R, R, R, R, R, 3, R, 2,
+      R,
+    ],
+    kick: [1, R, R, R, R, R, 1, R, R, R, 1, R, R, R, R, R],
+    hat: [R, R, 1, R, R, 1, R, R, 1, R, R, 1, R, R, 1, 1],
+    wave: { bass: 'triangle', arp: 'square', lead: 'triangle' },
+    mix: { bass: 0.5, arp: 0.14, lead: 0.28, drums: 0.4 },
+  },
+  swamp: {
+    id: 'swamp',
+    bpm: 68,
+    root: 45,
+    scale: MINOR_PENT,
+    chords: [
+      [0, 2, 4],
+      [0, 2, 4],
+      [3, 0, 2],
+      [2, 4, 1],
+    ],
+    bass: [1, R, R, R, R, R, R, R, R, R, R, R, 2, R, R, R],
+    arp: [R, R, 1, R, R, R, 3, R, R, 2, R, R, R, R, 4, R],
+    lead: [
+      R, R, R, R, R, R, R, R, 3, R, R, R, 2, R, R, R, R, R, R, R, R, R, R, R, 1, R, R, R, R, R, R,
+      R,
+    ],
+    kick: [1, R, R, R, R, R, R, R, R, R, 1, R, R, R, R, R],
+    wave: { bass: 'sine', arp: 'triangle', lead: 'square' },
+    mix: { bass: 0.55, arp: 0.2, lead: 0.12, drums: 0.3 },
+  },
+  cherry: {
+    id: 'cherry',
+    bpm: 90,
+    root: 64,
+    scale: LYDIAN,
+    chords: [
+      [0, 2, 4],
+      [1, 3, 5],
+      [3, 5, 7],
+      [4, 6, 8],
+    ],
+    bass: [1, R, R, R, R, R, R, R, 1, R, R, R, 2, R, R, R],
+    arp: [1, R, 2, R, 3, R, 2, R, 1, R, 2, R, 3, R, 4, R],
+    lead: [
+      5, R, R, R, 3, R, 4, R, 5, R, R, R, 7, R, R, R, 6, R, R, R, 5, R, R, R, 3, R, R, R, R, R, R,
+      R,
+    ],
+    hat: [R, R, R, R, R, R, R, R, R, R, R, R, R, R, 1, R],
+    wave: { bass: 'sine', arp: 'triangle', lead: 'triangle' },
+    mix: { bass: 0.45, arp: 0.2, lead: 0.3, drums: 0.15 },
+  },
+  mushroom: {
+    id: 'mushroom',
+    bpm: 112,
+    root: 59,
+    scale: WHOLE_TONE,
+    chords: [
+      [0, 2, 4],
+      [1, 3, 5],
+      [2, 4, 6],
+      [1, 3, 5],
+    ],
+    bass: [1, R, 1, R, R, 2, R, R, 1, R, 1, R, R, R, 2, R],
+    arp: [1, 2, 3, 2, R, 3, 2, 1, R, 2, 3, 4, 3, R, 2, R],
+    lead: [
+      4, R, 5, R, 6, R, R, R, 5, R, 4, R, R, R, R, R, 3, R, 4, R, 5, R, R, R, 4, R, 2, R, R, R, R,
+      R,
+    ],
+    kick: [1, R, R, R, R, R, R, 1, R, R, R, R, 1, R, R, R],
+    hat: [R, 1, R, R, R, 1, R, R, R, 1, R, R, R, 1, R, 1],
+    wave: { bass: 'triangle', arp: 'square', lead: 'square' },
+    mix: { bass: 0.5, arp: 0.13, lead: 0.17, drums: 0.3 },
+  },
+  badlands: {
+    id: 'badlands',
+    bpm: 94,
+    root: 53,
+    scale: MINOR_PENT,
+    chords: [
+      [0, 2, 4],
+      [0, 2, 4],
+      [3, 0, 2],
+      [4, 1, 3],
+    ],
+    bass: [1, R, R, 1, R, R, 2, R, 1, R, R, 1, R, 2, R, R],
+    arp: [1, R, 2, R, 3, R, 2, R, 1, R, 3, R, 4, R, 3, R],
+    lead: [
+      R, R, R, R, 3, R, R, 5, R, R, 4, R, R, R, 3, R, R, R, R, R, 2, R, R, 3, R, R, R, R, 1, R, R,
+      R,
+    ],
+    kick: [1, R, R, R, R, R, R, 1, R, R, 1, R, R, R, R, R],
+    snare: [R, R, R, R, 1, R, R, R, R, R, R, R, 1, R, R, R],
+    hat: [1, R, 1, R, 1, R, 1, R, 1, R, 1, R, 1, R, 1, R],
+    wave: { bass: 'sawtooth', arp: 'triangle', lead: 'square' },
+    mix: { bass: 0.42, arp: 0.16, lead: 0.2, drums: 0.38 },
+  },
   nether: {
     id: 'nether',
     bpm: 112,
@@ -324,9 +448,8 @@ export const THEMES: Record<ThemeId, Theme> = {
 export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
 
 /**
- * Music theme of a biome. New biomes reuse the closest existing theme until they get their own
- * (forest / cherry grove -> plains, swamp / jungle / mushroom fields -> dark forest, badlands -> desert);
- * the mapping lives in each biome's `theme` field (world/biomes.ts).
+ * Music theme of a biome (the mapping lives in each biome's `theme` field, world/biomes.ts): plains and
+ * forest share the plains theme, every other biome has its own.
  */
 export function biomeTheme(biome: BiomeId): ThemeId {
   return BIOMES[biome].theme;
@@ -378,4 +501,68 @@ export function stepEvents(theme: Theme, step: number): StepEvent[] {
   if (theme.snare?.[pos]) out.push({ voice: 'snare', len: 1 });
   if (theme.hat?.[pos]) out.push({ voice: 'hat', len: 1 });
   return out;
+}
+
+/** Seconds a new biome's theme must be the one under the hero before the music follows. */
+export const THEME_SETTLE = 4;
+/** Minimum seconds between two biome-driven theme changes (walking along a border never flutters). */
+export const THEME_MIN_GAP = 20;
+/** Night factor to switch to the night theme, and the lower one to leave it (hysteresis). */
+export const NIGHT_ON = 0.55;
+export const NIGHT_OFF = 0.4;
+
+export interface MusicSituation {
+  boss: boolean;
+  rift: boolean;
+  /** 0..1 night factor. */
+  night: number;
+  biome: BiomeId;
+}
+
+/**
+ * Chooses the run's music theme from the moment: a boss, the Nether rift and night take over at once;
+ * otherwise the theme of the biome under the hero, with hysteresis so the border between two biomes
+ * does not restart the track (the engine crossfades every change, but a flutter would still be noise).
+ */
+export class MusicDirector {
+  private current: ThemeId | null = null;
+  private candidate: ThemeId | null = null;
+  private candidateT = 0;
+  private sinceSwitch = Infinity;
+  private night = false;
+  private overridden = false;
+
+  /** The theme to play now; call once per simulation step with its dt. */
+  update(dt: number, s: MusicSituation): ThemeId {
+    this.sinceSwitch += dt;
+    this.night = s.night > (this.night ? NIGHT_OFF : NIGHT_ON);
+    const want = biomeTheme(s.biome);
+    if (s.boss || s.rift || this.night) {
+      this.overridden = true;
+      return s.boss ? 'boss' : s.rift ? 'nether' : 'night';
+    }
+    if (this.current === null || this.overridden) {
+      // First call, or an override just ended: follow the biome straight away.
+      this.overridden = false;
+      this.current = want;
+      this.candidate = null;
+      this.sinceSwitch = 0;
+      return want;
+    }
+    if (want === this.current) {
+      this.candidate = null;
+      this.candidateT = 0;
+    } else if (want !== this.candidate) {
+      this.candidate = want;
+      this.candidateT = 0;
+    } else {
+      this.candidateT += dt;
+      if (this.candidateT >= THEME_SETTLE && this.sinceSwitch >= THEME_MIN_GAP) {
+        this.current = want;
+        this.candidate = null;
+        this.sinceSwitch = 0;
+      }
+    }
+    return this.current;
+  }
 }

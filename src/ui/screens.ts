@@ -1,4 +1,5 @@
 /** Title screen and the hub (main menu): live world backdrop, profile chip, resources and the menu buttons. */
+import { cb } from '../core/accessibility';
 import { abilityById, abilityText } from '../abilities';
 import { t } from '../core/i18n';
 import type { App } from '../app';
@@ -6,6 +7,9 @@ import { allyById, heroById, petById, RARITY_COLOR, type CompanionDef } from '..
 import { abilityRank, loadoutFromSave } from '../systems/meta';
 import { accountBadge } from './accountInfo';
 import { GAME_VERSION } from './aboutScreen';
+import type { MissionReward } from '../data/missions';
+import { claimDailyReward, dailyRewardState, missionsClaimable } from '../systems/missions';
+import { pushToast } from './toast';
 import { achievementsScreen } from './achievementsScreen';
 import { collectionScreen } from './collectionScreen';
 import { drawAvatar } from './avatar';
@@ -13,7 +17,6 @@ import {
   hubLayout,
   keyToNav,
   levelInfo,
-  missionsClaimable,
   pickSplash,
   playerXp,
   rankOf,
@@ -195,15 +198,13 @@ interface Tile {
   go: () => void;
 }
 
-/** What the hub needs to show a claimable daily reward; the meta system provides the real thing. */
-export interface DailyRewardSlot {
-  available(): boolean;
-  label?: string;
-  claim(): void;
-}
-
-export interface HubOptions {
-  dailyReward?: DailyRewardSlot;
+/** "+120 emeralds, +1 egg" for a mission / daily reward. */
+export function rewardText(r: MissionReward): string {
+  const parts: string[] = [];
+  if (r.emeralds) parts.push(`${r.emeralds} emeralds`);
+  if (r.spawnEggs) parts.push(`${r.spawnEggs} egg${r.spawnEggs > 1 ? 's' : ''}`);
+  if (r.rareSpawnEggs) parts.push(`${r.rareSpawnEggs} rare egg${r.rareSpawnEggs > 1 ? 's' : ''}`);
+  return parts.join(', ') || 'a surprise';
 }
 
 function rectOf(r: UiRect): UiRect {
@@ -211,7 +212,7 @@ function rectOf(r: UiRect): UiRect {
 }
 
 /** Main menu: the equipped hero idling at dusk plus the entry points to every meta screen. */
-export function hubScreen(app: App, opts: HubOptions = {}): Screen {
+export function hubScreen(app: App): Screen {
   app.audio.setTheme('hub');
   const { router } = app;
   const buttons = new Buttons();
@@ -220,6 +221,14 @@ export function hubScreen(app: App, opts: HubOptions = {}): Screen {
   const troupe = new Troupe((app.data().createdAt ^ 0x9e37) | 0, 34, 3);
   let time = 0;
   const back = (): void => router.pop();
+  const claimDaily = (): void => {
+    const data = app.data();
+    const res = claimDailyReward(data, Date.now());
+    if (!res.ok) return;
+    app.store.save(data);
+    app.audio.play('emerald');
+    pushToast({ text: `Daily reward: ${rewardText(res.reward)}`, icon: 'gift', color: UI.gold });
+  };
   const play = (): void => {
     const data = app.data();
     if (data.records.runs === 0 && !data.flags.tutorialDone) app.startRun();
@@ -312,7 +321,7 @@ export function hubScreen(app: App, opts: HubOptions = {}): Screen {
       heroById(data.profile.avatar).id,
       { x: r.x + 3, y: r.y + 3, w: av, h: av },
       time,
-      RARITY_COLOR[heroById(data.profile.avatar).rarity],
+      cb(RARITY_COLOR[heroById(data.profile.avatar).rarity]),
     );
     const info = levelInfo(playerXp(data.stats));
     const rank = rankOf(info.level);
@@ -351,7 +360,7 @@ export function hubScreen(app: App, opts: HubOptions = {}): Screen {
     const ab = abilityById(hero.ability);
     const rank = abilityRank(lo.heroShards ?? 0);
     const txt = abilityText(hero.id, rank);
-    drawPanel(ctx, r, false, RARITY_COLOR[hero.rarity]);
+    drawPanel(ctx, r, false, cb(RARITY_COLOR[hero.rarity]));
     const x = r.x + 5;
     const w = r.w - 10;
     drawSlot(ctx, { x: r.x + 4, y: r.y + 4, w: 14, h: 14 });
@@ -469,7 +478,7 @@ export function hubScreen(app: App, opts: HubOptions = {}): Screen {
         });
       }
       // Name plate under the hero's feet.
-      drawText(ctx, hero.name, L.stage.x, L.stage.y + 10, RARITY_COLOR[hero.rarity], 'center');
+      drawText(ctx, hero.name, L.stage.x, L.stage.y + 10, cb(RARITY_COLOR[hero.rarity]), 'center');
       drawCard(ctx, L.card, L.tier);
 
       // Small logo between the chip and the resources when there is room.
@@ -500,13 +509,13 @@ export function hubScreen(app: App, opts: HubOptions = {}): Screen {
           custom: (c, r, st) => drawChip(c, r, st.hover || st.pressed, st.focused),
         },
       );
-      const dr = opts.dailyReward;
-      if (dr?.available()) {
-        buttons.add(rectOf(L.banner), dr.label ?? 'Daily reward', () => dr.claim(), false, {
+      const daily = dailyRewardState(data, Date.now());
+      if (daily.canClaim) {
+        buttons.add(rectOf(L.banner), 'Daily reward!', claimDaily, false, {
           key: 'daily',
           variant: 'gold',
           icon: 'gift',
-          tooltip: 'Claim your daily reward.',
+          tooltip: `Day ${daily.day}: ${rewardText(daily.reward)}. Click to claim.`,
         });
       }
       buttons.add(rectOf(L.play), 'PLAY', play, false, {
@@ -514,7 +523,7 @@ export function hubScreen(app: App, opts: HubOptions = {}): Screen {
         variant: 'primary',
         icon: 'sword',
       });
-      const claimable = missionsClaimable(data);
+      const claimable = missionsClaimable(data, Date.now());
       tiles.forEach((tile, i) => {
         const r = L.tiles[i];
         if (!r) return;
@@ -526,7 +535,7 @@ export function hubScreen(app: App, opts: HubOptions = {}): Screen {
           align: 'left',
           tooltip:
             tile.label === 'MISSIONS' && claimable > 0
-              ? `${claimable} mission${claimable > 1 ? 's' : ''} in progress.`
+              ? `${claimable} mission${claimable > 1 ? 's' : ''} ready.`
               : tile.tip,
           badge: tile.label === 'MISSIONS' && claimable > 0 ? '!' : null,
         });

@@ -97,7 +97,8 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
   run.kills++;
   run.onKill(e);
   const m = run.mods;
-  const slimy = e.def.id.startsWith('slime') || e.def.id.startsWith('magma_cube');
+  const slimy =
+    e.def.slime === true || e.def.id.startsWith('slime') || e.def.id.startsWith('magma_cube');
   const slimeXp = slimy ? (1 + m.slimeXp) * (run.kit.slimeXpMult ?? 1) : 1;
   const big = e.elite || e.boss !== null;
   const xp =
