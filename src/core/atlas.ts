@@ -57,6 +57,43 @@ export class Atlas {
     return id in this.data.anims;
   }
 
+  /**
+   * Walk-cycle pose for sprites that only have an idle pose: the lower `legFrac` of the frame (the legs) is
+   * shifted sideways by `legDx` px and the upper body is lifted by `lift` px, both whole pixels so the pixel art
+   * stays crisp. Feet anchor at (x, y); `flip` mirrors around the anchor.
+   */
+  drawWalk(
+    ctx: CanvasRenderingContext2D,
+    key: string,
+    x: number,
+    y: number,
+    flip: boolean,
+    legDx: number,
+    lift: number,
+    legFrac = 0.34,
+  ): void {
+    const f = this.data.frames[key];
+    const page = f ? this.pages[f.page] : undefined;
+    if (!f || !page) return;
+    const cut = Math.max(1, Math.min(f.h - 1, Math.round(f.h * legFrac)));
+    const upper = f.h - cut;
+    const dx = Math.round(x);
+    const dy = Math.round(y - f.oy);
+    const draw = (left: number): void => {
+      ctx.drawImage(page, f.x, f.y, f.w, upper, left, dy - lift, f.w, upper);
+      ctx.drawImage(page, f.x, f.y + upper, f.w, cut, left + legDx, dy + upper, f.w, cut);
+    };
+    if (flip) {
+      ctx.save();
+      ctx.translate(dx, 0);
+      ctx.scale(-1, 1);
+      draw(Math.round(-f.w + f.ox));
+      ctx.restore();
+    } else {
+      draw(Math.round(dx - f.ox));
+    }
+  }
+
   /** Draw a frame with its feet anchor at (x, y); flip mirrors around the anchor; scale grows it from the feet. */
   draw(
     ctx: CanvasRenderingContext2D,

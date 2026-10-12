@@ -2,12 +2,32 @@ import type { InputSource } from '../core/input';
 import type { BiomeId } from '../world/biomes';
 import { SOUL_SLOW, WATER_SLOW, type World } from '../world/world';
 
+/** Art px per second squared: full speed in about 0.1 s, a stop in about 0.07 s. */
+const ACCEL = 720;
+const BRAKE = 1100;
+const ICE_ACCEL = 170;
+const ICE_BRAKE = 95;
+/** Distance in art px covered per half-stride of the walk cycle. */
+const STRIDE = 7;
+
 export class Player {
   x = 0;
   y = 0;
+  /** Previous-step position (NaN = just spawned/teleported) and the interpolated render position. */
+  prevX = Number.NaN;
+  prevY = Number.NaN;
+  rx = 0;
+  ry = 0;
+
   /** Sprites face right by default; -1 mirrors them. */
   facing: 1 | -1 = 1;
   moving = false;
+  /** Facing forced by an attack for a moment (weapons aim; movement takes over afterwards). */
+  aimT = 0;
+  aimFacing: 1 | -1 = 1;
+  /** Distance-driven walk cycle phase in half-strides (integer part flips the foot) and a footfall flag. */
+  walkPhase = 0;
+  footfall = false;
   readonly radius = 5;
   speed = 72; // art px per second (4.5 tiles/s)
   speedMult = 1;
@@ -52,18 +72,37 @@ export class Player {
     const sp = this.speed * this.speedMult * this.envMult * water * (this.slowT > 0 ? 0.6 : 1);
     const wantX = v.x * sp;
     const wantY = v.y * sp;
-    if (surface === 'ice') {
-      // Slippery: velocity eases towards the input instead of snapping to it.
-      const k = Math.min(1, 2.2 * dt);
-      this.vx += (wantX - this.vx) * k;
-      this.vy += (wantY - this.vy) * k;
-    } else {
+    // Accelerate towards the wanted velocity and brake when the keys are released, so starts and stops
+    // ease in instead of snapping; ice keeps the old slippery feel with much lower rates.
+    const input2 = v.x !== 0 || v.y !== 0;
+    const ice = surface === 'ice';
+    const rate = ice ? (input2 ? ICE_ACCEL : ICE_BRAKE) : input2 ? ACCEL : BRAKE;
+    const dvx = wantX - this.vx;
+    const dvy = wantY - this.vy;
+    const dv = Math.hypot(dvx, dvy);
+    const maxDv = rate * dt;
+    if (dv <= maxDv) {
       this.vx = wantX;
       this.vy = wantY;
+    } else {
+      this.vx += (dvx / dv) * maxDv;
+      this.vy += (dvy / dv) * maxDv;
     }
-    this.moving = v.x !== 0 || v.y !== 0 || Math.hypot(this.vx, this.vy) > 6;
-    if (v.x !== 0) this.facing = v.x > 0 ? 1 : -1;
-    if (Math.hypot(this.vx, this.vy) < 0.01) return;
+    const speedNow = Math.hypot(this.vx, this.vy);
+    this.moving = input2 || speedNow > 6;
+    this.aimT = Math.max(0, this.aimT - dt);
+    if (this.aimT > 0) this.facing = this.aimFacing;
+    else if (v.x !== 0) this.facing = v.x > 0 ? 1 : -1;
+    // Walk cycle: advance by distance travelled so the feet match the ground speed.
+    this.footfall = false;
+    if (speedNow > 8) {
+      const before = Math.floor(this.walkPhase);
+      this.walkPhase += (speedNow * dt) / STRIDE;
+      if (Math.floor(this.walkPhase) !== before) this.footfall = true;
+    } else {
+      this.walkPhase = Math.round(this.walkPhase / 2) * 2; // settle on a standing pose
+    }
+    if (speedNow < 0.01) return;
     const next = world.collide(this.x + this.vx * dt, this.y + this.vy * dt, this.radius, biome);
     this.x = next.x;
     this.y = next.y;
@@ -81,6 +120,19 @@ export class Player {
       this.dead = true;
     }
     return dmg;
+  }
+
+  /** Face a direction because of an attack (held for a quarter of a second, then movement decides again). */
+  aim(dir: 1 | -1): void {
+    this.aimFacing = dir;
+    this.aimT = 0.25;
+    this.facing = dir;
+  }
+
+  /** Forget the previous position so the next render does not slide across a teleport. */
+  snap(): void {
+    this.prevX = Number.NaN;
+    this.prevY = Number.NaN;
   }
 
   heal(amount: number): void {

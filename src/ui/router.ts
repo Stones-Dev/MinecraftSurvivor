@@ -4,7 +4,7 @@ export interface Screen {
   enter?(): void;
   exit?(): void;
   update(dt: number): void;
-  render(view: View): void;
+  render(view: View, alpha?: number): void;
   onClick?(x: number, y: number): void;
   onMove?(x: number, y: number): void;
   onKey?(code: string): void;
@@ -42,7 +42,7 @@ export class Router {
     this.top?.update(dt);
   }
 
-  render(view: View): void {
-    for (const s of this.stack) s.render(view);
+  render(view: View, alpha = 1): void {
+    for (const s of this.stack) s.render(view, alpha);
   }
 }

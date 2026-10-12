@@ -73,7 +73,7 @@ export function onHitMods(
 
 /** Make the hero face a world point (sprites only face left or right). */
 export function faceToward(run: RunState, x: number): void {
-  run.player.facing = x >= run.player.x ? 1 : -1;
+  run.player.aim(x >= run.player.x ? 1 : -1);
 }
 
 /** Keep exactly `count` orbiters for `owner`, evenly spaced, with the given stats. */

@@ -174,6 +174,9 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   let renderer = overRenderer;
   const camera = new Camera();
   const stats = new FrameStats();
+  // True while the last update stepped the simulation (false when an overlay paused it).
+  let simRan = false;
+  let lastRenderMs = performance.now();
   // First run ever: a short overlay explains movement, auto-attack, XP and level-up cards.
   const tutorial = !opts.debug && !app.data().flags.tutorialDone && app.data().records.runs === 0;
   let showDebug = opts.debug;
@@ -227,6 +230,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       window.removeEventListener('keydown', onKey);
     },
     update(dt) {
+      simRan = false;
       if (run.offer !== null) {
         router.push(levelupScreen(app, run));
         return;
@@ -251,6 +255,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         return;
       }
       run.update(dt, input);
+      simRan = true;
       app.audio.setTheme(run.status === 'dead' ? null : runTheme(run));
       for (const ev of new Set(run.events)) app.audio.play(ev);
       run.events.length = 0;
@@ -261,7 +266,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       if (run.status === 'dead' && run.deadT > 1.4)
         router.replace(resultsScreen(app, run, !opts.debug));
     },
-    render(view: View) {
+    render(view: View, alpha = 1) {
       const { ctx, width, height } = view;
       stats.tick(performance.now());
       updateQuality();
@@ -273,7 +278,13 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         prebaked = false;
       }
       renderer.beginFrame();
-      camera.follow(p.x, p.y, width, height);
+      // Blend the last two simulation steps so motion is smooth at any refresh rate; while the sim is
+      // paused (overlays) there is nothing to blend.
+      run.interpolate(simRan ? alpha : 1);
+      const nowMs = performance.now();
+      const frameDt = Math.min(0.05, (nowMs - lastRenderMs) / 1000);
+      lastRenderMs = nowMs;
+      camera.follow(p.rx, p.ry, width, height, p.vx, p.vy, frameDt);
       const shake = app.data().settings.screenShake ? run.shake : 0;
       const camX = camera.x + (shake > 0.5 ? Math.round(Math.sin(run.time * 97) * shake) : 0);
       const camY = camera.y + (shake > 0.5 ? Math.round(Math.cos(run.time * 83) * shake) : 0);
@@ -310,16 +321,16 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       }
       for (const e of run.enemies) {
         if (!e.dying && run.quality > 0)
-          renderer.drawShadow(ctx, e.x, e.y, e.radius / 6, camX, camY);
+          renderer.drawShadow(ctx, e.rx, e.ry, e.radius / 6, camX, camY);
       }
-      if (run.quality > 0) renderer.drawShadow(ctx, p.x, p.y, 0.9, camX, camY);
+      if (run.quality > 0) renderer.drawShadow(ctx, p.rx, p.ry, 0.9, camX, camY);
 
       const drawables: Drawable[] = items.map((item) => ({ y: item.prop.y, kind: 'prop', item }));
-      for (const enemy of run.enemies) drawables.push({ y: enemy.y, kind: 'enemy', enemy });
+      for (const enemy of run.enemies) drawables.push({ y: enemy.ry, kind: 'enemy', enemy });
       for (const npc of run.npcs) drawables.push({ y: npc.y, kind: 'npc', npc });
-      for (const ally of run.allies) drawables.push({ y: ally.y, kind: 'ally', ally });
-      if (run.pet) drawables.push({ y: run.pet.y, kind: 'pet', pet: run.pet });
-      drawables.push({ y: p.y, kind: 'hero' });
+      for (const ally of run.allies) drawables.push({ y: ally.ry, kind: 'ally', ally });
+      if (run.pet) drawables.push({ y: run.pet.ry, kind: 'pet', pet: run.pet });
+      drawables.push({ y: p.ry, kind: 'hero' });
       drawables.sort((a, b) => a.y - b.y);
       for (const d of drawables) {
         if (d.kind === 'prop') {
@@ -333,7 +344,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       }
       for (const m of run.mines) drawMine(ctx, m, camX, camY);
       for (const o of run.orbiters) drawOrbiter(ctx, o, camX, camY, run.time);
-      for (const pr of run.projectiles) drawProjectile(ctx, pr, camX, camY, p.x, p.y);
+      for (const pr of run.projectiles) drawProjectile(ctx, pr, camX, camY, p.rx, p.ry);
       for (const f of run.fx) drawFx(ctx, f, camX, camY);
 
       drawNight(

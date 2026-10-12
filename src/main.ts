@@ -175,9 +175,9 @@ async function boot(): Promise<void> {
       router.update(dt);
       input.endStep();
     },
-    render() {
+    render(alpha) {
       view.ctx.imageSmoothingEnabled = false;
-      router.render(view);
+      router.render(view, alpha);
     },
   }).start();
 }

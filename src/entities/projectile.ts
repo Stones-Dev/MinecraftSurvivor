@@ -23,6 +23,9 @@ export type ProjStyle =
 export class Projectile {
   px = 0;
   py = 0;
+  /** Interpolated render position. */
+  rx = 0;
+  ry = 0;
   alive = true;
   /** Enemy ids already hit (piercing projectiles hit each enemy once per pass). */
   readonly hits = new Set<number>();

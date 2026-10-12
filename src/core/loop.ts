@@ -4,7 +4,8 @@ const MAX_STEPS_PER_FRAME = 5;
 
 export interface LoopHandlers {
   update(dt: number): void;
-  render(): void;
+  /** `alpha` is how far (0..1) the clock is into the next fixed step: blend previous and current state with it. */
+  render(alpha: number): void;
 }
 
 export class Loop {
@@ -39,7 +40,7 @@ export class Loop {
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) this.acc = 0;
-    this.handlers.render();
+    this.handlers.render(this.acc / STEP);
     this.raf = requestAnimationFrame(this.frame);
   };
 }

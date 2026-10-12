@@ -109,8 +109,8 @@ export function drawEnemy(
   const blink = e.state === 'fuse' && Math.floor(e.animT * 8) % 2 === 0;
   if (e.hurtT > 0 || blink) key += '@flash';
   if (e.dying) ctx.globalAlpha = Math.max(0, 1 - e.deathT / 0.6);
-  const x = e.x - camX;
-  const y = e.y - camY;
+  const x = e.rx - camX;
+  const y = e.ry - camY;
   const sc = e.def.scale ?? 1;
   atlas.draw(ctx, key, x, y, e.facing < 0, sc);
   ctx.globalAlpha = 1;
@@ -177,16 +177,21 @@ export function drawHero(
   const swinging = p.swingT > 0;
   const name = run.loadout.hero;
   const id = `hero.${name}.${armor}.sword_${sword}.${swinging ? 'swing' : 'idle'}`;
-  const t = swinging ? 0.33 - p.swingT : run.time;
+  const walking = p.moving && !swinging && !p.dead;
+  const t = swinging ? 0.33 - p.swingT : run.time * (walking ? 1.5 : 1);
   const anim = atlas.hasAnim(id) ? atlas.anim(id) : atlas.anim(`hero.${name}.none.sword_wood.idle`);
   let key = frameAt(anim, t);
   if (p.hurtT > 0) key += '@flash';
-  const bob = p.moving && !swinging ? -(Math.floor(run.time * 10) % 2) : 0;
   if (p.dead) ctx.globalAlpha = 0.5;
   else if (p.iframes > 0 && Math.floor(run.time * 20) % 2 === 0) ctx.globalAlpha = 0.65;
-  const x = p.x - camX;
-  const y = p.y - camY + bob;
-  atlas.draw(ctx, key, x, y, p.facing < 0);
+  const x = p.rx - camX;
+  const y = p.ry - camY;
+  if (walking) {
+    // Distance-driven walk cycle: the legs shuffle +1, 0, -1, 0 px and the body rises on the passing step.
+    const stage = Math.floor(p.walkPhase) & 3;
+    const legDx = stage === 1 ? 1 : stage === 3 ? -1 : 0;
+    atlas.drawWalk(ctx, key, x, y, p.facing < 0, legDx, stage & 1);
+  } else atlas.draw(ctx, key, x, y, p.facing < 0);
   ctx.globalAlpha = 1;
   if (armor === 'enchanted' || sword === 'enchanted') {
     // Enchantment glint: a few purple sparkles drifting over the hero.
@@ -212,8 +217,8 @@ export function drawPickup(
   camX: number,
   camY: number,
 ): void {
-  const x = Math.round(pk.x - camX);
-  const y = Math.round(pk.y - camY) - 3;
+  const x = Math.round(pk.rx - camX);
+  const y = Math.round(pk.ry - camY) - 3;
   if (pk.kind === 'xp') {
     const bright = Math.floor(pk.age * 6) % 2 === 0;
     ctx.fillStyle = '#1b3a14';
@@ -254,8 +259,8 @@ export function drawProjectile(
   heroX: number,
   heroY: number,
 ): void {
-  const x = pr.x - camX;
-  let y = pr.y - camY;
+  const x = pr.rx - camX;
+  let y = pr.ry - camY;
   const len = Math.hypot(pr.vx, pr.vy) || 1;
   const dx = pr.vx / len;
   const dy = pr.vy / len;
@@ -335,8 +340,8 @@ export function drawProjectile(
         const t = i / steps;
         px(
           ctx,
-          heroX - camX + (pr.x - heroX) * t,
-          heroY - camY - 8 + (pr.y - heroY + 8) * t,
+          heroX - camX + (pr.rx - heroX) * t,
+          heroY - camY - 8 + (pr.ry - heroY + 8) * t,
           1,
           1,
           '#d8d8d8',
@@ -709,8 +714,8 @@ export function drawAlly(
   const id = companionAnim(atlas, a.def.sprite, a.moving);
   if (!id) return;
   const anim = atlas.anim(id);
-  const x = a.x - camX;
-  const y = a.y - camY + 4;
+  const x = a.rx - camX;
+  const y = a.ry - camY + 4;
   if (a.downed) ctx.globalAlpha = 0.35 + 0.1 * Math.sin(time * 6);
   if (a.def.sprite.startsWith('npc.') && id.endsWith('.walk')) {
     const f = Math.floor(time * 6) % 4;
@@ -754,5 +759,5 @@ export function drawPet(
   if (!id) return;
   const flying = id.endsWith('.flying') || p.def.id === 'parrot' || p.def.id === 'bee';
   const bob = flying ? Math.sin(time * 5 + p.t) * 2 - 6 : 0;
-  atlas.draw(ctx, frameAt(atlas.anim(id), time), p.x - camX, p.y - camY + 4 + bob, p.facing < 0);
+  atlas.draw(ctx, frameAt(atlas.anim(id), time), p.rx - camX, p.ry - camY + 4 + bob, p.facing < 0);
 }

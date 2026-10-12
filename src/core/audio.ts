@@ -25,7 +25,8 @@ export type SfxName =
   | 'chest'
   | 'egg'
   | 'spin'
-  | 'gameover';
+  | 'gameover'
+  | 'step';
 
 /** Minimum seconds between two plays of the same effect (keeps crowds from clipping). */
 const SPACING: Record<SfxName, number> = {
@@ -53,6 +54,7 @@ const SPACING: Record<SfxName, number> = {
   egg: 0.3,
   spin: 0.03,
   gameover: 2,
+  step: 0.17,
 };
 
 const MAX_VOICES = 18;
@@ -275,6 +277,9 @@ export class AudioEngine {
         [392, 349, 311, 261, 196].forEach((f, i) =>
           this.tone(f, i === 4 ? 0.9 : 0.22, 'triangle', 0.16, f * 0.98, i * 0.2),
         );
+        break;
+      case 'step':
+        this.noise(0.04, 0.035, 900);
         break;
       case 'trade':
         this.tone(784, 0.08, 'triangle', 0.12, 784);

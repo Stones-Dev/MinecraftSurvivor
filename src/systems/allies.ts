@@ -33,10 +33,12 @@ export function gatherCompanions(run: RunState): void {
   for (const a of run.allies) {
     a.x = p.x + (a.slot === 0 ? 26 : -26);
     a.y = p.y + 12;
+    a.prevX = Number.NaN;
   }
   if (run.pet) {
     run.pet.x = p.x - 20;
     run.pet.y = p.y + 10;
+    run.pet.prevX = Number.NaN;
   }
 }
 
@@ -246,6 +248,7 @@ export function updateAllies(run: RunState, dt: number): void {
         a.hp = a.maxHp * 0.5;
         a.x = p.x + (a.slot === 0 ? 20 : -20);
         a.y = p.y + 10;
+        a.prevX = Number.NaN;
         run.fx.push(makeFx('ring', a.x, a.y, 0.4, { r: 16, color: '#7dff9a' }));
       }
       continue;
@@ -257,6 +260,7 @@ export function updateAllies(run: RunState, dt: number): void {
     if (Math.hypot(p.x - a.x, p.y - a.y) > 320) {
       a.x = ax;
       a.y = ay;
+      a.prevX = Number.NaN;
     }
     runRole(run, a, dt, ax, ay);
     takeContact(run, a, dt);
@@ -290,6 +294,7 @@ export function updatePet(run: RunState, dt: number): void {
   if (Math.hypot(p.x - pet.x, p.y - pet.y) > 300) {
     pet.x = tx;
     pet.y = ty;
+    pet.prevX = Number.NaN;
     pet.vx = pet.vy = 0;
   }
   const eff = pet.def.effect;

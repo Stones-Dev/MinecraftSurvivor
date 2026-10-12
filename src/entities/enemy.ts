@@ -6,6 +6,12 @@ export type EnemyState =
 export class Enemy {
   x = 0;
   y = 0;
+  /** Previous-step position (NaN = just spawned/teleported) and the interpolated render position. */
+  prevX = Number.NaN;
+  prevY = Number.NaN;
+  rx = 0;
+  ry = 0;
+
   radius: number;
   hp = 1;
   maxHp = 1;

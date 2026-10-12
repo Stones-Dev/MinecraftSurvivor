@@ -11,6 +11,11 @@ export class Ally {
   contactCd = 0;
   hurtT = 0;
   facing = 1;
+  /** Previous-step position (NaN = just spawned/teleported) and the interpolated render position. */
+  prevX = Number.NaN;
+  prevY = Number.NaN;
+  rx = 0;
+  ry = 0;
   dx = 0;
   dy = 1;
   moving = false;
@@ -33,6 +38,11 @@ export class Ally {
 
 /** The pet: invulnerable, follows with a lazy spring. */
 export class PetState {
+  /** Previous-step position (NaN = just spawned/teleported) and the interpolated render position. */
+  prevX = Number.NaN;
+  prevY = Number.NaN;
+  rx = 0;
+  ry = 0;
   vx = 0;
   vy = 0;
   facing = 1;

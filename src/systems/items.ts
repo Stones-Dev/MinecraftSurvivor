@@ -75,6 +75,7 @@ export function useItem(run: RunState, dirX: number, dirY: number): void {
       run.fx.push(makeFx('ring', p.x, p.y - 8, 0.3, { r: 16, color: '#7a5cff' }));
       p.x = r.x;
       p.y = r.y;
+      p.snap();
       p.iframes = Math.max(p.iframes, 0.4);
       run.fx.push(makeFx('ring', p.x, p.y - 8, 0.3, { r: 16, color: '#7a5cff' }));
       run.itemCd = ITEMS.ender_pearl.cooldown;

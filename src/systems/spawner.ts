@@ -172,6 +172,7 @@ export function updateSpawner(run: RunState, dt: number): void {
       if (pt) {
         e.x = pt.x;
         e.y = pt.y;
+        e.prevX = Number.NaN;
         e.farT = 0;
       }
     }

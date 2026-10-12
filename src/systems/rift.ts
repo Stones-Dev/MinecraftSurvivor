@@ -71,6 +71,7 @@ function enter(run: RunState): void {
   r.portal = null;
   p.x = 0;
   p.y = 90;
+  p.snap();
   p.vx = p.vy = 0;
   p.iframes = 1.5;
   gatherCompanions(run);
@@ -123,6 +124,7 @@ function leave(run: RunState, won: boolean): void {
   run.world = s.world;
   p.x = s.x;
   p.y = s.y;
+  p.snap();
   p.vx = p.vy = 0;
   p.iframes = 2;
   p.dotT = 0;
@@ -137,6 +139,7 @@ function leave(run: RunState, won: boolean): void {
     for (const pk of loot) {
       pk.x = p.x;
       pk.y = p.y;
+      pk.prevX = Number.NaN;
       pk.magnet = true;
       run.pickups.push(pk);
     }

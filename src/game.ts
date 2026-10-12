@@ -7,7 +7,7 @@ import { baseMods, PASSIVES, type Mods, type PassiveId } from './data/upgrades';
 import type { ItemId } from './data/items';
 import { ARMOR_TIERS, SWORD_TIERS } from './data/tiers';
 import type { Enemy } from './entities/enemy';
-import type { Fx } from './entities/fx';
+import { makeFx, type Fx } from './entities/fx';
 import { Player } from './entities/player';
 import type { Pickup } from './entities/pickup';
 import type { Projectile } from './entities/projectile';
@@ -102,6 +102,10 @@ export type RunStatus = 'playing' | 'dead';
 const PICKUP_COLLECT = 8;
 
 const MAX_PICKUPS = 300;
+
+function lerpPos(prev: number, cur: number, a: number): number {
+  return prev !== prev ? cur : prev + (cur - prev) * a;
+}
 
 export class RunState {
   readonly rng: { spawn: Rng; drops: Rng; levelup: Rng; ai: Rng; fx: Rng; events: Rng };
@@ -378,6 +382,7 @@ export class RunState {
 
   /** One fixed simulation step. Frozen while a level-up offer is open (the screen stops calling it). */
   update(dt: number, input: InputSource): void {
+    this.snapshotPrev();
     this.time += dt;
     this.shake = Math.max(0, this.shake - 14 * dt);
     this.darkness = Math.max(0, this.darkness - dt);
@@ -412,6 +417,19 @@ export class RunState {
     updateAllies(this, dt);
     updatePet(this, dt);
     this.updateHeroPassives(dt);
+    if (p.footfall && !p.dead) {
+      this.emit('step');
+      if (this.quality > 0 && this.world.surface(p.x, p.y, this.biome()) === 'ground') {
+        const f = this.rng.fx;
+        this.fx.push(
+          makeFx('spark', p.x - p.facing * 3, p.y - 1, 0.28, {
+            vx: -p.facing * 10 + f.range(-6, 6),
+            vy: f.range(-20, -9),
+            color: '#c9b98f',
+          }),
+        );
+      }
+    }
     this.buffTick -= dt;
     if (this.buffTick <= 0) {
       this.buffTick = 0.5;
@@ -427,6 +445,63 @@ export class RunState {
     if (due.length > 0) {
       this.scheduled = this.scheduled.filter((s) => s.t > 0);
       for (const s of due) s.fn();
+    }
+  }
+
+  /** Remember where everything was at the start of this step (the render blends previous and current). */
+  private snapshotPrev(): void {
+    const p = this.player;
+    p.prevX = p.x;
+    p.prevY = p.y;
+    for (const e of this.enemies) {
+      e.prevX = e.x;
+      e.prevY = e.y;
+    }
+    for (const a of this.allies) {
+      a.prevX = a.x;
+      a.prevY = a.y;
+    }
+    const pet = this.pet;
+    if (pet) {
+      pet.prevX = pet.x;
+      pet.prevY = pet.y;
+    }
+    for (const pk of this.pickups) {
+      pk.prevX = pk.x;
+      pk.prevY = pk.y;
+    }
+  }
+
+  /**
+   * Fill the render positions (`rx`, `ry`) by blending the previous and the current simulation step.
+   * `alpha` is the fraction of the next step that has elapsed (0..1); NaN previous positions (just spawned
+   * or teleported) render at the current position.
+   */
+  interpolate(alpha: number): void {
+    const a = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
+    const p = this.player;
+    p.rx = lerpPos(p.prevX, p.x, a);
+    p.ry = lerpPos(p.prevY, p.y, a);
+    for (const e of this.enemies) {
+      e.rx = lerpPos(e.prevX, e.x, a);
+      e.ry = lerpPos(e.prevY, e.y, a);
+    }
+    for (const al of this.allies) {
+      al.rx = lerpPos(al.prevX, al.x, a);
+      al.ry = lerpPos(al.prevY, al.y, a);
+    }
+    const pet = this.pet;
+    if (pet) {
+      pet.rx = lerpPos(pet.prevX, pet.x, a);
+      pet.ry = lerpPos(pet.prevY, pet.y, a);
+    }
+    for (const pk of this.pickups) {
+      pk.rx = lerpPos(pk.prevX, pk.x, a);
+      pk.ry = lerpPos(pk.prevY, pk.y, a);
+    }
+    for (const pr of this.projectiles) {
+      pr.rx = pr.px + (pr.x - pr.px) * a;
+      pr.ry = pr.py + (pr.y - pr.py) * a;
     }
   }
 
