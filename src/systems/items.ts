@@ -10,7 +10,8 @@ export function giveItem(run: RunState, id: ItemId): void {
     run.itemCd = 0;
     run.recomputeStats();
   } else if (run.item !== id) {
-    run.pendingItem = id;
+    if (run.pendingItem === null) run.pendingItem = id;
+    else run.pendingQueue.push(id);
   }
 }
 
@@ -21,7 +22,7 @@ export function resolveItemChoice(run: RunState, take: boolean): void {
     run.itemCd = 0;
     run.recomputeStats();
   }
-  run.pendingItem = null;
+  run.pendingItem = run.pendingQueue.shift() ?? null;
 }
 
 function floatText(run: RunState, text: string, color: string): void {

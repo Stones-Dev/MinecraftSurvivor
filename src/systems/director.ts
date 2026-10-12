@@ -7,7 +7,7 @@ import { MINI_BOSSES } from '../data/enemies';
 import type { Enemy } from '../entities/enemy';
 import { boltPoints, makeFx } from '../entities/fx';
 import type { RunState } from '../game';
-import { explode, hurtPlayer } from './combat';
+import { damageEnemy, hurtPlayer } from './combat';
 import { giveItem } from './items';
 import { makeEnemy, ringPoint } from './spawner';
 
@@ -30,6 +30,9 @@ export class DirectorState {
   raidAt = 0;
   raidUntil = 0;
   raidSpawnT = 0;
+  bannerDone = false;
+  /** Game time at which the next Endless boss arrives. */
+  nextEndlessAt = ENDLESS_FIRST;
   raidAngle = 0;
   weatherCheckAt = 120;
   stormUntil = 0;
@@ -75,6 +78,7 @@ function spawnBoss(run: RunState, id: string, power: number): void {
 
 /** Called when anything dies with a reward. */
 export function onEnemyKilled(run: RunState, e: Enemy): void {
+  if (e.riftFoe) return;
   if (e.boss === 'boss') {
     run.bossKills++;
     run.rareSpawnEggs++;
@@ -82,6 +86,7 @@ export function onEnemyKilled(run: RunState, e: Enemy): void {
     run.announce(`${e.def.name} defeated!`, '#ffd84a', 4);
     if (e.def.boss === 'warden' && !run.won) {
       run.won = true;
+      run.director.nextEndlessAt = Math.max(ENDLESS_FIRST, run.time + 60);
       run.announce('NIGHT SURVIVED!', '#7dff9a', 6);
     }
   } else if (e.boss === 'mini') {
@@ -120,8 +125,7 @@ function lightning(run: RunState, x: number, y: number): void {
         makeFx('text', e.x, e.y - 20, 1, { text: 'Charged!', vy: -12, color: '#6ad0ff' }),
       );
     } else {
-      e.hp -= 60;
-      if (e.hp <= 0) explode(run, e.x, e.y, 0.01, 0, 0, null);
+      damageEnemy(run, e, 60, x, y, 0);
     }
   }
 }
@@ -136,7 +140,8 @@ export function updateDirector(run: RunState, dt: number): void {
   if (next && t >= next.at) {
     spawnBoss(run, next.id, 1);
     d.nextBoss++;
-  } else if (!next && run.won && t >= ENDLESS_FIRST + d.endlessBoss * ENDLESS_EVERY) {
+  } else if (!next && run.won && t >= d.nextEndlessAt) {
+    d.nextEndlessAt = t + ENDLESS_EVERY;
     const id = BOSS_SCHEDULE[d.endlessBoss % BOSS_SCHEDULE.length]?.id ?? 'warden';
     spawnBoss(run, id, 1 + 0.5 * (d.endlessBoss + 1));
     d.endlessBoss++;
@@ -175,6 +180,7 @@ export function updateDirector(run: RunState, dt: number): void {
     d.raidUntil = t + 30;
     d.raidAt = t + run.rng.events.range(240, 300);
     d.raidAngle = run.rng.events.range(0, Math.PI * 2);
+    d.bannerDone = false;
     d.raidSpawnT = 0;
     run.announce('RAID! Pillagers incoming', '#ff6b6b', 4);
     run.emit('hiss');
@@ -183,7 +189,7 @@ export function updateDirector(run: RunState, dt: number): void {
     d.raidSpawnT -= dt;
     if (d.raidSpawnT <= 0) {
       d.raidSpawnT = 1.6;
-      const last = d.raidUntil - t < 3;
+      const last = d.raidUntil - t < 3 && !d.bannerDone;
       for (let i = 0; i < 3; i++) {
         const id = run.rng.events.chance(0.6) ? 'pillager' : 'vindicator';
         const e = makeEnemy(run, id, 0, 0, false);
@@ -192,6 +198,7 @@ export function updateDirector(run: RunState, dt: number): void {
         e.x = pt.x;
         e.y = pt.y;
         if (last && i === 0) {
+          d.bannerDone = true;
           e.banner = true;
           e.elite = true;
           e.maxHp *= 1.6;

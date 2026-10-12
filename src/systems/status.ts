@@ -36,29 +36,29 @@ export function applyStatus(e: Enemy, kind: StatusKind, dur: number, power = 0):
   }
 }
 
-/** Advance timers and deal damage-over-time ticks (every 0.5 s). */
+/** Advance timers and deal damage-over-time ticks (every 0.5 s). The last tick of an expiring effect still lands. */
 export function tickStatus(run: RunState, e: Enemy, dt: number): void {
+  // DoT strength at the start of the step, before timers can expire it.
+  const dps =
+    (e.burnT > 0 ? e.burnDps : 0) +
+    (e.poisonT > 0 ? e.poisonDps : 0) +
+    (e.witherT > 0 ? e.witherDps : 0);
   e.burnT = Math.max(0, e.burnT - dt);
   e.poisonT = Math.max(0, e.poisonT - dt);
   e.witherT = Math.max(0, e.witherT - dt);
   e.slowT = Math.max(0, e.slowT - dt);
   e.stunT = Math.max(0, e.stunT - dt);
   e.freezeT = Math.max(0, e.freezeT - dt);
+  if (e.slowT <= 0) e.slowF = 1;
+  if (dps > 0) {
+    e.statusAcc += dt;
+    while (e.statusAcc >= 0.5 - 1e-6 && !e.dying) {
+      e.statusAcc -= 0.5;
+      damageEnemy(run, e, dps * 0.5, e.x, e.y, 0, true);
+    }
+  }
   if (e.burnT <= 0) e.burnDps = 0;
   if (e.poisonT <= 0) e.poisonDps = 0;
   if (e.witherT <= 0) e.witherDps = 0;
-  if (e.slowT <= 0) e.slowF = 1;
-  if (e.burnT <= 0 && e.poisonT <= 0 && e.witherT <= 0) {
-    e.statusAcc = 0;
-    return;
-  }
-  e.statusAcc += dt;
-  while (e.statusAcc >= 0.5 && !e.dying) {
-    e.statusAcc -= 0.5;
-    const dps =
-      (e.burnT > 0 ? e.burnDps : 0) +
-      (e.poisonT > 0 ? e.poisonDps : 0) +
-      (e.witherT > 0 ? e.witherDps : 0);
-    if (dps > 0) damageEnemy(run, e, dps * 0.5, e.x, e.y, 0, true);
-  }
+  if (e.burnT <= 0 && e.poisonT <= 0 && e.witherT <= 0) e.statusAcc = 0;
 }

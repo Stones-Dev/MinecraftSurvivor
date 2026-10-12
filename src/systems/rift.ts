@@ -6,6 +6,7 @@ import type { Enemy } from '../entities/enemy';
 import { makeFx } from '../entities/fx';
 import type { RunState } from '../game';
 import type { World } from '../world/world';
+import { gatherCompanions } from './allies';
 import { ringPoint, makeEnemy } from './spawner';
 
 interface Stash {
@@ -17,6 +18,7 @@ interface Stash {
   telegraphs: RunState['telegraphs'];
   orbiters: RunState['orbiters'];
   npcs: RunState['npcs'];
+  scheduled: RunState['scheduled'];
   x: number;
   y: number;
   world: World;
@@ -46,6 +48,7 @@ function enter(run: RunState): void {
     telegraphs: run.telegraphs,
     orbiters: run.orbiters,
     npcs: run.npcs,
+    scheduled: run.scheduled,
     x: p.x,
     y: p.y,
     world: run.world,
@@ -58,7 +61,11 @@ function enter(run: RunState): void {
   run.telegraphs = [];
   run.orbiters = [];
   run.npcs = [];
+  run.scheduled = [];
+  run.storm = false;
+  run.chargedBonus = 0;
   run.world = run.arenaWorld;
+  gatherCompanions(run);
   r.active = true;
   r.timer = RIFT_DURATION;
   r.portal = null;
@@ -74,6 +81,7 @@ function enter(run: RunState): void {
     e.maxHp *= hpMult;
     e.hp = e.maxHp;
     e.boss = 'mini';
+    e.riftFoe = true;
     e.cd = 2;
     run.enemies.push(e);
     r.foes.push(e);
@@ -100,6 +108,7 @@ function leave(run: RunState, won: boolean): void {
   const s = r.stash;
   const p = run.player;
   if (!s) return;
+  const loot = run.pickups;
   run.enemies = s.enemies;
   run.projectiles = s.projectiles;
   run.pickups = s.pickups;
@@ -108,16 +117,27 @@ function leave(run: RunState, won: boolean): void {
   run.telegraphs = s.telegraphs;
   run.orbiters = s.orbiters;
   run.npcs = s.npcs;
+  run.scheduled = s.scheduled;
   run.world = s.world;
   p.x = s.x;
   p.y = s.y;
   p.vx = p.vy = 0;
   p.iframes = 2;
+  p.dotT = 0;
+  p.dotDps = 0;
+  gatherCompanions(run);
   r.stash = null;
   r.active = false;
   r.foes = [];
   r.checkAt = run.time + 30;
   if (won) {
+    // Whatever the arena kills dropped comes back with the hero.
+    for (const pk of loot) {
+      pk.x = p.x;
+      pk.y = p.y;
+      pk.magnet = true;
+      run.pickups.push(pk);
+    }
     run.rareSpawnEggs++;
     run.spawnEggs += 3;
     run.emeraldsPicked += Math.round(60 * run.mods.lootMult);
@@ -136,10 +156,10 @@ export function updateRift(run: RunState, dt: number): void {
   const p = run.player;
   if (r.active) {
     r.timer -= dt;
-    if (p.dead) {
-      leave(run, false);
-    } else if (r.foes.length > 0 && r.foes.every((e) => e.dying || e.hp <= 0)) {
+    if (r.foes.length > 0 && r.foes.every((e) => e.dying || e.hp <= 0)) {
       leave(run, true);
+    } else if (p.dead) {
+      leave(run, false);
     } else if (r.timer <= 0) {
       leave(run, false);
     }

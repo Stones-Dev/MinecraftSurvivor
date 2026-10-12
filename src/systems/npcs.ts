@@ -31,7 +31,6 @@ export interface RescueMarker {
 }
 
 const TRADE_COST = 100;
-let nextNpc = 1;
 
 function add(
   run: RunState,
@@ -42,7 +41,7 @@ function add(
   leader = 0,
 ): Npc {
   const n: Npc = {
-    id: nextNpc++,
+    id: run.nextNpcId++,
     kind,
     x,
     y,
@@ -115,6 +114,7 @@ export function updateNpcs(run: RunState, dt: number): void {
     d.villagerAt = run.time + run.rng.events.range(220, 320);
     spawnVillager(run);
   }
+  if (run.rescue) run.rescue.left -= dt;
   for (const n of run.npcs) {
     n.t += dt;
     const dist = Math.hypot(p.x - n.x, p.y - n.y);
@@ -157,11 +157,12 @@ export function updateNpcs(run: RunState, dt: number): void {
       const leader = run.npcs.find((o) => o.id === n.leader);
       if (!leader) {
         n.state = 'flee';
+        moveToward(n, n.x + 100, n.y, 60, dt);
       } else {
         const off = n.id % 2 === 0 ? 14 : -14;
         moveToward(n, leader.x + off, leader.y + 8, leader.state === 'flee' ? 66 : 44, dt);
       }
-    } else if (n.kind === 'villager' && run.rescue) {
+    } else if (n.kind === 'villager' && run.rescue && n.state !== 'flee') {
       if (n.state === 'lost' && dist < 40 && !p.dead) {
         n.state = 'follow';
         run.fx.push(
@@ -187,7 +188,6 @@ export function updateNpcs(run: RunState, dt: number): void {
           run.rescue = null;
         }
       }
-      if (run.rescue) run.rescue.left -= dt;
       if (run.rescue && run.rescue.left <= 0) {
         n.state = 'flee';
         run.rescue = null;

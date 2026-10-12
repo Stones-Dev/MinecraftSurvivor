@@ -5,7 +5,13 @@ import type { RunState } from '../game';
 import { ITEMS } from '../data/items';
 import { runReward } from '../systems/economy';
 import { resolveItemChoice } from '../systems/items';
-import { applyCard, buildOffer, finishOffer, SKIP_EMERALDS } from '../systems/levelup';
+import {
+  applyCard,
+  buildOffer,
+  enchantOffer,
+  finishOffer,
+  SKIP_EMERALDS,
+} from '../systems/levelup';
 import { drawIcon } from './icons';
 import { drawButton, drawPanel, drawText, inRect, type Rect, wrap } from './panel';
 import type { Screen } from './router';
@@ -45,7 +51,7 @@ export function levelupScreen(app: App, run: RunState): Screen {
   const reroll = (): void => {
     if (run.rerolls <= 0) return;
     run.rerolls--;
-    run.offer = buildOffer(run);
+    run.offer = run.offerKind === 'enchant' ? enchantOffer(run) : buildOffer(run);
   };
   const skip = (): void => {
     run.emeraldsPicked += SKIP_EMERALDS;
@@ -291,7 +297,7 @@ export function resultsScreen(app: App, run: RunState): Screen {
     miniBosses: run.miniKills,
     picked: run.emeraldsPicked,
   });
-  const newTime = run.time > data.records.bestTimeSec;
+  const newTime = Math.floor(run.time) > Math.floor(data.records.bestTimeSec);
   const newKills = run.kills > data.records.bestKills;
   data.currencies.emeralds += earned;
   data.records.runs += 1;

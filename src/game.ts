@@ -162,6 +162,9 @@ export class RunState {
   item: ItemId | null = null;
   itemCd = 0;
   pendingItem: ItemId | null = null;
+  /** Item offers that arrived while another choice was open. */
+  pendingQueue: ItemId[] = [];
+  nextNpcId = 1;
   absorb = 0;
   resistUntil = 0;
   dash: { dx: number; dy: number; t: number } | null = null;

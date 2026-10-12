@@ -84,7 +84,7 @@ async function boot(): Promise<void> {
         runScreen(app, {
           loadout: loadout ?? debugLoadout(),
           seed: num('seed', Date.now() % 1_000_000_000),
-          startTime: num('t', 0),
+          startTime: params.has('debug') ? num('t', 0) : 0,
           debug: params.has('debug'),
           weapons: params.get('weapons')?.split(',') as WeaponId[] | undefined,
           startXp: num('xp', 0),

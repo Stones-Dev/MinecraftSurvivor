@@ -104,3 +104,55 @@ describe('save', () => {
     expect(() => broken.save(broken.load())).not.toThrow();
   });
 });
+
+describe('save hardening', () => {
+  it('drops mistyped fields, keeps Steve and clamps levels', () => {
+    const s = migrate({
+      saveVersion: 1,
+      currencies: { emeralds: '9', spawnEggs: 3 },
+      owned: { alex: { level: 99, shards: -4, obtainedAt: 'x' }, bad: null },
+      pity: [],
+      upgrades: null,
+      loadout: { hero: 'ghost', pet: 'alex', allies: [1, 'alex'] },
+    });
+    expect(s.currencies.emeralds).toBe(500);
+    expect(s.currencies.spawnEggs).toBe(3);
+    expect(s.owned['steve']).toBeDefined();
+    expect(s.owned['alex']?.level).toBe(5);
+    expect(s.owned['alex']?.shards).toBe(0);
+    expect(s.owned['bad']).toBeUndefined();
+    expect(s.loadout.hero).toBe('steve');
+    expect(s.loadout.allies).toEqual(['alex']);
+    expect(s.upgrades).toEqual({});
+  });
+
+  it('keeps a newer-version save untouched and backs up corrupt blobs', () => {
+    const mem = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, v),
+    };
+    mem.set('minesurvive.save', JSON.stringify({ saveVersion: 99, currencies: { emeralds: 5 } }));
+    const store = new LocalSaveStore(storage);
+    const d = store.load();
+    expect(d.currencies.emeralds).toBe(500);
+    store.save(d);
+    expect(JSON.parse(mem.get('minesurvive.save') ?? '{}').saveVersion).toBe(99);
+    expect(mem.get('minesurvive.save.bak')).toContain('99');
+    mem.set('minesurvive.save', '{not json');
+    const store2 = new LocalSaveStore(storage);
+    store2.load();
+    expect(mem.get('minesurvive.save.bak')).toContain('99'); // first backup is kept
+  });
+
+  it('rejects imports that are not saves', () => {
+    const store = new LocalSaveStore(null);
+    expect(() => store.import('[]')).toThrow();
+    expect(() => store.import('{"hello":1}')).toThrow();
+    expect(() => store.import('not json')).toThrow();
+    expect(
+      store.import(JSON.stringify({ saveVersion: 1, currencies: { emeralds: 7 } })).currencies
+        .emeralds,
+    ).toBe(7);
+  });
+});

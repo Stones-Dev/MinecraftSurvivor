@@ -39,6 +39,8 @@ export class Enemy {
   angry = 0;
   /** Raid banner carrier: drops a chest when killed. */
   banner = false;
+  /** Nether rift opponent: its reward is the rift's, not a mini-boss payout. */
+  riftFoe = false;
   /** Boss attack timers and counters (systems/bossAI.ts). */
   atk = 0;
   atk2 = 0;

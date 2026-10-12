@@ -175,7 +175,7 @@ export function updateInteract(run: RunState, dt: number): void {
         break;
       }
       case 'anvil':
-        if (d < 14) {
+        if (d < 14 && (run.armorTier < 7 || run.swordTier < 6)) {
           const armor = run.armorTier < 7;
           const sword = run.swordTier < 6;
           const pickArmor = armor && (!sword || run.rng.drops.chance(0.5));
