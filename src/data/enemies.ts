@@ -55,6 +55,8 @@ export interface EnemyDef {
   fromMinute: number;
   /** Relative spawn weight (0 = never spawned directly). */
   weight: number;
+  /** The sprite faces LEFT by default (most mob sheets from the author face right), so the flip is inverted. */
+  faceLeft?: boolean;
   /** Slimes: what the corpse splits into (two of them). */
   splitInto?: string;
   /** Whether the sprite has a walk animation. */
@@ -829,6 +831,29 @@ export const MINI_BOSSES = [
 ] as const;
 
 export const ENEMIES: Record<string, EnemyDef> = E;
+
+/** Sprites drawn facing left in the source sheets (checked on a contact sheet of every shipped mob). */
+const FACES_LEFT = [
+  'husk',
+  'spider',
+  'cave_spider',
+  'hoglin',
+  'zoglin',
+  'pillager',
+  'pillager_captain',
+  'skeleton',
+  'stray',
+  'wither_skeleton',
+  'silverfish',
+  'piglin',
+  'zombie_piglin',
+  'piglin_brute',
+  'raid_captain',
+];
+for (const id of FACES_LEFT) {
+  const def = ENEMIES[id];
+  if (def) def.faceLeft = true;
+}
 
 /** Damage/HP growth curves from BRIEF section 15. */
 export function hpScale(minute: number): number {

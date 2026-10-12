@@ -83,14 +83,15 @@ function moveTo(run: RunState, a: Ally, tx: number, ty: number, speed: number, d
   return d;
 }
 
-function nearestFoe(run: RunState, x: number, y: number, range: number): Enemy | null {
+/** Nearest living enemy to (x, y) between `min` and `range` px away. */
+function nearestFoe(run: RunState, x: number, y: number, range: number, min = 0): Enemy | null {
   run.hash.query(x, y, range, near);
   let best: Enemy | null = null;
   let bd = Infinity;
   for (const e of near) {
     if (e.dying || e.hp <= 0) continue;
     const d = Math.hypot(e.x - x, e.y - y);
-    if (d < bd) {
+    if (d >= min && d <= range && d < bd) {
       bd = d;
       best = e;
     }
@@ -283,29 +284,29 @@ function goatRam(
     }
     return;
   }
-  if (foe && a.cd <= 0) {
-    const d = Math.hypot(foe.x - a.x, foe.y - a.y);
-    if (d > 24 && d < RAM_LENGTH) {
-      a.phase = 1;
-      a.phaseT = RAM_WINDUP;
-      a.chargeX = (foe.x - a.x) / d;
-      a.chargeY = (foe.y - a.y) / d;
-      a.facing = a.chargeX >= 0 ? 1 : -1;
-      a.dx = a.chargeX;
-      a.dy = a.chargeY;
-      run.telegraphs.push({
-        kind: 'line',
-        x: a.x,
-        y: a.y - 4,
-        x2: a.x + a.chargeX * RAM_LENGTH,
-        y2: a.y - 4 + a.chargeY * RAM_LENGTH,
-        r: 6,
-        t: 0,
-        dur: RAM_WINDUP,
-        friendly: true,
-      });
-      return;
-    }
+  // Ram the nearest enemy that is far enough away to build up speed.
+  const mark = a.cd <= 0 && foe ? nearestFoe(run, a.x, a.y, RAM_LENGTH - 10, 28) : null;
+  if (mark) {
+    const d = Math.hypot(mark.x - a.x, mark.y - a.y) || 1;
+    a.phase = 1;
+    a.phaseT = RAM_WINDUP;
+    a.chargeX = (mark.x - a.x) / d;
+    a.chargeY = (mark.y - a.y) / d;
+    a.facing = a.chargeX >= 0 ? 1 : -1;
+    a.dx = a.chargeX;
+    a.dy = a.chargeY;
+    run.telegraphs.push({
+      kind: 'line',
+      x: a.x,
+      y: a.y - 4,
+      x2: a.x + a.chargeX * RAM_LENGTH,
+      y2: a.y - 4 + a.chargeY * RAM_LENGTH,
+      r: 6,
+      t: 0,
+      dur: RAM_WINDUP,
+      friendly: true,
+    });
+    return;
   }
   // Between rams: headbutt anything in reach, otherwise stay near the hero.
   if (foe && Math.hypot(foe.x - a.x, foe.y - a.y) < 60) {

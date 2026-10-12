@@ -114,7 +114,7 @@ export function drawEnemy(
   const x = e.rx - camX;
   const y = e.ry - camY;
   const sc = e.def.scale ?? 1;
-  atlas.draw(ctx, key, x, y, e.facing < 0, sc);
+  atlas.draw(ctx, key, x, y, e.def.faceLeft ? e.facing > 0 : e.facing < 0, sc);
   ctx.globalAlpha = 1;
   if (e.dying) return;
   const h = (e.def.height ?? 28) * (sc > 1 ? 1 : 1);
@@ -263,7 +263,7 @@ export function drawSpriteHero(
   const npc = base.startsWith('npc.');
   const sc = def.scale ?? 1;
   let key: string | undefined;
-  let flip = p.facing < 0;
+  let flip = def.faceLeft ? p.facing > 0 : p.facing < 0;
   let alpha = 1;
   const row = npc ? npcRow(p.moveDX, p.moveDY) : null;
   if (row) flip = row.flip;
@@ -283,7 +283,7 @@ export function drawSpriteHero(
       def.castFrames,
     );
   } else if (attackId) {
-    key = frameAtProgress(atlas.anim(attackId).frames, 1 - p.swingT / SWING_TIME);
+    key = frameAtProgress(atlas.anim(attackId).frames, 1 - p.swingT / SWING_TIME, def.attackFrames);
   } else if (p.moving) {
     const walkId = spriteHeroAnim(atlas, base, 'walk', WALK_ANIMS);
     if (walkId) {
@@ -342,7 +342,7 @@ function drawDecoys(
         frameAt(atlas.anim(id), run.time + i * 0.37),
         x,
         y,
-        d.facing < 0,
+        def.faceLeft ? d.facing > 0 : d.facing < 0,
         def.scale ?? 1,
         DECOY_TINT,
       );

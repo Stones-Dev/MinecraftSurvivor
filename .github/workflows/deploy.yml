@@ -28,6 +28,15 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+        env:
+          # Public Firebase web-app identifiers (not secrets), set as repository VARIABLES under
+          # Settings > Secrets and variables > Actions > Variables. Empty = local/guest-only build.
+          # See docs/FIREBASE_SETUP.md.
+          VITE_FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

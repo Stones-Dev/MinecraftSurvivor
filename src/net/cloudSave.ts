@@ -116,9 +116,13 @@ export class CloudSaveStore implements SaveStore {
   }
 
   import(json: string): SaveData {
-    const keep = this.local.load().cloud;
+    const cur = this.local.load();
+    const keep = cur.cloud;
+    const lastModified = cur.lastModified;
     const data = this.local.import(json);
     data.cloud = { ...keep }; // the imported file's own sync bookkeeping is meaningless here
+    // The import is the newest change, whatever date the file carries.
+    data.lastModified = Math.max(data.lastModified, lastModified);
     this.save(data);
     return data;
   }

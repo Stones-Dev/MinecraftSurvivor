@@ -119,8 +119,14 @@ export interface HeroDef extends CompanionBase {
   tint?: string;
   /** Sprite heroes: animation played while the ability is being cast (first one that exists wins). */
   castAnims?: readonly string[];
-  /** Only the first N frames of the cast animation are used (the creeper's later frames are the blast puff). */
+  /**
+   * Only the first N frames of the cast / attack animation are used: several sets end in frames of the
+   * projectile or puff alone (the creeper's blast, the witch's flask, the skeleton's arrow).
+   */
   castFrames?: number;
+  attackFrames?: number;
+  /** Sprite heroes whose art faces left when not mirrored (most mob sets; the default assumes right). */
+  faceLeft?: boolean;
 }
 
 export interface PetDef extends CompanionBase {
@@ -225,6 +231,9 @@ export const HEROES: HeroDef[] = [
     passiveName: 'Bone Dry',
     passive: 'Starts with the Bow at level 3, projectiles +1 pierce. Undead: immune to poison.',
     castAnims: ['firing', 'attack'],
+    castFrames: 5,
+    attackFrames: 5,
+    faceLeft: true,
     quip: 'All bones, no stamina. Still out-shoots everyone in the room.',
   },
   {
@@ -294,6 +303,9 @@ export const HEROES: HeroDef[] = [
     passiveName: 'Cauldron Craft',
     passive: 'Potion weapons +30% area. Starts with a random potion weapon (Poison or Harming).',
     castAnims: ['throw', 'attack'],
+    castFrames: 4,
+    attackFrames: 4,
+    faceLeft: true,
     quip: 'Cackles at everything. The potions are labelled, just not honestly.',
   },
   {
@@ -312,6 +324,9 @@ export const HEROES: HeroDef[] = [
     passive:
       '+10% speed. 20% of the hits you take leave a decoy behind that lures enemies for 1.5 s.',
     castAnims: ['magic', 'firing'],
+    castFrames: 4,
+    attackFrames: 5,
+    faceLeft: true,
     quip: 'There are four of him. None of them did the dishes.',
   },
   {
@@ -330,6 +345,7 @@ export const HEROES: HeroDef[] = [
     passive:
       '+15% luck and heal 1 HP per kill. Piglins and zombified piglins ignore him (bosses and rift foes do not).',
     castAnims: ['attack'],
+    faceLeft: true,
     tint: 'rgba(255,214,90,0.22)',
     quip: 'Will fight for you. Will fight a lot harder for gold.',
   },
@@ -664,6 +680,7 @@ export const PETS: PetDef[] = [
     text: 'At night: +{v}% speed and damage; nights are brighter',
     quip: 'Sleeps all day upside down. Night shift is where it shines.',
     hover: true,
+    scale: 0.7,
   },
   {
     id: 'glare',

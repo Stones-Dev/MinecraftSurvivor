@@ -21,8 +21,8 @@ import {
 
 describe('companion data', () => {
   it('meets the v1.0 content floor and has unique ids and pools', () => {
-    expect(PETS.length).toBeGreaterThanOrEqual(15);
-    expect(ALLIES.length).toBeGreaterThanOrEqual(10);
+    expect(PETS.length).toBeGreaterThanOrEqual(30);
+    expect(ALLIES.length).toBeGreaterThanOrEqual(22);
     expect(HEROES).toHaveLength(11);
     expect(new Set(COMPANIONS.map((c) => c.id)).size).toBe(COMPANIONS.length);
     for (const r of RARITY_ORDER) expect(OVERWORLD_BANNER.pool[r].length).toBeGreaterThan(0);
