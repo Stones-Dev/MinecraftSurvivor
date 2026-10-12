@@ -52,6 +52,8 @@ const ACTION_LABEL: Record<Action, string> = {
 const QUALITY: Quality[] = ['auto', 'high', 'medium', 'low'];
 /** Seconds the "Really reset?" confirmation stays armed. */
 const RESET_ARM = 3;
+/** Seconds a chosen import file stays armed for the confirming click. */
+const IMPORT_ARM = 10;
 
 const keyName = (code: string): string => code.replace(/^(Key|Digit)/, '');
 
@@ -62,6 +64,8 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
   let capture: Action | null = null;
   let clock = 0;
   let resetUntil = 0;
+  /** A chosen save file waiting for the second click (importing replaces the current save). */
+  let pendingImport: { text: string; until: number } | null = null;
   let message = '';
   let messageOk = true;
   /** Clickable volume bars of the current frame. */
@@ -121,6 +125,18 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
     say('Exported');
   };
   const importSave = (): void => {
+    if (pendingImport && clock < pendingImport.until) {
+      const { text } = pendingImport;
+      pendingImport = null;
+      try {
+        app.store.import(text);
+        app.applySettings();
+        say('Imported (backup kept)');
+      } catch {
+        say('Invalid file', false);
+      }
+      return;
+    }
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/json';
@@ -129,13 +145,8 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
       if (!file) return;
       file.text().then(
         (text) => {
-          try {
-            app.store.import(text);
-            app.applySettings();
-            say('Imported');
-          } catch {
-            say('Invalid file', false);
-          }
+          pendingImport = { text, until: clock + IMPORT_ARM };
+          say('Click "Replace save?" to overwrite your progress', false);
         },
         () => say('Invalid file', false),
       );
@@ -362,7 +373,11 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
         row(0, 'Export save', 'minesurvive-save.json');
         buttons.add(ctl(0, 80), 'Export', exportSave);
         row(1, 'Import save', 'Load a save file');
-        buttons.add(ctl(1, 80), 'Import', importSave);
+        buttons.add(
+          ctl(1, 80),
+          pendingImport && clock < pendingImport.until ? 'Replace save?' : 'Import',
+          importSave,
+        );
         row(2, 'Reset save', 'Erase all progress');
         buttons.add(ctl(2, 80), clock < resetUntil ? 'Really reset?' : 'Reset', resetSave);
         if (message) {
