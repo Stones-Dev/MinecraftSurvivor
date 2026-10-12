@@ -257,8 +257,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       }
     },
     onClick(x, y) {
-      // Tap or click the minimap (or its touch chip) to toggle it, like the M key.
-      minimap.tap(x, y);
+      // Tap or click the minimap (or its touch chip) to toggle it, like the M key; touch buttons win.
+      if (!(app.touch.enabled && app.touch.buttonAt(x, y))) minimap.tap(x, y);
     },
     exit() {
       window.removeEventListener('keydown', onKey);

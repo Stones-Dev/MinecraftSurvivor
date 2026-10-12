@@ -52,6 +52,7 @@ export function useItem(run: RunState, dirX: number, dirY: number): void {
     case 'enchanted_apple':
       p.heal(p.maxHp);
       run.resistUntil = run.time + 20;
+      run.recomputeStats();
       floatText(run, 'Enchanted Apple', '#d9a6ff');
       run.item = null;
       break;

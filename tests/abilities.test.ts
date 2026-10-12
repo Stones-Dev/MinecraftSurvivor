@@ -4,6 +4,7 @@ import type { InputSource } from '../src/core/input';
 import { HEROES } from '../src/data/companions';
 import { RunState } from '../src/game';
 import { defaultLoadout } from '../src/systems/meta';
+import { useItem } from '../src/systems/items';
 import { makeEnemy } from '../src/systems/spawner';
 
 const idle: InputSource = {
@@ -44,6 +45,35 @@ describe('ability registry', () => {
   });
 });
 
+describe('determinism', () => {
+  const walk: InputSource = { ...idle, moveVector: () => ({ x: 1, y: 0 }) };
+
+  /** Cast the hero's ability after a walk; the walk draws cosmetic particles only when quality > 0. */
+  function castAt(hero: string, quality: 0 | 1 | 2): RunState {
+    const run = new RunState(11, 0, { ...defaultLoadout(), hero });
+    run.quality = quality;
+    for (let i = 0; i < 90; i++) run.update(1 / 60, walk);
+    expect(castAbility(run, aim)).toBe(true);
+    return run;
+  }
+
+  it('Mirror Images places its decoys the same way at every visual quality', () => {
+    const lo = castAt('illusioner', 0);
+    const hi = castAt('illusioner', 2);
+    expect(lo.decoys.length).toBeGreaterThan(0);
+    expect(lo.decoys.map((d) => [d.x, d.y])).toEqual(hi.decoys.map((d) => [d.x, d.y]));
+  });
+
+  it('Emerald Shower scatters its emeralds the same way at every visual quality', () => {
+    const lo = castAt('wandering_trader', 0);
+    const hi = castAt('wandering_trader', 2);
+    const pos = (r: RunState): number[][] =>
+      r.pickups.filter((p) => p.kind === 'emerald').map((p) => [p.x, p.y]);
+    expect(pos(lo).length).toBeGreaterThan(3);
+    expect(pos(lo)).toEqual(pos(hi));
+  });
+});
+
 describe('casting', () => {
   it('spends and respects the cooldown, scaled by Mods.abilityCd', () => {
     const run = new RunState(1, 0, defaultLoadout());
@@ -71,6 +101,25 @@ describe('casting', () => {
     step(run, 0.4);
     const after = run.enemies.map((e) => Math.hypot(e.x, e.y));
     expect(after.some((d, i) => d > (before[i] ?? 0) + 5)).toBe(true);
+  });
+
+  it("Iron Resolve's damage reduction lifts again once it expires", () => {
+    const run = new RunState(2, 0, defaultLoadout());
+    const base = run.mods.dmgTaken;
+    expect(castAbility(run, aim)).toBe(true);
+    expect(run.mods.dmgTaken).toBeCloseTo(base * 0.5);
+    step(run, 5);
+    expect(run.mods.dmgTaken).toBeCloseTo(base);
+  });
+
+  it('the Enchanted Apple halves damage immediately and stops after its 20 s', () => {
+    const run = new RunState(2, 0, defaultLoadout());
+    const base = run.mods.dmgTaken;
+    run.item = 'enchanted_apple';
+    useItem(run, 0, 0);
+    expect(run.mods.dmgTaken).toBeCloseTo(base * 0.5);
+    step(run, 21);
+    expect(run.mods.dmgTaken).toBeCloseTo(base);
   });
 
   it("Alex's Arrow Rain damages enemies under the target area over time", () => {

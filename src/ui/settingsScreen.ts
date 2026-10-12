@@ -97,7 +97,8 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
       if (buttons.keyboardActive) buttons.focusOn(`tab:${next.id}`);
       return;
     }
-    if (ev === 'ok' && !buttons.keyboardActive) {
+    if (!buttons.keyboardActive) {
+      // The first press only shows the ring, on the current tab.
       buttons.focusOn(`tab:${tab}`);
       return;
     }

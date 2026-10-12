@@ -133,7 +133,10 @@ export function updateInteract(run: RunState, dt: number): void {
   if (run.mods.lavaSpeed > 0 && (run.rift.active || run.world.surface(p.x, p.y) === 'lava')) {
     p.envMult *= 1 + run.mods.lavaSpeed;
   }
-  if (p.dead) return;
+  if (p.dead) {
+    run.hitPoints.length = 0; // nothing consumes this frame's hits below, so do not let them pile up
+    return;
+  }
   const props = run.world.propsInRect(p.x - 40, p.y - 40, p.x + 40, p.y + 40);
   const hits = run.hitPoints;
   for (const prop of props) {

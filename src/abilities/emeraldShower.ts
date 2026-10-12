@@ -22,8 +22,8 @@ export const emeraldShower: AbilityDef = {
     const power = run.mods.abilityPower;
     const n = Math.round(EMERALDS * power);
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + run.rng.fx.range(0, 0.6);
-      const d = run.rng.fx.range(36, 58);
+      const a = (i / n) * Math.PI * 2 + run.rng.events.range(0, 0.6);
+      const d = run.rng.events.range(36, 58);
       run.pickups.push(
         new Pickup('emerald', p.x + Math.cos(a) * d, p.y + Math.sin(a) * d * 0.8, 1),
       );
@@ -36,8 +36,8 @@ export const emeraldShower: AbilityDef = {
     }
     run.fx.push(makeFx('ring', p.x, p.y - 4, 0.5, { r: radius, color: '#3fe07a' }));
     for (let i = 0; i < 14; i++) {
-      const a = run.rng.fx.range(0, Math.PI * 2);
-      const sp = run.rng.fx.range(40, 100);
+      const a = run.rng.events.range(0, Math.PI * 2);
+      const sp = run.rng.events.range(40, 100);
       run.fx.push(
         makeFx('spark', p.x, p.y - 14, 0.6, {
           vx: Math.cos(a) * sp,

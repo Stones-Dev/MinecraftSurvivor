@@ -188,7 +188,7 @@ async function boot(): Promise<void> {
   } else if (params.has('mobs')) {
     router.push(mobGalleryScreen(atlas, params.get('mobs') || 'new'));
   } else if (params.has('screen')) {
-    // Review helper: `?screen=collection|spawner|upgrades|settings|setup` opens a hub screen directly.
+    // Review helper: `?screen=<name>` opens a hub screen directly (see README).
     const back = (): void => app.goHub();
     router.push(hubScreen(app));
     const which = params.get('screen');

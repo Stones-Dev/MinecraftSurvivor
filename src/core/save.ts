@@ -490,9 +490,9 @@ export function isNewerSave(raw: unknown): boolean {
 /** True when `raw` looks like a MineSurvive save (current or prototype), used to vet imports. */
 function looksLikeSave(raw: unknown): boolean {
   if (!isRecord(raw)) return false;
-  return ['saveVersion', 'currencies', 'owned', 'records', 'emeralds', 'bestTime'].some(
-    (k) => k in raw,
-  );
+  if (typeof raw.saveVersion === 'number' || isRecord(raw.currencies)) return true;
+  // The v0 prototype save had no version: it is recognised by its two numeric counters.
+  return typeof raw.emeralds === 'number' && typeof raw.bestTime === 'number';
 }
 
 /** Summary used by sync conflict prompts and to tell an untouched save from real progress. */
@@ -613,6 +613,13 @@ export class LocalSaveStore implements SaveStore {
     const raw: unknown = JSON.parse(json);
     const data = looksLikeSave(raw) ? tryMigrate(raw) : null;
     if (!data) throw new Error('Not a valid MineSurvive save');
+    // Keep the save being replaced aside, like a reset does, so a wrong file can be recovered by hand.
+    try {
+      const current = this.rawText();
+      if (current) this.storage?.setItem(`${this.key}.pre-import.bak`, current);
+    } catch {
+      // Nothing more we can do.
+    }
     this.locked = false;
     this.save(data);
     return data;

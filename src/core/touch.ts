@@ -43,6 +43,11 @@ export class TouchInput implements InputSource {
     ];
   }
 
+  /** Is (x, y) on one of the on-screen buttons (so other tap targets must ignore it)? */
+  buttonAt(x: number, y: number, width = this.width, height = this.height): boolean {
+    return this.buttons(width, height).some((b) => Math.hypot(x - b.x, y - b.y) <= b.r + 4);
+  }
+
   get enabled(): boolean {
     return touchEnabled(this.mode, this.coarse, this.active);
   }

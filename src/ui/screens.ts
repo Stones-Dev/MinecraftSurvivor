@@ -46,6 +46,7 @@ import { settingsScreen } from './settingsScreen';
 import { spawnerScreen } from './spawnerScreen';
 import { upgradesScreen } from './upgradesScreen';
 import { aboutScreen } from './aboutScreen';
+import { BIOME_IDS } from '../world/biomes';
 import { Buttons, drawActor, drawPill, PadNav, rarityColor } from './widgets';
 
 export const SCREEN_NAMES = [
@@ -83,11 +84,13 @@ export function emptyScreen(name: string, router: Router, hub: () => Screen): Sc
   };
 }
 
-/** `?menubiome=<id>` picks the biome behind the menus (review helper); the default is a calm plains meadow. */
+/**
+ * `?menubiome=<id>` picks the biome behind the menus (review helper, see README); an unknown id falls back to
+ * the default, a calm plains meadow. The scene is shared, so only the first menu opened reads the parameter.
+ */
 function sceneFor(app: App): ReturnType<typeof sharedMenuScene> {
   const raw = app.params.get('menubiome');
-  const biome = raw === null ? 'plains' : (raw as 'plains');
-  return sharedMenuScene(app.atlas, biome);
+  return sharedMenuScene(app.atlas, BIOME_IDS.find((b) => b === raw) ?? 'plains');
 }
 
 const MODIFIER_KEYS = new Set([

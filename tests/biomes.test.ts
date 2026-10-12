@@ -321,3 +321,19 @@ function findTileIn(world: World, code: number, biome: BiomeId): { x: number; y:
   }
   throw new Error(`no tile ${code} in ${biome}`);
 }
+
+describe('findBiomeGround', () => {
+  it('always lands on dry, walkable ground, for many seeds and every overworld biome', () => {
+    for (let seed = 1; seed <= 150; seed++) {
+      const world = new World(seed);
+      for (const biome of OVERWORLD_BIOMES) {
+        const spot = findBiomeGround(world, biome);
+        if (!spot) throw new Error(`no ground for ${biome} on seed ${seed}`);
+        const tile = world.tileAtPx(spot.x, spot.y);
+        expect([TILE.GRASS, TILE.SAND], `${biome} seed ${seed}`).toContain(tile);
+        expect(world.surface(spot.x, spot.y), `${biome} seed ${seed}`).toBe('ground');
+        expect(world.overlapsSolid(spot.x, spot.y, 8)).toBe(false);
+      }
+    }
+  });
+});

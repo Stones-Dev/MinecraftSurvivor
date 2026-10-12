@@ -17,7 +17,7 @@ export const mirrorImages: AbilityDef = {
     const p = run.player;
     const dur = 6 * run.mods.duration;
     const pop = 14 * run.mods.dmg * run.mods.abilityPower;
-    const a0 = run.rng.fx.range(0, Math.PI * 2);
+    const a0 = run.rng.events.range(0, Math.PI * 2);
     for (let i = 0; i < IMAGES; i++) {
       const a = a0 + (i / IMAGES) * Math.PI * 2;
       spawnDecoy(run, p.x + Math.cos(a) * SPREAD, p.y + Math.sin(a) * SPREAD * 0.75, dur, 150, pop);

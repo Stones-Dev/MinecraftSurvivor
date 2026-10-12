@@ -29,7 +29,7 @@ import {
 import { resultsScreen } from './resultsScreen';
 import type { Screen } from './router';
 
-const RARITY_COLOR = { common: '#101014', rare: '#3b78d8', epic: '#a24ad8', legendary: '#e8b923' };
+const CARD_BORDER = { common: '#101014', rare: '#3b78d8', epic: '#a24ad8', legendary: '#e8b923' };
 
 function dim(view: View, alpha: number): void {
   view.ctx.fillStyle = `rgba(0,0,0,${alpha})`;
@@ -88,7 +88,7 @@ export function levelupScreen(app: App, run: RunState): Screen {
       );
       run.offer?.forEach((card, i) => {
         const r = cardRect(view, i);
-        drawPanel(ctx, r, hover === i, cb(card.gold ? '#e8b923' : RARITY_COLOR[card.rarity]));
+        drawPanel(ctx, r, hover === i, cb(card.gold ? '#e8b923' : CARD_BORDER[card.rarity]));
         drawText(ctx, `${i + 1}`, r.x + 6, r.y + 12, '#aaa');
         if (card.isNew) drawText(ctx, 'NEW', r.x + r.w - 6, r.y + 12, '#7dff9a', 'right');
         drawIcon(ctx, card.icon, r.x + r.w / 2 - 18, r.y + 18, 3);

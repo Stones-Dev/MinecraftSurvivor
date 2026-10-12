@@ -90,6 +90,17 @@ describe('render interpolation', () => {
     expect(p.rx).toBeCloseTo(p.x);
   });
 
+  it('a NaN previous x alone marks a teleport on both axes (y does not blend from a stale value)', () => {
+    const run = new RunState(5);
+    const p = run.player;
+    run.update(STEP, keys(0, 0));
+    p.prevX = Number.NaN;
+    p.prevY = p.y - 400;
+    run.interpolate(0.5);
+    expect(p.rx).toBeCloseTo(p.x);
+    expect(p.ry).toBeCloseTo(p.y);
+  });
+
   it('renders a freshly spawned enemy at its position, not at the origin', () => {
     const run = new RunState(6);
     for (let i = 0; i < 60 * 3; i++) run.update(STEP, keys(0, 0));

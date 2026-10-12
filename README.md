@@ -38,7 +38,7 @@ Survive 15 minutes and defeat the Warden to win, or keep going in Endless. Colle
 | `npm run lint` | ESLint + Prettier check |
 | `npm run balance` | Headless balance simulator, writes `docs/BALANCE_RESULTS.md` |
 
-Debug URL parameters: `?run&debug&t=<sec>&seed=<n>&weapons=a,b,c&xp=<n>&hp=<n>&hero=alex&pet=cat&ally=wolf,horse&lv=3&portal&trader&villager`, `?gallery=<0|1>`, `?screen=collection|spawner|upgrades|settings|setup`. `F3` toggles the debug overlay.
+Debug URL parameters: `?run&debug&t=<sec>&seed=<n>&weapons=a,b,c&xp=<n>&hp=<n>&hero=alex&pet=cat&ally=wolf,horse&lv=3&portal&trader&villager`, `?gallery=<0|1>`, `?mobs=<biome|new|all>[:page]`, `?crowd=<n>` (with `?run&debug`), `?screen=collection|spawner|upgrades|settings|setup|about|profile|ranking|missions|achievements` (and `results` together with `debug`), `?menubiome=<biome id>` (the biome behind the title, hub and menu screens; default `plains`, unknown ids fall back to it; only the first menu opened reads it). `F3` toggles the debug overlay.
 
 ## Project layout
 

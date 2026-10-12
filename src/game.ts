@@ -114,8 +114,9 @@ const PICKUP_COLLECT = 8;
 
 const MAX_PICKUPS = 300;
 
-function lerpPos(prev: number, cur: number, a: number): number {
-  return prev !== prev ? cur : prev + (cur - prev) * a;
+/** Blend one axis; `other` is the previous value of the other axis: a NaN on either axis marks a teleport and snaps both. */
+function lerpPos(prev: number, cur: number, a: number, other: number): number {
+  return prev !== prev || other !== other ? cur : prev + (cur - prev) * a;
 }
 
 export class RunState {
@@ -526,7 +527,9 @@ export class RunState {
     this.buffTick -= dt;
     if (this.buffTick <= 0) {
       this.buffTick = 0.5;
-      const live = Object.values(this.buffs).some((b) => b > this.time);
+      // `resistUntil` is not a buff, but its expiry edge must recompute `mods.dmgTaken` as well.
+      const live =
+        Object.values(this.buffs).some((b) => b > this.time) || this.time < this.resistUntil;
       if (live || this.hadBuff) this.recomputeStats();
       this.hadBuff = live;
     }
@@ -573,24 +576,24 @@ export class RunState {
   interpolate(alpha: number): void {
     const a = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
     const p = this.player;
-    p.rx = lerpPos(p.prevX, p.x, a);
-    p.ry = lerpPos(p.prevY, p.y, a);
+    p.rx = lerpPos(p.prevX, p.x, a, p.prevY);
+    p.ry = lerpPos(p.prevY, p.y, a, p.prevX);
     for (const e of this.enemies) {
-      e.rx = lerpPos(e.prevX, e.x, a);
-      e.ry = lerpPos(e.prevY, e.y, a);
+      e.rx = lerpPos(e.prevX, e.x, a, e.prevY);
+      e.ry = lerpPos(e.prevY, e.y, a, e.prevX);
     }
     for (const al of this.allies) {
-      al.rx = lerpPos(al.prevX, al.x, a);
-      al.ry = lerpPos(al.prevY, al.y, a);
+      al.rx = lerpPos(al.prevX, al.x, a, al.prevY);
+      al.ry = lerpPos(al.prevY, al.y, a, al.prevX);
     }
     const pet = this.pet;
     if (pet) {
-      pet.rx = lerpPos(pet.prevX, pet.x, a);
-      pet.ry = lerpPos(pet.prevY, pet.y, a);
+      pet.rx = lerpPos(pet.prevX, pet.x, a, pet.prevY);
+      pet.ry = lerpPos(pet.prevY, pet.y, a, pet.prevX);
     }
     for (const pk of this.pickups) {
-      pk.rx = lerpPos(pk.prevX, pk.x, a);
-      pk.ry = lerpPos(pk.prevY, pk.y, a);
+      pk.rx = lerpPos(pk.prevX, pk.x, a, pk.prevY);
+      pk.ry = lerpPos(pk.prevY, pk.y, a, pk.prevX);
     }
     for (const pr of this.projectiles) {
       pr.rx = pr.px + (pr.x - pr.px) * a;

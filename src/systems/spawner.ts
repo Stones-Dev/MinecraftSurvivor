@@ -83,17 +83,24 @@ function pickType(run: RunState): string {
   );
 }
 
-/** A free point on the spawn ring at `angle`, or null if every attempt is blocked. */
+/**
+ * A free point on the spawn ring at `angle`, or null if every attempt is blocked. Points on lava are never
+ * offered, and neither are points in water unless `aquatic` (drowned, guardians). The attempts are a fixed
+ * fan of angles and no RNG is drawn, so the result is deterministic and the search always terminates.
+ */
 export function ringPoint(
   run: RunState,
   angle: number,
   radius: number,
+  aquatic = false,
 ): { x: number; y: number } | null {
   const p = run.player;
   for (let i = 0; i < 6; i++) {
     const a = angle + i * 0.35 * (i % 2 === 0 ? 1 : -1);
     const x = p.x + Math.cos(a) * SPAWN_RING;
     const y = p.y + Math.sin(a) * SPAN_Y * SPAWN_RING;
+    const surface = run.world.surface(x, y);
+    if (surface === 'lava' || (surface === 'water' && !aquatic)) continue;
     const r = run.world.collide(x, y, radius);
     if (Math.abs(r.x - x) < 3 && Math.abs(r.y - y) < 3) return { x, y };
   }
@@ -107,7 +114,7 @@ function spawnOne(run: RunState, angle: number, limit: number): boolean {
   const id = pickType(run);
   const def = ENEMIES[id];
   if (!def) return false;
-  const pt = ringPoint(run, angle, def.radius);
+  const pt = ringPoint(run, angle, def.radius, def.nearWater);
   if (!pt) return false;
   const elite = run.enemies.length >= ENEMY_CAP * ELITE_FROM;
   const n = def.pack ?? 1;
@@ -163,7 +170,7 @@ export function updateSpawner(run: RunState, dt: number): void {
     const d = Math.hypot(e.x - p.x, e.y - p.y);
     e.farT = d > SPAWN_RING * 1.6 ? e.farT + dt : 0;
     if (e.farT > 2.5 || d > SPAWN_RING * 2.6) {
-      const pt = ringPoint(run, run.rng.spawn.range(0, Math.PI * 2), e.radius);
+      const pt = ringPoint(run, run.rng.spawn.range(0, Math.PI * 2), e.radius, e.def.nearWater);
       if (pt) {
         e.x = pt.x;
         e.y = pt.y;

@@ -425,6 +425,9 @@ export function updateOrbiters(run: RunState, dt: number): void {
       damageEnemy(run, e, o.dmg, o.x, o.y, o.knock);
       if (o.burn) applyStatus(e, 'burn', 2 * run.mods.duration, o.dmg * 0.4);
     }
-    if (o.hitAt.size > 96) o.hitAt.clear();
+    if (o.hitAt.size > 96) {
+      // Forget only enemies that may be hit again anyway; a wholesale clear would re-arm everyone at once.
+      for (const [id, t] of o.hitAt) if (run.time - t >= o.rehit) o.hitAt.delete(id);
+    }
   }
 }

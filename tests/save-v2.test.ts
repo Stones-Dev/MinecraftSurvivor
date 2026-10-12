@@ -11,6 +11,7 @@ import {
   tryMigrate,
 } from '../src/core/save';
 import { loadoutFromSave } from '../src/systems/meta';
+import { memStorage } from './helpers/memStorage';
 
 const fixture = (name: string): unknown =>
   JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
@@ -243,5 +244,29 @@ describe('save hardening (review)', () => {
   it('rejects oversize imports before parsing', () => {
     const store = new LocalSaveStore(null);
     expect(() => store.import(' '.repeat(MAX_SAVE_JSON + 1))).toThrow(/too large/);
+  });
+
+  it('rejects JSON that only vaguely resembles a save and leaves the stored save alone', () => {
+    const mem = memStorage();
+    const store = new LocalSaveStore(mem, 'k');
+    store.save(defaultSave());
+    const before = mem.getItem('k');
+    for (const bad of ['{"records":{}}', '{"saveVersion":"3"}', '{"owned":{}}', '[]', '{}']) {
+      expect(() => store.import(bad)).toThrow(/Not a valid/);
+    }
+    expect(mem.getItem('k')).toBe(before);
+    expect(mem.getItem('k.pre-import.bak')).toBeNull();
+  });
+
+  it('backs up the current save before an import replaces it', () => {
+    const mem = memStorage();
+    const store = new LocalSaveStore(mem, 'k');
+    const mine = defaultSave();
+    mine.currencies.emeralds = 777;
+    store.save(mine);
+    const before = mem.getItem('k');
+    store.import(JSON.stringify(fixture('save-v1-late.json')));
+    expect(mem.getItem('k.pre-import.bak')).toBe(before);
+    expect(mem.getItem('k')).not.toBe(before);
   });
 });

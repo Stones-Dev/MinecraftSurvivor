@@ -181,8 +181,10 @@ export function mapPoint(
 export const MAP_SIDE = WINDOW_CELLS * PX_PER_CELL;
 /** Side of the chip that stands in for a hidden map on touch screens. */
 export const CHIP_SIDE = 16;
-/** Touch controls need this much height before the map is shown next to them (else it hides, as before). */
+/** Touch controls need this much height before the map is shown beside them (below it the map hides). */
 export const TOUCH_MIN_HEIGHT = 150;
+/** With touch controls the map moves this far left so it clears the ability / item buttons. */
+export const TOUCH_SHIFT = 48;
 
 export interface MapSlot {
   /** The map window (without its 2 px frame), or null when it is not drawn. */
@@ -193,9 +195,10 @@ export interface MapSlot {
 
 /**
  * Where the minimap and its touch chip go for a view: top-right, `top` px down, `right` px across. Without
- * touch controls only the map exists (the M key toggles it). With them, a map that fits is shown, and while it
- * is hidden a small chip takes its corner so a tap brings it back; on a view too short for the controls and
- * the map (below TOUCH_MIN_HEIGHT) neither is drawn.
+ * touch controls only the map exists (the M key toggles it). With them the map sits TOUCH_SHIFT px further
+ * left, clear of the buttons, and while it is hidden a small chip takes its corner so a tap brings it back; on
+ * a view shorter than TOUCH_MIN_HEIGHT (or than the map's top plus 90 px, the item button's reach) neither is
+ * drawn.
  */
 export function minimapSlot(
   right: number,
@@ -205,11 +208,15 @@ export function minimapSlot(
   visible: boolean,
   arena = false,
 ): MapSlot {
-  if (arena || (touch && height < TOUCH_MIN_HEIGHT)) return { map: null, chip: null };
-  if (visible)
-    return { map: { x: right - MAP_SIDE - 3, y: top + 1, w: MAP_SIDE, h: MAP_SIDE }, chip: null };
+  if (arena || (touch && height < Math.max(TOUCH_MIN_HEIGHT, top + 90))) {
+    return { map: null, chip: null };
+  }
+  const edge = touch ? right - TOUCH_SHIFT : right;
+  if (visible) {
+    return { map: { x: edge - MAP_SIDE - 3, y: top + 1, w: MAP_SIDE, h: MAP_SIDE }, chip: null };
+  }
   if (!touch) return { map: null, chip: null };
-  return { map: null, chip: { x: right - 1 - CHIP_SIDE, y: top + 1, w: CHIP_SIDE, h: CHIP_SIDE } };
+  return { map: null, chip: { x: edge - 1 - CHIP_SIDE, y: top + 1, w: CHIP_SIDE, h: CHIP_SIDE } };
 }
 
 /** Does a tap at (x, y) land on the map (frame included) or chip? `pad` widens it for fingers. */

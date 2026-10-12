@@ -19,6 +19,7 @@ interface Stash {
   orbiters: RunState['orbiters'];
   npcs: RunState['npcs'];
   scheduled: RunState['scheduled'];
+  decoys: RunState['decoys'];
   x: number;
   y: number;
   world: World;
@@ -49,6 +50,7 @@ function enter(run: RunState): void {
     orbiters: run.orbiters,
     npcs: run.npcs,
     scheduled: run.scheduled,
+    decoys: run.decoys,
     x: p.x,
     y: p.y,
     world: run.world,
@@ -62,6 +64,7 @@ function enter(run: RunState): void {
   run.orbiters = [];
   run.npcs = [];
   run.scheduled = [];
+  run.decoys = []; // overworld decoys must not lure the arena foes; they wait in the stash
   run.hazardT = 0;
   run.storm = false;
   run.chargedBonus = 0;
@@ -110,6 +113,13 @@ function leave(run: RunState, won: boolean): void {
   const s = r.stash;
   const p = run.player;
   if (!s) return;
+  // Callbacks queued inside the arena (volleys, pools, blasts) are bound to arena positions, so firing them
+  // later in the overworld would land them in the wrong place. Flush them now instead, while the arena is
+  // still the active world: hero effects resolve, and any loot they drop is collected below. The overworld's
+  // own queue is restored untouched (it is frozen meanwhile, like everything else in the stash).
+  const pending = run.scheduled;
+  run.scheduled = [];
+  for (const q of pending) q.fn();
   const loot = run.pickups;
   run.enemies = s.enemies;
   run.projectiles = s.projectiles;
@@ -120,6 +130,7 @@ function leave(run: RunState, won: boolean): void {
   run.orbiters = s.orbiters;
   run.npcs = s.npcs;
   run.scheduled = s.scheduled;
+  run.decoys = s.decoys;
   run.hazardT = 0;
   run.world = s.world;
   p.x = s.x;
@@ -161,10 +172,11 @@ export function updateRift(run: RunState, dt: number): void {
   const p = run.player;
   if (r.active) {
     r.timer -= dt;
-    if (r.foes.length > 0 && r.foes.every((e) => e.dying || e.hp <= 0)) {
-      leave(run, true);
-    } else if (p.dead) {
+    // A dead hero escapes even if the last foe fell the same step: no reward, no corpse in the overworld.
+    if (p.dead) {
       leave(run, false);
+    } else if (r.foes.length > 0 && r.foes.every((e) => e.dying || e.hp <= 0)) {
+      leave(run, true);
     } else if (r.timer <= 0) {
       leave(run, false);
     }

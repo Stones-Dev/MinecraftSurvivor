@@ -512,6 +512,7 @@ export function updateEnemies(run: RunState, dt: number): void {
             const r = run.world.collide(e.tx, e.ty, e.radius);
             e.x = r.x;
             e.y = r.y;
+            e.prevX = e.prevY = Number.NaN;
             run.fx.push(makeFx('ring', e.x, e.y - 10, 0.3, { r: 14, color: '#b06bff' }));
             e.state = 'move';
             e.cd2 = run.rng.ai.range(def.blink?.cd[0] ?? 3.5, def.blink?.cd[1] ?? 5);

@@ -217,8 +217,10 @@ export class World {
 }
 
 /**
- * Nearest walkable spot (dry ground, clear of solid props) well inside a biome, searching outward from
- * the origin deterministically. Used by the `?biome=` debug start and by tests.
+ * Nearest walkable spot (dry ground, clear of solid props) inside a biome, searching outward from the origin
+ * deterministically. Used by the `?biome=` debug start and by tests. Biomes with big lakes (swamp, snowy
+ * taiga, mushroom fields) can have water at the cell centre, so the search widens in tiers: grass of the
+ * biome, then grass or sand of the biome, then any dry grass or sand nearby, then null.
  */
 export function findBiomeGround(
   world: World,
@@ -228,18 +230,29 @@ export function findBiomeGround(
   const cell =
     findBiome(biome, world.seed, 0, 0, maxTiles, 2) ?? findBiome(biome, world.seed, 0, 0, maxTiles);
   if (!cell) return null;
-  for (let r = 0; r <= 6; r++) {
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        const tx = cell.tx + dx;
-        const ty = cell.ty + dy;
-        if (world.tileAt(tx, ty) !== TILE.GRASS || world.biomeAtTile(tx, ty) !== biome) continue;
-        const x = tx * TILE_PX + TILE_PX / 2;
-        const y = ty * TILE_PX + TILE_PX / 2;
-        if (!world.overlapsSolid(x, y, 8)) return { x, y };
+  const dry = (tx: number, ty: number, sandOk: boolean): boolean => {
+    const t = world.tileAt(tx, ty);
+    return t === TILE.GRASS || (sandOk && t === TILE.SAND);
+  };
+  const tiers: ((tx: number, ty: number) => boolean)[] = [
+    (tx, ty) => dry(tx, ty, false) && world.biomeAtTile(tx, ty) === biome,
+    (tx, ty) => dry(tx, ty, true) && world.biomeAtTile(tx, ty) === biome,
+    (tx, ty) => dry(tx, ty, true),
+  ];
+  for (const accept of tiers) {
+    for (let r = 0; r <= 40; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const tx = cell.tx + dx;
+          const ty = cell.ty + dy;
+          if (!accept(tx, ty)) continue;
+          const x = tx * TILE_PX + TILE_PX / 2;
+          const y = ty * TILE_PX + TILE_PX / 2;
+          if (!world.overlapsSolid(x, y, 8)) return { x, y };
+        }
       }
     }
   }
-  return { x: cell.tx * TILE_PX + TILE_PX / 2, y: cell.ty * TILE_PX + TILE_PX / 2 };
+  return null;
 }
