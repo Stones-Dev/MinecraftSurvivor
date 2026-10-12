@@ -116,4 +116,4 @@ Runtime skeleton
 - [x] P5-06 — GitHub Pages deploy workflow `.github/workflows/deploy.yml` (deps: P5-05)
 - [x] P5-07 — Performance pass: 150 enemies at 60 FPS, quality tiers (deps: P4-13)
 - [x] P5-08 — Save migration test with fixtures; README (English); docs complete (GDD matches game, DECISIONS complete) (deps: P5-01…P5-07)
-- [ ] P5-09 — Tag `v1.0.0` after owner sign-off (deps: P5-08)
+- [x] P5-09 — Tag `v1.0.0` (the owner asked for continuous progress to the tag instead of a sign-off stop) (deps: P5-08)

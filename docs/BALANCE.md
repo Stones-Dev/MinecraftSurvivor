@@ -24,9 +24,9 @@ tides every 38-56 s, soft cap 64.
 
 | Target (BRIEF section 15) | Result |
 |---|---|
-| New Steve (sword only, random cards) dies around minute 4-6 | newbie median 2:56, smart median 5:06 (sword only; the sword bot rarely levels) |
-| A decent build reaches the Wither (10:00) | ranged starters with smart picks: bow 9:14, crossbow 9:43, snowball 8:41 median, p90 above 10:00 |
-| Bosses are beatable but dangerous | bot averages 0.3 boss kills per run; the 5:00 Raid Captain is the usual wall for weak builds |
+| New Steve (sword only, random cards) dies around minute 4-6 | newbie median 3:44, smart median 4:16 (policy table); sword as the per-weapon starter 5:44 |
+| A decent build reaches the Wither (10:00) | bow 9:27, crossbow 9:09, blaze rods 8:58, lightning rod 8:22 median; p90 above 10:00 for bow, crossbow, snowball, blaze rods, lava bucket |
+| Bosses are beatable but dangerous | the bot kills 0.3-0.8 bosses per run on strong starters; the 5:00 Raid Captain is the usual wall for weak builds |
 
 ## Changes made because of the simulator
 
@@ -54,3 +54,7 @@ Median survival / kills for every starter, 4 seeds each, is in `docs/BALANCE_RES
 snowball, crossbow and poison scale best into late game (700+ kills), blaze rods, axe and sword are
 the slowest starters. Evolutions need their passive partner and are rarely completed by the bot
 inside ten minutes, which matches the design intent that evolutions are a mid-run payoff.
+
+## Final run of the simulator (v1.0)
+
+Re-run after the review fixes, hero loadout support and perf changes (8 seeds, cap 20 min): the numbers above are from that run. Re-run `npm run balance` after any change to spawn curves, weapons or enemy stats; the policy table should keep the new-player median between 4 and 6 minutes.

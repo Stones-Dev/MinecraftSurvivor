@@ -49,3 +49,15 @@ Tests added: 9 gacha tests (1e6 rate check within 1%, pity, x10, dupes, determin
 Screenshots: `p4-hub.png`, `p4-collection.png`, `p4-spawner.png`, `p4-spawner-spin.png`, `p4-spawner-reveal.png`, `p4-spawner-x10.png`, `p4-upgrades.png`, `p4-settings.png`, `p4-setup.png`, `p4-run-companions.png`.
 
 Known gaps carried to Phase 5: no About/credits screen yet, `quality` is stored but the render quality tiers arrive with the performance pass, music and the Legendary sting are pending.
+
+## Checkpoint 5 — polish and release
+
+Built: 8 procedural music themes (hub, plains, night, dark forest, taiga, desert, nether, boss) on a look-ahead sequencer with crossfades, chosen by moment (boss > rift > night > biome), plus stings (legendary, victory, game over, boss, portal, trade) and the remaining SFX (potion splash, snowball, thunder, chest, egg, spawner spin); music and SFX volume sliders and mute persist and apply live. Hub with a live dusk slice of the world behind the menu, About / credits / legal screen, first-run tutorial. Quality tiers (auto adapts to frame time; low/medium/high change particles, weather and shadows). Installable PWA: service worker (offline reload verified in headless Chromium), web manifest, icons. `.github/workflows/deploy.yml` (lint, test, build, publish to GitHub Pages on `main` and `v*` tags). README (English), GDD "as shipped" section, save-migration fixtures (v0 prototype and early v1) with export/import round-trip tests.
+
+Performance: 120-150 enemies on screen hold 60 FPS (16.7 ms frames) in headless Chromium (software rendering, conservative); screenshot `p5-crowd150.png`. Review-driven hot-path fixes are listed under Checkpoint 3.
+
+Reviews: a second independent read-only review of the Phase 4 code found 13 issues, all fixed: Esc could not un-pause (the key also re-triggered pause), key auto-repeat skipped offers and dismissed results, Looting and Pig were counted twice (now a payout-only multiplier), debug URL parameters granted real rewards (now `debug`-only and debug runs never save), 4-card offers and the Spawner overflowed at 320x180, unsanitised upgrade ranks and loadout ids in saves, companions placed before the rift teleport, and smaller UI and Turtle issues.
+
+Open items for the owner: author names for `CREDITS.md`; enabling GitHub Pages (Settings > Pages > GitHub Actions) and merging the branch into `main` so the workflow runs.
+
+Screenshots: `p5-title.png`, `p5-hub.png`, `p5-hub-small.png`, `p5-crowd150.png`, `p4-tutorial.png`.
