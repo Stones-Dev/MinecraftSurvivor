@@ -5,7 +5,7 @@ import { fitCanvas, type View } from './core/canvas';
 import { KeyboardInput } from './core/input';
 import { Loop } from './core/loop';
 import { LocalSaveStore } from './core/save';
-import type { WeaponId } from './data/weapons';
+import type { WeaponId } from './weapons/types';
 import { galleryScreen } from './ui/gallery';
 import { Router } from './ui/router';
 import { runScreen } from './ui/runScreen';
@@ -48,6 +48,7 @@ async function boot(): Promise<void> {
     router,
     store,
     params,
+    pointer: { x: 0, y: 0 },
     data: () => store.load(),
     goHub: () => router.reset(hubScreen(atlas, () => app.startRun())),
     startRun: () =>
@@ -96,6 +97,8 @@ async function boot(): Promise<void> {
   });
   canvas.addEventListener('pointermove', (e) => {
     const { x, y } = toArt(e);
+    app.pointer.x = x;
+    app.pointer.y = y;
     router.top?.onMove?.(x, y);
   });
 

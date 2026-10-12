@@ -2,11 +2,14 @@
 import { dmgScale, ENEMIES, hpScale } from '../data/enemies';
 import { Enemy } from '../entities/enemy';
 import type { RunState } from '../game';
+import { TILE } from '../world/terrain';
 import { nightFactor } from './daynight';
 
 export const ENEMY_CAP = 64;
 const ELITE_FROM = 0.85;
 const OVERFLOW = 10;
+/** Any enemy has a 1 in 1000 chance to spawn Charged (BRIEF section 7). */
+const CHARGED_CHANCE = 0.001;
 /** Distance from the player where enemies appear (just outside the visible area). */
 export const SPAWN_RING = 270;
 
@@ -23,6 +26,8 @@ export function tideCount(t: number): number {
 export class SpawnerState {
   acc = 0;
   tideT = 32;
+  waterNear = false;
+  waterCheckAt = -9;
 }
 
 export function makeEnemy(
@@ -43,13 +48,42 @@ export function makeEnemy(
   e.hp = e.maxHp;
   e.dmg = def.dmg * dmgScale(minute) * (elite ? 1.25 : 1);
   e.cd = run.rng.spawn.range(0.5, 2);
+  e.cd2 = run.rng.spawn.range(1, 4);
+  if (def.shieldPct) e.shield = def.shieldPct * e.maxHp;
   return e;
+}
+
+/** Is there water within ~120 px of the hero? (drowned, guardians) Cached for a second. */
+function waterNear(run: RunState): boolean {
+  const s = run.spawner;
+  if (run.time - s.waterCheckAt < 1) return s.waterNear;
+  s.waterCheckAt = run.time;
+  const p = run.player;
+  s.waterNear = false;
+  for (const r of [60, 120]) {
+    for (let i = 0; i < 12 && !s.waterNear; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      if (run.world.tileAtPx(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r) === TILE.WATER)
+        s.waterNear = true;
+    }
+  }
+  return s.waterNear;
 }
 
 function pickType(run: RunState): string {
   const minute = run.time / 60;
-  const pool = Object.values(ENEMIES).filter((d) => d.weight > 0 && d.fromMinute <= minute);
-  const total = pool.reduce((s, d) => s + d.weight, 0);
+  const night = nightFactor(run.time) > 0.6;
+  const biome: string = run.biome();
+  const water = waterNear(run);
+  const pool = Object.values(ENEMIES).filter(
+    (d) =>
+      d.weight > 0 &&
+      d.fromMinute <= minute &&
+      (!d.nightOnly || night) &&
+      (!d.biomes || d.biomes.includes(biome)) &&
+      (!d.nearWater || water),
+  );
+  const total = pool.reduce((sum, d) => sum + d.weight, 0);
   let r = run.rng.spawn.float() * total;
   for (const d of pool) {
     r -= d.weight;
@@ -82,9 +116,24 @@ function spawnOne(run: RunState, angle: number, limit: number): boolean {
   const pt = ringPoint(run, angle, def.radius);
   if (!pt) return false;
   const elite = run.enemies.length >= ENEMY_CAP * ELITE_FROM;
-  const e = makeEnemy(run, id, pt.x, pt.y, elite);
-  if (e) run.enemies.push(e);
-  return e !== null;
+  const n = def.pack ?? 1;
+  for (let i = 0; i < n; i++) {
+    const e = makeEnemy(
+      run,
+      id,
+      pt.x + (i > 0 ? run.rng.spawn.range(-14, 14) : 0),
+      pt.y + (i > 0 ? run.rng.spawn.range(-10, 10) : 0),
+      elite,
+    );
+    if (!e) continue;
+    if (run.rng.spawn.chance(CHARGED_CHANCE + run.chargedBonus)) {
+      e.charged = true;
+      e.maxHp *= 2;
+      e.hp = e.maxHp;
+    }
+    run.enemies.push(e);
+  }
+  return true;
 }
 
 export function updateSpawner(run: RunState, dt: number): void {
@@ -108,7 +157,7 @@ export function updateSpawner(run: RunState, dt: number): void {
   // Enemies left far behind are moved back onto the ring so the player never faces an empty field.
   const p = run.player;
   for (const e of run.enemies) {
-    if (e.dying) continue;
+    if (e.dying || e.boss) continue;
     const d = Math.hypot(e.x - p.x, e.y - p.y);
     e.farT = d > SPAWN_RING * 1.6 ? e.farT + dt : 0;
     if (e.farT > 2.5 || d > SPAWN_RING * 2.6) {

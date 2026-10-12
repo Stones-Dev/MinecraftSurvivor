@@ -12,6 +12,8 @@ export interface App {
   router: Router;
   store: SaveStore;
   params: URLSearchParams;
+  /** Last pointer position in art pixels (for aimed items). */
+  pointer: { x: number; y: number };
   data(): SaveData;
   goHub(): void;
   startRun(): void;

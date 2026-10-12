@@ -4,6 +4,7 @@ import { Player } from '../src/entities/player';
 import { RunState } from '../src/game';
 import { applyCard, buildOffer, finishOffer, gainXp } from '../src/systems/levelup';
 import { ENEMY_CAP, tideCount, trickleRate } from '../src/systems/spawner';
+import { newWeapon } from '../src/weapons';
 import { World } from '../src/world/world';
 
 class ScriptedInput implements InputSource {
@@ -19,6 +20,9 @@ class ScriptedInput implements InputSource {
     return false;
   }
   cancelPressed(): boolean {
+    return false;
+  }
+  activePressed(): boolean {
     return false;
   }
   endStep(): void {}
@@ -77,11 +81,7 @@ describe('headless run simulation', () => {
   it('runs 3 simulated minutes deterministically without errors, spawning and killing enemies', () => {
     const simulate = (): { kills: number; enemies: number; level: number } => {
       const run = new RunState(42, 0);
-      run.weapons = [
-        { id: 'sword', level: 1, cd: 0 },
-        { id: 'bow', level: 1, cd: 0 },
-        { id: 'tnt', level: 1, cd: 0 },
-      ];
+      run.weapons = [newWeapon('sword'), newWeapon('bow'), newWeapon('tnt')];
       const input = new ScriptedInput();
       for (let i = 0; i < 60 * 180; i++) {
         run.update(1 / 60, input);

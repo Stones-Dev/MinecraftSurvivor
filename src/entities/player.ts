@@ -22,19 +22,30 @@ export class Player {
   hurtT = 0;
   /** Sword swing animation seconds left. */
   swingT = 0;
+  /** Slowed by enemy attacks (seconds left; movement x0.6). */
+  slowT = 0;
+  /** Damage over time on the hero: poison (cannot kill) or wither (can). */
+  dotT = 0;
+  dotDps = 0;
+  dotKind: 'poison' | 'wither' = 'poison';
+  /** Regeneration disabled while > 0 (husk hunger). */
+  hungerT = 0;
   dead = false;
 
-  update(dt: number, input: InputSource, world: World, biome: BiomeId): void {
+  update(dt: number, input: InputSource, world: World, biome: BiomeId, waterImmune = false): void {
     this.iframes = Math.max(0, this.iframes - dt);
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.swingT = Math.max(0, this.swingT - dt);
+    this.slowT = Math.max(0, this.slowT - dt);
+    this.hungerT = Math.max(0, this.hungerT - dt);
     if (this.dead) return;
-    if (this.regen > 0) this.heal(this.regen * dt);
+    if (this.regen > 0 && this.hungerT <= 0) this.heal(this.regen * dt);
     const v = input.moveVector();
     this.moving = v.x !== 0 || v.y !== 0;
     if (v.x !== 0) this.facing = v.x > 0 ? 1 : -1;
     if (!this.moving) return;
-    const step = this.speed * this.speedMult * world.speedFactor(this.x, this.y) * dt;
+    const water = waterImmune ? 1 : world.speedFactor(this.x, this.y);
+    const step = this.speed * this.speedMult * water * (this.slowT > 0 ? 0.6 : 1) * dt;
     const next = world.collide(this.x + v.x * step, this.y + v.y * step, this.radius, biome);
     this.x = next.x;
     this.y = next.y;

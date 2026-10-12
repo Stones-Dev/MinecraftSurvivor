@@ -12,9 +12,14 @@ export function inRect(r: Rect, x: number, y: number): boolean {
   return x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
 }
 
-export function drawPanel(ctx: CanvasRenderingContext2D, r: Rect, hot = false): void {
+export function drawPanel(
+  ctx: CanvasRenderingContext2D,
+  r: Rect,
+  hot = false,
+  accent: string | null = null,
+): void {
   const { x, y, w, h } = r;
-  ctx.fillStyle = '#101014';
+  ctx.fillStyle = accent ?? '#101014';
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = hot ? '#3a4a5e' : '#2c2c34';
   ctx.fillRect(x + 1, y + 1, w - 2, h - 2);

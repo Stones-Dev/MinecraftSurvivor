@@ -3,18 +3,24 @@ import type { SfxName } from './core/audio';
 import type { InputSource } from './core/input';
 import { Rng } from './core/rng';
 import { SpatialHash } from './core/spatialhash';
-import { PASSIVES, type PassiveId } from './data/upgrades';
+import { baseMods, PASSIVES, type Mods, type PassiveId } from './data/upgrades';
+import type { ItemId } from './data/items';
+import { ARMOR_TIERS, SWORD_TIERS } from './data/tiers';
 import type { Enemy } from './entities/enemy';
 import type { Fx } from './entities/fx';
 import { Player } from './entities/player';
 import type { Pickup } from './entities/pickup';
 import type { Projectile } from './entities/projectile';
-import { updateMines, updateProjectiles } from './systems/combat';
+import { applyStatus } from './systems/status';
+import { updateMines, updateOrbiters, updateProjectiles, updateZones } from './systems/combat';
 import { updateEnemies } from './systems/enemyAI';
+import { updateItems } from './systems/items';
 import { gainXp, type Card } from './systems/levelup';
 import { Pathing } from './systems/pathing';
 import { SpawnerState, updateSpawner } from './systems/spawner';
-import { updateWeapons, type WeaponState } from './systems/weapons';
+import { updateWeapons } from './systems/weapons';
+import { newWeapon } from './weapons';
+import type { WeaponId, WeaponState } from './weapons/types';
 import { biomeState, type BiomeId } from './world/biomes';
 import { World } from './world/world';
 
@@ -38,6 +44,49 @@ export interface Telegraph {
   dur: number;
 }
 
+/** A damage pool on the ground (lingering potions, lava trail, poison clouds, frost). */
+export interface Zone {
+  x: number;
+  y: number;
+  r: number;
+  t: number;
+  dur: number;
+  /** Damage per second to everything inside. */
+  dps: number;
+  tick: number;
+  kind: 'burn' | 'poison' | 'wither' | 'frost' | 'harm';
+  /** Movement factor applied to enemies inside (1 = none). */
+  slowF: number;
+  friendly: boolean;
+}
+
+/** A rod or blade circling the hero. */
+export interface Orbiter {
+  owner: WeaponId;
+  angle: number;
+  radius: number;
+  speed: number;
+  dmg: number;
+  size: number;
+  knock: number;
+  /** Seconds before the same enemy can be hit again. */
+  rehit: number;
+  burn: boolean;
+  style: 'rod' | 'blade';
+  x: number;
+  y: number;
+  hitAt: Map<number, number>;
+}
+
+export interface ShieldState {
+  has: boolean;
+  ready: boolean;
+  timer: number;
+  cd: number;
+  thorns: number;
+  reflect: boolean;
+}
+
 export type RunStatus = 'playing' | 'dead';
 
 const PICKUP_COLLECT = 8;
@@ -56,10 +105,30 @@ export class RunState {
   fx: Fx[] = [];
   mines: Mine[] = [];
   telegraphs: Telegraph[] = [];
+  zones: Zone[] = [];
+  orbiters: Orbiter[] = [];
   /** Sound events produced this frame; the screen plays and clears them. */
   events: SfxName[] = [];
-  weapons: WeaponState[] = [{ id: 'sword', level: 1, cd: 0.3 }];
+  /** Deferred callbacks (beams, fangs, lightning): [seconds left, fn]. */
+  scheduled: { t: number; fn: () => void }[] = [];
+  weapons: WeaponState[] = [newWeapon('sword')];
   passives = new Map<PassiveId, number>();
+  shield: ShieldState = { has: false, ready: false, timer: 0, cd: 8, thorns: 0, reflect: false };
+
+  /** Equipped item (one per run), its cooldown, a queued swap choice and temporary buffs. */
+  item: ItemId | null = null;
+  itemCd = 0;
+  pendingItem: ItemId | null = null;
+  absorb = 0;
+  resistUntil = 0;
+  dash: { dx: number; dy: number; t: number } | null = null;
+  /** Cursor position in world coordinates (set by the screen each frame). */
+  targetX = 0;
+  targetY = 0;
+
+  /** Armor tier 0..7 and sword tier 0..6 (indices into ARMOR_TIERS / SWORD_TIERS). */
+  armorTier = 0;
+  swordTier = 0;
 
   time: number;
   kills = 0;
@@ -76,10 +145,17 @@ export class RunState {
   /** Seconds since death (the screen shows Results after a beat). */
   deadT = 0;
 
-  dmgMult = 1;
-  cdMult = 1;
-  magnetRadius = 28;
+  mods: Mods = baseMods();
+  /** Sword weapon multipliers from the sword tier. */
+  swordDmg = 1;
+  swordCd = 1;
+  swordArea = 0;
   spawnMult = 1;
+  /** Extra chance for spawns to be Charged (thunderstorms). */
+  chargedBonus = 0;
+  private dotAcc = 0;
+  /** Base max HP before bonuses (Steve: 100 + 10%). */
+  private readonly baseMaxHp = 110;
 
   constructor(
     readonly seed: number,
@@ -95,10 +171,17 @@ export class RunState {
     };
     this.world = new World(seed);
     this.time = startTime;
-    // Steve's Builder's Grit: +10% max HP.
-    this.player.maxHp = Math.round(this.player.maxHp * 1.1);
-    this.player.hp = this.player.maxHp;
     this.recomputeStats();
+    this.player.hp = this.player.maxHp;
+  }
+
+  get magnetRadius(): number {
+    return 28 * this.mods.magnet;
+  }
+
+  /** Run `fn` after `delay` seconds of game time. */
+  later(delay: number, fn: () => void): void {
+    this.scheduled.push({ t: delay, fn });
   }
 
   emit(name: SfxName): void {
@@ -109,14 +192,47 @@ export class RunState {
     return biomeState(this.time).current;
   }
 
-  /** Derive multipliers from owned passives. */
+  /** Hook for systems that react to kills (events, bosses...). */
+  onKill(_e: Enemy): void {
+    void _e;
+  }
+
+  /** Hook for systems that react to the hero being hurt. */
+  onPlayerHurt(): void {}
+
+  /** Rebuild every modifier from passives, tiers and items. */
   recomputeStats(): void {
-    const lv = (id: PassiveId): number => this.passives.get(id) ?? 0;
-    this.dmgMult = 1 + 0.1 * lv('sharpness');
-    this.cdMult = Math.max(0.4, 1 - 0.08 * lv('quick_charge'));
-    this.player.speedMult = 1 + 0.06 * lv('swiftness');
-    this.player.armor = 3 * lv('protection');
-    this.magnetRadius = 28 * (1 + 0.3 * lv('magnet'));
+    const m = baseMods();
+    for (const [id, level] of this.passives) PASSIVES[id].apply(level, m);
+    const armor = ARMOR_TIERS[this.armorTier];
+    const sword = SWORD_TIERS[this.swordTier];
+    if (armor) {
+      m.armor += armor.armor;
+      m.maxHpBonus += armor.hp;
+      m.luck += armor.luck;
+      m.regen += armor.regen;
+    }
+    if (this.item === 'rabbit_foot') m.luck += 0.15;
+    if (this.time < this.resistUntil) m.dmgTaken *= 0.5;
+    if (sword) {
+      m.burnChance += sword.burn;
+      this.swordDmg = sword.dmg;
+      this.swordCd = sword.cd;
+      this.swordArea = sword.area;
+    }
+    m.cd = Math.max(0.35, m.cd);
+    m.dmgTaken = Math.max(0.2, m.dmgTaken);
+    this.mods = m;
+    const p = this.player;
+    const maxHp = this.baseMaxHp + m.maxHpBonus;
+    if (maxHp !== p.maxHp) {
+      const ratio = p.maxHp > 0 ? p.hp / p.maxHp : 1;
+      p.maxHp = maxHp;
+      p.hp = Math.min(maxHp, Math.max(1, ratio * maxHp));
+    }
+    p.armor = m.armor;
+    p.speedMult = m.speed;
+    p.regen = m.regen;
   }
 
   passiveLevel(id: PassiveId): number {
@@ -128,7 +244,8 @@ export class RunState {
     this.time += dt;
     this.shake = Math.max(0, this.shake - 14 * dt);
     const p = this.player;
-    p.update(dt, input, this.world, this.biome());
+    updateItems(this, dt);
+    p.update(dt, input, this.world, this.biome(), this.mods.waterImmune);
     if (p.dead) {
       if (this.status !== 'dead') this.emit('death');
       this.status = 'dead';
@@ -140,12 +257,50 @@ export class RunState {
     this.hash.clear();
     for (const e of this.enemies) if (!e.dying) this.hash.insert(e);
 
+    this.frostAura();
     updateEnemies(this, dt);
     updateWeapons(this, dt);
     updateProjectiles(this, dt);
     updateMines(this, dt);
+    updateZones(this, dt);
+    updateOrbiters(this, dt);
     this.updatePickups(dt);
     this.updateFx(dt);
+    this.updateDot(dt);
+    for (const s of this.scheduled) s.t -= dt;
+    const due = this.scheduled.filter((s) => s.t <= 0);
+    if (due.length > 0) {
+      this.scheduled = this.scheduled.filter((s) => s.t > 0);
+      for (const s of due) s.fn();
+    }
+  }
+
+  /** Poison and wither ticks on the hero (every 0.5 s). */
+  private updateDot(dt: number): void {
+    const p = this.player;
+    if (p.dotT <= 0 || p.dead) return;
+    p.dotT -= dt;
+    this.dotAcc += dt;
+    while (this.dotAcc >= 0.5) {
+      this.dotAcc -= 0.5;
+      const dmg = p.dotDps * 0.5;
+      p.hp -= dmg;
+      if (p.dotKind === 'poison') p.hp = Math.max(1, p.hp);
+      else if (p.hp <= 0) {
+        p.hp = 0;
+        p.dead = true;
+      }
+    }
+    if (p.dotT <= 0) p.dotDps = 0;
+  }
+
+  /** Frost Walker: enemies close to the hero are slowed. */
+  private frostAura(): void {
+    const r = this.mods.frost;
+    if (r <= 0 || this.player.dead) return;
+    const near: Enemy[] = [];
+    this.hash.query(this.player.x, this.player.y, r, near);
+    for (const e of near) if (!e.dying) applyStatus(e, 'slow', 0.4, 0.6);
   }
 
   private updatePickups(dt: number): void {
@@ -202,5 +357,3 @@ export class RunState {
     return [...this.passives.entries()].map(([id, level]) => ({ id, level }));
   }
 }
-
-export { PASSIVES };

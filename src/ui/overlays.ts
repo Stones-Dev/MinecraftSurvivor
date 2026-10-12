@@ -2,11 +2,15 @@
 import type { App } from '../app';
 import type { View } from '../core/canvas';
 import type { RunState } from '../game';
+import { ITEMS } from '../data/items';
 import { runReward } from '../systems/economy';
+import { resolveItemChoice } from '../systems/items';
 import { applyCard, buildOffer, finishOffer, SKIP_EMERALDS } from '../systems/levelup';
 import { drawIcon } from './icons';
 import { drawButton, drawPanel, drawText, inRect, type Rect, wrap } from './panel';
 import type { Screen } from './router';
+
+const RARITY_COLOR = { common: '#101014', rare: '#3b78d8', epic: '#a24ad8', legendary: '#e8b923' };
 
 function dim(view: View, alpha: number): void {
   view.ctx.fillStyle = `rgba(0,0,0,${alpha})`;
@@ -65,7 +69,7 @@ export function levelupScreen(app: App, run: RunState): Screen {
       );
       run.offer?.forEach((card, i) => {
         const r = cardRect(view, i);
-        drawPanel(ctx, r, hover === i);
+        drawPanel(ctx, r, hover === i, card.gold ? '#e8b923' : RARITY_COLOR[card.rarity]);
         drawText(ctx, `${i + 1}`, r.x + 6, r.y + 12, '#aaa');
         if (card.isNew) drawText(ctx, 'NEW', r.x + r.w - 6, r.y + 12, '#7dff9a', 'right');
         drawIcon(ctx, card.icon, r.x + r.w / 2 - 18, r.y + 18, 3);
@@ -100,6 +104,78 @@ export function levelupScreen(app: App, run: RunState): Screen {
       else if (code === 'Digit4' || code === 'Numpad4') pick(3);
       else if (code === 'KeyR') reroll();
       else if (code === 'KeyS') skip();
+    },
+  };
+}
+
+/** Asked when a second item is found: keep the current one or swap (the game stays paused). */
+export function itemChoiceScreen(app: App, run: RunState): Screen {
+  let hover = -1;
+  let lastView: View | null = null;
+  const btns = (view: View): Rect[] => {
+    const cx = Math.floor(view.width / 2);
+    const y = Math.floor(view.height / 2) + 30;
+    return [
+      { x: cx - 104, y, w: 100, h: 18 },
+      { x: cx + 4, y, w: 100, h: 18 },
+    ];
+  };
+  const choose = (take: boolean): void => {
+    resolveItemChoice(run, take);
+    app.router.pop();
+  };
+  return {
+    update() {},
+    render(view) {
+      lastView = view;
+      const { ctx } = view;
+      dim(view, 0.62);
+      drawText(
+        ctx,
+        'NEW ITEM FOUND',
+        view.width / 2,
+        Math.floor(view.height / 2) - 44,
+        '#ffe27a',
+        'center',
+      );
+      const cur = run.item ? ITEMS[run.item] : null;
+      const next = run.pendingItem ? ITEMS[run.pendingItem] : null;
+      const cx = Math.floor(view.width / 2);
+      const y = Math.floor(view.height / 2) - 36;
+      for (const [i, def, label] of [
+        [0, cur, 'Keep'],
+        [1, next, 'Take'],
+      ] as const) {
+        const r: Rect = { x: cx + (i === 0 ? -104 : 4), y, w: 100, h: 62 };
+        drawPanel(ctx, r, hover === i);
+        if (def) {
+          drawIcon(ctx, def.icon, r.x + r.w / 2 - 12, r.y + 6, 2);
+          drawText(ctx, def.name, r.x + r.w / 2, r.y + 38, '#fff', 'center');
+          wrap(ctx, def.blurb, r.w - 8)
+            .slice(0, 2)
+            .forEach((line, j) =>
+              drawText(ctx, line, r.x + r.w / 2, r.y + 47 + j * 8, '#c9c9d4', 'center'),
+            );
+        }
+        drawText(ctx, label, r.x + 6, r.y + 10, '#aaa');
+      }
+      const [a, b] = btns(view);
+      if (a && b) {
+        drawButton(ctx, a, 'Keep current (1)', hover === 0);
+        drawButton(ctx, b, 'Take new (2)', hover === 1);
+      }
+    },
+    onMove(x, y) {
+      if (lastView) hover = btns(lastView).findIndex((r) => inRect(r, x, y));
+    },
+    onClick(x, y) {
+      if (!lastView) return;
+      const i = btns(lastView).findIndex((r) => inRect(r, x, y));
+      if (i >= 0) choose(i === 1);
+    },
+    onKey(code) {
+      if (code === 'Digit1') choose(false);
+      else if (code === 'Digit2') choose(true);
     },
   };
 }

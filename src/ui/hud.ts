@@ -1,6 +1,7 @@
 import type { View } from '../core/canvas';
 import { PASSIVES } from '../data/upgrades';
-import { WEAPONS } from '../data/weapons';
+import { ITEMS } from '../data/items';
+import { WEAPONS } from '../weapons';
 import type { RunState } from '../game';
 import { xpToNext } from '../systems/economy';
 import { drawIcon } from './icons';
@@ -66,6 +67,23 @@ export function drawHud(view: View, run: RunState): void {
   run
     .passiveList()
     .forEach((ps, i) => slot(ctx, 4 + i * 18, y0 - 18, PASSIVES[ps.id].icon, ps.level));
+
+  if (run.item) {
+    const def = ITEMS[run.item];
+    const x = width - 22;
+    const y = height - 22;
+    slot(ctx, x, y, def.icon, 0);
+    ctx.fillStyle = '#3a3a44';
+    ctx.fillRect(x + 12, y + 12, 3, 3);
+    if (run.itemCd > 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      const h = Math.ceil(14 * Math.min(1, run.itemCd / Math.max(1, def.cooldown)));
+      ctx.fillRect(x + 1, y + 15 - h, 14, h);
+      drawText(ctx, String(Math.ceil(run.itemCd)), x + 8, y + 12, '#fff', 'center');
+    } else if (def.active) {
+      drawText(ctx, 'SPACE', x + 8, y - 3, '#ffe27a', 'center');
+    }
+  }
 
   if (p.hp / p.maxHp < 0.3 && !p.dead) {
     const pulse = 0.35 + 0.15 * Math.sin(run.time * 6);

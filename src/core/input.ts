@@ -4,6 +4,8 @@ export interface InputSource {
   pausePressed(): boolean;
   confirmPressed(): boolean;
   cancelPressed(): boolean;
+  /** Use the equipped item (Space). */
+  activePressed(): boolean;
   /** Clear one-shot presses; call once per simulation step. */
   endStep(): void;
 }
@@ -40,6 +42,10 @@ export class KeyboardInput implements InputSource {
 
   cancelPressed(): boolean {
     return this.pressed.has('Escape');
+  }
+
+  activePressed(): boolean {
+    return this.pressed.has('Space');
   }
 
   endStep(): void {
