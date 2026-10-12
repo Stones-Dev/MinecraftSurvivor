@@ -253,6 +253,12 @@ export function inRotation(id: BiomeId): boolean {
   return BIOME_ORDER.includes(id);
 }
 
+/** Current rotation biome at time t, without allocating a state object (hot paths). */
+export function biomeAt(t: number): BiomeId {
+  const period = Math.max(0, Math.floor(t / BIOME_PERIOD));
+  return BIOME_ORDER[period % BIOME_ORDER.length] ?? 'plains';
+}
+
 export function biomeState(t: number): BiomeState {
   const n = BIOME_ORDER.length;
   const period = Math.max(0, Math.floor(t / BIOME_PERIOD));

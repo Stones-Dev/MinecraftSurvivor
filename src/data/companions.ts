@@ -352,7 +352,7 @@ export const ALLIES: AllyDef[] = [
     kind: 'ally',
     name: 'Trader Llama',
     rarity: 'uncommon',
-    sprite: 'pet.creamy_llama_white_decor',
+    sprite: 'pet.white_llama_trader_decor',
     role: 'llama',
     hp: 70,
     dmg: 0.5,

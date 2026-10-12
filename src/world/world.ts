@@ -9,8 +9,23 @@ export const WATER_SLOW = 0.6;
 export type Surface = 'ground' | 'water' | 'ice' | 'lava' | 'soul';
 export const SOUL_SLOW = 0.65;
 
+const BIOME_INDEX: Record<BiomeId, number> = {
+  plains: 0,
+  dark_forest: 1,
+  snowy_taiga: 2,
+  desert: 3,
+  nether: 4,
+};
+
+/** Numeric cache key for a chunk and biome (no string building in the collision hot path). */
+function chunkKey(cx: number, cy: number, biome: BiomeId): number {
+  return ((cx + 32768) * 65536 + (cy + 32768)) * 8 + BIOME_INDEX[biome];
+}
+
 export class World {
-  private readonly propCache = new Map<string, Prop[]>();
+  private readonly propCache = new Map<number, Prop[]>();
+  /** Bumped whenever a prop is removed, invalidating the per-prop `gone` cache. */
+  private removedVer = 1;
 
   constructor(
     readonly seed: number,
@@ -44,16 +59,22 @@ export class World {
   private readonly removed = new Set<string>();
 
   isRemoved(p: Prop): boolean {
-    return this.removed.size > 0 && this.removed.has(`${p.id}|${p.kind}`);
+    if (this.removed.size === 0) return false;
+    if (p.chk !== this.removedVer) {
+      p.gone = this.removed.has(`${p.id}|${p.kind}`);
+      p.chk = this.removedVer;
+    }
+    return p.gone === true;
   }
 
   removeProp(p: Prop): void {
     this.removed.add(`${p.id}|${p.kind}`);
+    this.removedVer++;
     this.solidCache.clear();
   }
 
   chunkProps(cx: number, cy: number, biome: BiomeId): Prop[] {
-    const key = `${cx},${cy},${biome}`;
+    const key = chunkKey(cx, cy, biome);
     let props = this.propCache.get(key);
     if (!props) {
       props = genProps(cx, cy, this.seed, biome, this.arena);
@@ -79,11 +100,11 @@ export class World {
     return out;
   }
 
-  private readonly solidCache = new Map<string, Prop[]>();
+  private readonly solidCache = new Map<number, Prop[]>();
 
   /** Solid props of a chunk (cached; the collision hot path iterates these directly). */
   private chunkSolids(cx: number, cy: number, biome: BiomeId): Prop[] {
-    const key = `${cx},${cy},${biome}`;
+    const key = chunkKey(cx, cy, biome);
     let solids = this.solidCache.get(key);
     if (!solids) {
       solids = this.chunkProps(cx, cy, biome).filter((p) => p.solid && !this.isRemoved(p));

@@ -205,8 +205,15 @@ export function updateInteract(run: RunState, dt: number): void {
     }
   }
   // Traps and ground hazards that also affect enemies.
-  const near = run.world.propsInRect(p.x - 300, p.y - 220, p.x + 300, p.y + 220, biome);
-  for (const prop of near) {
+  run.hazardT -= dt;
+  if (run.hazardT <= 0) {
+    run.hazardT = 0.3;
+    run.hazards = run.world
+      .propsInRect(p.x - 300, p.y - 220, p.x + 300, p.y + 220, biome)
+      .filter((q) => q.kind === 'tnt_trap' || q.kind === 'cobweb' || q.kind === 'magma');
+  }
+  for (const prop of run.hazards) {
+    if (run.world.isRemoved(prop)) continue;
     if (prop.kind === 'tnt_trap') {
       const trigger =
         Math.hypot(prop.x - p.x, prop.y - p.y) < 12 ||

@@ -46,7 +46,9 @@ export function damageEnemy(
       run.hash.query(e.x, e.y, 140, mates);
       for (const m of mates) if (m.def.packAggro) m.angry = 6;
     }
-    run.fx.push(makeFx('text', e.x, e.y - 16, 0.55, { text: String(Math.round(dmg)), vy: -26 }));
+    if (run.fx.length < 260) {
+      run.fx.push(makeFx('text', e.x, e.y - 16, 0.55, { text: String(Math.round(dmg)), vy: -26 }));
+    }
     for (let i = 0; i < 3; i++) {
       const a = run.rng.fx.range(0, Math.PI * 2);
       const sp = run.rng.fx.range(30, 70);

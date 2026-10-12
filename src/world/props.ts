@@ -37,6 +37,9 @@ export interface Prop {
   y: number;
   radius: number;
   solid: boolean;
+  /** World bookkeeping (removed-prop cache): version at which `gone` was last computed. */
+  chk?: number;
+  gone?: boolean;
 }
 
 /** Per-cell chances (cumulative after trees/cacti). */

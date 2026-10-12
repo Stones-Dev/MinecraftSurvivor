@@ -3,6 +3,7 @@ import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
 import { ARMOR_IDS, SWORD_IDS } from '../data/tiers';
 import type { Ally, PetState } from '../entities/ally';
+import type { EnemyDef } from '../data/enemies';
 import type { Enemy } from '../entities/enemy';
 import type { Fx } from '../entities/fx';
 import type { Pickup } from '../entities/pickup';
@@ -13,38 +14,86 @@ import { propStateOf } from '../systems/interact';
 import type { Npc } from '../systems/npcs';
 import type { Prop } from '../world/props';
 import { drawIcon } from '../ui/icons';
-import { drawText } from '../ui/panel';
+import { UI_FONT } from '../ui/panel';
 
-/** Pick the animation for an enemy's current state and the time into it. */
-function enemyAnim(atlas: Atlas, e: Enemy): { id: string; t: number } {
+const animCache = new WeakMap<EnemyDef, Record<string, string>>();
+const animOut = { id: '', t: 0 };
+
+/** Resolve (and memoise per enemy type and state slot) the first available animation among the candidates. */
+function resolveAnim(
+  atlas: Atlas,
+  e: Enemy,
+  slot: string,
+  c1?: string,
+  c2?: string,
+  c3?: string,
+): string {
+  let m = animCache.get(e.def);
+  if (!m) {
+    m = {};
+    animCache.set(e.def, m);
+  }
+  const hit = m[slot];
+  if (hit) return hit;
   const base = e.def.sprite;
+  let id = `${base}.idle`;
+  let found = false;
+  for (const c of [c1, c2, c3]) {
+    if (c && atlas.hasAnim(`${base}.${c}`)) {
+      id = `${base}.${c}`;
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    for (const c of ['idle', 'walk', 'summon', 'firing', 'attack']) {
+      if (atlas.hasAnim(`${base}.${c}`)) {
+        id = `${base}.${c}`;
+        break;
+      }
+    }
+  }
+  m[slot] = id;
+  return id;
+}
+
+/** Pick the animation for an enemy's current state and the time into it (returns a shared object). */
+function enemyAnim(atlas: Atlas, e: Enemy): { id: string; t: number } {
   const names = e.def.anims ?? {};
-  const has = (name: string): boolean => atlas.hasAnim(`${base}.${name}`);
-  const pick = (...candidates: (string | undefined)[]): string => {
-    for (const c of candidates) if (c && has(c)) return `${base}.${c}`;
-    for (const c of ['idle', 'walk', 'summon', 'firing', 'attack'])
-      if (has(c)) return `${base}.${c}`;
-    return `${base}.idle`;
-  };
-  if (e.dying) return { id: pick('death'), t: e.deathT };
+  const out = animOut;
+  if (e.dying) {
+    out.id = resolveAnim(atlas, e, 'death', 'death');
+    out.t = e.deathT;
+    return out;
+  }
+  out.t = e.animT;
   switch (e.state) {
     case 'fuse':
-      return { id: pick('explode'), t: e.animT * 0.8 };
+      out.id = resolveAnim(atlas, e, 'fuse', 'explode');
+      out.t = e.animT * 0.8;
+      return out;
     case 'aim':
-      return { id: pick(names.aim, 'firing', 'attack'), t: e.animT };
+      out.id = resolveAnim(atlas, e, 'aim', names.aim, 'firing', 'attack');
+      return out;
     case 'cast':
-      return { id: pick(names.cast, 'magic', 'attack'), t: e.animT };
+      out.id = resolveAnim(atlas, e, 'cast', names.cast, 'magic', 'attack');
+      return out;
     case 'blink':
-      return { id: pick('teleport_away', 'idle'), t: e.animT };
+      out.id = resolveAnim(atlas, e, 'blink', 'teleport_away', 'idle');
+      return out;
     case 'windup':
-      return { id: pick(names.windup, 'attack'), t: e.animT };
+      out.id = resolveAnim(atlas, e, 'windup', names.windup, 'attack');
+      return out;
     case 'leap':
-      return { id: pick(names.dash, 'attack'), t: e.animT };
+      out.id = resolveAnim(atlas, e, 'leap', names.dash, 'attack');
+      return out;
     default:
       break;
   }
-  if (e.def.walkAnim) return { id: pick(names.walk, 'walk'), t: e.animT };
-  return { id: pick(names.idle, 'idle'), t: e.animT };
+  out.id = e.def.walkAnim
+    ? resolveAnim(atlas, e, 'walk', names.walk, 'walk')
+    : resolveAnim(atlas, e, 'idle', names.idle, 'idle');
+  return out;
 }
 
 export function drawEnemy(
@@ -326,6 +375,35 @@ const ZONE_COLORS: Record<Zone['kind'], [string, string]> = {
   harm: ['rgba(220,60,110,0.36)', '#ffc0d8'],
 };
 
+const discCache = new Map<number, HTMLCanvasElement>();
+const ZONE_INDEX: Record<Zone['kind'], number> = {
+  burn: 0,
+  poison: 1,
+  wither: 2,
+  frost: 3,
+  harm: 4,
+};
+
+/** Pre-rendered ellipse for a pool (one drawImage per zone instead of a fillRect per scanline). */
+function zoneDisc(kind: Zone['kind'], rx: number, ry: number, fill: string): HTMLCanvasElement {
+  const key = (ZONE_INDEX[kind] * 512 + rx) * 512 + ry;
+  let c = discCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = rx * 2 + 1;
+  c.height = ry * 2 + 1;
+  const g = c.getContext('2d');
+  if (g) {
+    g.fillStyle = fill;
+    for (let y = -ry; y <= ry; y++) {
+      const half = Math.floor(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))));
+      g.fillRect(rx - half, ry + y, half * 2 + 1, 1);
+    }
+  }
+  discCache.set(key, c);
+  return c;
+}
+
 /** Damage pool: a dithered pixel disc with rising sparkles. */
 export function drawZone(
   ctx: CanvasRenderingContext2D,
@@ -341,11 +419,7 @@ export function drawZone(
   const rx = Math.round(z.r);
   const ry = Math.max(2, Math.round(z.r * 0.72));
   ctx.globalAlpha = fade;
-  ctx.fillStyle = fill;
-  for (let y = -ry; y <= ry; y++) {
-    const half = Math.floor(rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))));
-    ctx.fillRect(cx - half, cy + y, half * 2 + 1, 1);
-  }
+  ctx.drawImage(zoneDisc(z.kind, rx, ry, fill), cx - rx, cy - ry);
   ctx.fillStyle = spark;
   for (let i = 0; i < 4; i++) {
     const a = time * 1.5 + i * 1.7 + z.x;
@@ -449,10 +523,27 @@ export function drawFx(ctx: CanvasRenderingContext2D, f: Fx, camX: number, camY:
   }
 }
 
-export function drawFxText(ctx: CanvasRenderingContext2D, f: Fx, camX: number, camY: number): void {
-  if (f.kind !== 'text') return;
-  ctx.globalAlpha = Math.min(1, 2 * (1 - f.t / f.life));
-  drawText(ctx, f.text, f.x - camX, f.y - camY, f.color, 'center');
+/** All floating texts in one pass: the font is set once instead of once per number. */
+export function drawFxTexts(
+  ctx: CanvasRenderingContext2D,
+  fx: readonly Fx[],
+  camX: number,
+  camY: number,
+): void {
+  ctx.font = UI_FONT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  for (const f of fx) {
+    if (f.kind !== 'text') continue;
+    const x = Math.round(f.x - camX);
+    const y = Math.round(f.y - camY);
+    if (x < -40 || y < -20 || x > ctx.canvas.width + 40 || y > ctx.canvas.height + 20) continue;
+    ctx.globalAlpha = Math.min(1, 2 * (1 - f.t / f.life));
+    ctx.fillStyle = '#000';
+    ctx.fillText(f.text, x + 1, y + 1);
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, x, y);
+  }
   ctx.globalAlpha = 1;
 }
 
@@ -570,6 +661,8 @@ export function drawPropExtra(
   camX: number,
   camY: number,
 ): void {
+  const kind = p.kind;
+  if (kind !== 'locked_chest' && kind !== 'campfire' && kind !== 'beacon') return;
   const x = Math.round(p.x - camX);
   const y = Math.round(p.y - camY);
   const st = propStateOf(run, p);

@@ -62,6 +62,7 @@ function enter(run: RunState): void {
   run.orbiters = [];
   run.npcs = [];
   run.scheduled = [];
+  run.hazardT = 0;
   run.storm = false;
   run.chargedBonus = 0;
   run.world = run.arenaWorld;
@@ -118,6 +119,7 @@ function leave(run: RunState, won: boolean): void {
   run.orbiters = s.orbiters;
   run.npcs = s.npcs;
   run.scheduled = s.scheduled;
+  run.hazardT = 0;
   run.world = s.world;
   p.x = s.x;
   p.y = s.y;

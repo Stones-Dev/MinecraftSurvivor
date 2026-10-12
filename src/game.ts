@@ -30,7 +30,8 @@ import { SpawnerState, updateSpawner } from './systems/spawner';
 import { updateWeapons } from './systems/weapons';
 import { MAX_WEAPON_LEVEL, newWeapon } from './weapons';
 import type { WeaponId, WeaponState } from './weapons/types';
-import { biomeState, type BiomeId, type BiomeState } from './world/biomes';
+import { biomeAt, biomeState, type BiomeId, type BiomeState } from './world/biomes';
+import type { Prop } from './world/props';
 import { World } from './world/world';
 
 export interface Mine {
@@ -100,6 +101,8 @@ export type RunStatus = 'playing' | 'dead';
 
 const PICKUP_COLLECT = 8;
 
+const MAX_PICKUPS = 300;
+
 export class RunState {
   readonly rng: { spawn: Rng; drops: Rng; levelup: Rng; ai: Rng; fx: Rng; events: Rng };
   /** The world being played: the overworld, or the arena while a rift is active. */
@@ -165,6 +168,9 @@ export class RunState {
   /** Item offers that arrived while another choice was open. */
   pendingQueue: ItemId[] = [];
   nextNpcId = 1;
+  /** Traps and ground hazards near the hero, refreshed a few times per second. */
+  hazards: Prop[] = [];
+  hazardT = 0;
   absorb = 0;
   resistUntil = 0;
   dash: { dx: number; dy: number; t: number } | null = null;
@@ -286,7 +292,7 @@ export class RunState {
   }
 
   biome(): BiomeId {
-    return this.rift.active ? 'nether' : biomeState(this.time).current;
+    return this.rift.active ? 'nether' : biomeAt(this.time);
   }
 
   /** Biome and crossfade state for rendering (the rift arena has no crossfade). */
@@ -499,6 +505,19 @@ export class RunState {
       }
     }
     this.pickups = this.pickups.filter((pk) => !Number.isNaN(pk.vx));
+    // Uncollected orbs never despawn; past a cap the oldest are banked so thousands cannot pile up.
+    if (this.pickups.length > MAX_PICKUPS) {
+      let excess = this.pickups.length - MAX_PICKUPS;
+      for (const pk of this.pickups) {
+        if (excess <= 0) break;
+        if (pk.kind === 'xp' && !p.dead) {
+          gainXp(this, pk.value);
+          pk.vx = pk.vy = Number.NaN;
+          excess--;
+        }
+      }
+      this.pickups = this.pickups.filter((pk) => !Number.isNaN(pk.vx));
+    }
   }
 
   private updateFx(dt: number): void {

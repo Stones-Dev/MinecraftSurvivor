@@ -9,7 +9,7 @@ import {
   drawOrbiter,
   drawZone,
   drawFx,
-  drawFxText,
+  drawFxTexts,
   drawHero,
   drawNpc,
   drawAlly,
@@ -204,7 +204,16 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       if (run.rescue) drawRescueFlag(ctx, run.rescue, camX, camY, run.time);
       if (run.rift.portal) drawPortal(ctx, run.rift.portal, camX, camY, run.time);
       for (const t of run.telegraphs) drawTelegraph(ctx, t, camX, camY);
-      for (const pk of run.pickups) drawPickup(ctx, pk, camX, camY);
+      for (const pk of run.pickups) {
+        if (
+          pk.x < camX - 8 ||
+          pk.x > camX + width + 8 ||
+          pk.y < camY - 8 ||
+          pk.y > camY + height + 8
+        )
+          continue;
+        drawPickup(ctx, pk, camX, camY);
+      }
 
       const items = renderer.collectProps(camX, camY, width, height, state);
       propsVisible = items.length;
@@ -248,7 +257,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         nightFactor(run.time) * (1 - Math.min(0.6, run.mods.nightVision)),
       );
       drawWeather(ctx, run, width, height, state.current === 'snowy_taiga');
-      if (app.data().settings.damageNumbers) for (const f of run.fx) drawFxText(ctx, f, camX, camY);
+      if (app.data().settings.damageNumbers) drawFxTexts(ctx, run.fx, camX, camY);
       if (run.rift.active) {
         ctx.fillStyle = 'rgba(120,20,0,0.14)';
         ctx.fillRect(0, 0, width, height);
