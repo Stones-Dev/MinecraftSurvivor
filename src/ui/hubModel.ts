@@ -534,3 +534,53 @@ export function collectionLayout(w: number, h: number): CollectionLayout {
     buttonsY: h - 20,
   };
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Run setup layout.
+
+export interface SetupLayout {
+  tier: LayoutTier;
+  slotX: number;
+  slotW: number;
+  slotsY: number;
+  rowH: number;
+  rowGap: number;
+  /** Right-hand picker: header line, candidate grid and the detail box under it. */
+  picker: UiRect;
+  grid: { x: number; y: number; cw: number; ch: number; gap: number; cols: number; rows: number };
+  detail: UiRect;
+  /** Top of the bottom bar (Back, biome selector, START). */
+  barY: number;
+}
+
+export function setupLayout(w: number, h: number): SetupLayout {
+  const tier = layoutTier(w, h);
+  const m = 6;
+  const top = 24;
+  const barY = h - 20;
+  const bottom = barY - 4;
+  const slotW = tier === 'compact' ? 98 : tier === 'normal' ? 120 : 160;
+  const rowGap = tier === 'compact' ? 2 : 3;
+  const rowH = Math.max(22, Math.min(46, Math.floor((bottom - top - 3 * rowGap) / 4)));
+  const px = m + slotW + 6;
+  const picker = { x: px, y: top, w: w - m - px, h: bottom - top };
+  const [cw, ch, gap] =
+    tier === 'compact' ? [28, 32, 2] : tier === 'normal' ? [34, 40, 3] : [44, 52, 3];
+  const detailH = tier === 'compact' ? 46 : tier === 'normal' ? 60 : 78;
+  const gridTop = picker.y + 12;
+  const gridH = picker.h - 12 - detailH - 3;
+  const cols = Math.max(1, Math.floor((picker.w - 4 + gap) / (cw + gap)));
+  const rows = Math.max(1, Math.floor((gridH + gap) / (ch + gap)));
+  return {
+    tier,
+    slotX: m,
+    slotW,
+    slotsY: top,
+    rowH,
+    rowGap,
+    picker,
+    grid: { x: picker.x + 2, y: gridTop, cw, ch, gap, cols, rows },
+    detail: { x: picker.x, y: picker.y + picker.h - detailH, w: picker.w, h: detailH },
+    barY,
+  };
+}
