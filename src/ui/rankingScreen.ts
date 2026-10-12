@@ -17,7 +17,7 @@ import { Buttons, drawTitle } from './widgets';
 
 /** Rows requested per board (the list scrolls through them). */
 const FETCH_ROWS = 50;
-const ROW_H = 11;
+const ROW_H = 12;
 const TIMEOUT_MS = 8000;
 
 const PERIOD_TABS: { id: Period; label: string }[] = [
@@ -147,6 +147,7 @@ export function rankingScreen(app: App, back: () => void): Screen {
       const cloudOn = app.auth.cloudAvailable;
       buttons.begin();
       tabHits = [];
+      const arrows: { r: Rect; up: boolean; off: boolean }[] = [];
       drawTitle(view, 'RANKING');
 
       // ---- Tabs ----
@@ -178,20 +179,26 @@ export function rankingScreen(app: App, back: () => void): Screen {
         );
         y += 17;
       }
-      tabRow(
-        [{ id: '', name: 'All heroes' }, ...HEROES].map((h) => ({
-          label: h.name,
-          active: h.id === hero,
-          fn: () => select(period, h.id),
-        })),
-        y,
-      );
+      // Hero filter: a stepper (all heroes, then each hero) instead of one tab per hero.
+      {
+        const ids = ['', ...HEROES.map((h) => h.id)];
+        const at = Math.max(0, ids.indexOf(hero));
+        const stepHero = (d: number): void =>
+          select(period, ids[(at + d + ids.length) % ids.length] ?? '');
+        const label = `Hero: ${hero ? heroById(hero).name : 'All heroes'}`;
+        const mw = Math.min(190, w - 40);
+        const mxx = Math.floor((width - mw) / 2);
+        drawPanel(ctx, { x: mxx, y, w: mw, h: 13 });
+        drawText(ctx, fitText(label, mw - 6), width / 2, y + 10, '#fff', 'center');
+        buttons.add({ x: mxx - 20, y, w: 16, h: 13 }, '<', () => stepHero(-1));
+        buttons.add({ x: mxx + mw + 4, y, w: 16, h: 13 }, '>', () => stepHero(1));
+      }
       y += 17;
 
       // ---- Footer geometry ----
       const backY = height - 20;
       const infoY = backY - 5; // baseline of the line above the buttons
-      const headY = y + 8; // baseline of the column titles
+      const headY = y + 7; // baseline of the column titles
       const listTop = headY + 4;
       const listBottom = infoY - 9;
       fit = Math.max(1, Math.floor((listBottom - listTop) / ROW_H));
@@ -273,18 +280,17 @@ export function rankingScreen(app: App, back: () => void): Screen {
           const ky = listTop + Math.round(((th - knob) * scroll) / span);
           ctx.fillStyle = '#9a9aa8';
           ctx.fillRect(tx, ky, 3, knob);
-          buttons.add(
-            { x: width - pad - 12, y: backY, w: 12, h: 16 },
-            '^',
-            () => move(-1),
-            scroll <= 0,
-          );
-          buttons.add(
-            { x: width - pad - 26, y: backY, w: 12, h: 16 },
-            'v',
-            () => move(1),
-            scroll >= span,
-          );
+          const upR = { x: width - pad - 28, y: backY, w: 14, h: 16 };
+          const downR = { x: width - pad - 14, y: backY, w: 14, h: 16 };
+          buttons.add(upR, '', () => move(-1), scroll <= 0);
+          buttons.add(downR, '', () => move(1), scroll >= span);
+          arrows.push({ r: upR, up: true, off: scroll <= 0 }, { r: downR, up: false, off: scroll >= span });
+          const own = state.rows.findIndex((e) => e.uid === me);
+          if (own >= 0) {
+            buttons.add({ x: upR.x - 4 - 52, y: backY, w: 52, h: 16 }, 'Find me', () => {
+              scroll = clampScroll(own - Math.floor(fit / 2), state.rows.length, fit);
+            });
+          }
         }
       }
 
@@ -320,6 +326,16 @@ export function rankingScreen(app: App, back: () => void): Screen {
         );
       }
       buttons.draw(view);
+      // Scroll arrows: small triangles (the UI font has no arrow glyphs).
+      for (const a of arrows) {
+        ctx.fillStyle = a.off ? '#666670' : '#fff';
+        const cx = a.r.x + Math.floor(a.r.w / 2);
+        const cy = a.r.y + Math.floor(a.r.h / 2);
+        for (let i = 0; i < 3; i++) {
+          const half = a.up ? i : 2 - i;
+          ctx.fillRect(cx - half, cy - 1 + i, half * 2 + 1, 1);
+        }
+      }
     },
     onMove(x, y) {
       mx = x;

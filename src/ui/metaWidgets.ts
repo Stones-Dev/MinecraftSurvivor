@@ -1,4 +1,6 @@
 /** Shared bits of the missions, achievements and results screens: hit list, tabs, checkmark, formatting. */
+import type { MissionReward } from '../data/missions';
+import { drawIcon, type IconName } from './icons';
 import {
   drawButton,
   drawText,

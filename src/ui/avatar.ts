@@ -38,6 +38,7 @@ export function drawAvatar(
   ctx.beginPath();
   ctx.rect(ix, iy, iw, ih);
   ctx.clip();
-  atlas.draw(ctx, key, cx, iy + size.h - 1, false, 1);
+  // The sprites have big heads: skip the top rows of hair so the face is in the box.
+  atlas.draw(ctx, key, cx, iy + size.h - 4, false, 1);
   ctx.restore();
 }
