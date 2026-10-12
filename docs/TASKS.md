@@ -117,3 +117,50 @@ Runtime skeleton
 - [x] P5-07 — Performance pass: 150 enemies at 60 FPS, quality tiers (deps: P4-13)
 - [x] P5-08 — Save migration test with fixtures; README (English); docs complete (GDD matches game, DECISIONS complete) (deps: P5-01…P5-07)
 - [x] P5-09 — Tag `v1.0.0` (the owner asked for continuous progress to the tag instead of a sign-off stop) (deps: P5-08)
+
+## Phase 6 — v1.1 (owner feedback round; waves 0-4, details in `docs/DECISIONS.md`)
+
+Feel and input
+- [x] P6-01 — Tiny5 1-bit glyph-atlas text layer replaces Pixelify Sans (`ui/font.ts`, `drawText`/`wrapText`/`fitText`, damage-number cache)
+- [x] P6-02 — Movement: render interpolation (`Loop` alpha, `prevX/rx`), acceleration/braking, integer camera with look-ahead, aim facing, distance-driven walk cycle, dust and footsteps
+- [x] P6-03 — Hero ability framework (`src/abilities`, Q / Left Shift, HUD slot with cooldown, `abilityCd`/`abilityPower`) with Iron Resolve, Arrow Rain, Frog Leap (deps: P6-02)
+- [x] P6-04 — `MergedInput`: gamepad (standard mapping) and touch (floating joystick, ability/item/pause buttons) beside the keyboard
+- [x] P6-05 — Repository hygiene: `CLAUDE.md` and `.claude/` untracked and ignored, secrets patterns ignored, `.env.example`
+
+World and content
+- [x] P6-06 — Spatial biome map: 10 overworld biomes from a climate noise map, per-tile biome painting, "Entering" banner, `?biome=` debug start
+- [x] P6-07 — 16x16 Minecraft-style block textures (21 materials), per-biome animated water and lava (deps: P6-06)
+- [x] P6-08 — Voxel-style props per biome; gallery pages for props and block textures (deps: P6-06)
+- [x] P6-09 — Per-biome rosters and danger (`data/rosters.ts`), 37 newly packaged mob sheets (35 enemy defs), contact slow, lobbed pools, turrets, charger rams; left-facing sprite fix, `?mobs=` gallery (deps: P6-06)
+- [x] P6-10 — Ambient particles per biome, five new music themes (13 total) with biome-following `MusicDirector`, minimap with fog of war (M) (deps: P6-06)
+- [x] P6-11 — 8 new playable heroes (Skeleton, Wandering Trader, Village Smith, Enderman, Witch, Illusioner, Piglin, Creeper) with kits, abilities and a sprite hero renderer (deps: P6-03)
+- [x] P6-12 — Pets 15 → 30 and allies 10 → 22 with real effects and AI; portraits fit by atlas frame size
+- [x] P6-13 — Balance tooling: bot can start in any biome, `BAL_BIOMES=1` per-biome table; re-run recorded in `docs/BALANCE_RESULTS.md` (deps: P6-09)
+
+Accounts
+- [x] P6-14 — `src/net`: auth, cloud save with revision/conflict handling, leaderboards, Firebase backend plus in-memory twin, Firestore rules and indexes, `docs/FIREBASE_SETUP.md`, deploy workflow variables (`VITE_FIREBASE_*`)
+- [x] P6-15 — Accounts UI: Profile and Ranking canvas screens, DOM auth/nickname dialogs, cloud status wired into the app (deps: P6-14)
+
+Meta and UI
+- [x] P6-16 — Tabbed Settings with accessibility (colour-blind cue palettes, reduce flash, text size 2x for HUD and dialogs, camera look-ahead, touch mode) applied in game
+- [x] P6-17 — Missions (27 daily / 12 weekly templates, rerolls), 7-day daily reward, 55 achievements, run statistics and a detailed Results screen, toast queue
+- [x] P6-18 — Title logo, hub, collection, run setup (with start biome), upgrades and Spawner redesigned in inventory style; version bumped to 1.1.0
+
+Hardening
+- [x] P6-19 — Keyboard and gamepad navigation on every canvas screen (`PadNav`, focus rings), Spawner layout down to 213x120, minimap touch toggle, two-step save import
+- [x] P6-20 — Two independent reviews (gameplay/performance and security) and their fixes (see Checkpoint 6)
+- [x] P6-21 — Docs refresh: README, GDD, CHECKPOINTS (Checkpoint 6), TASKS, CREDITS
+- [ ] P6-22 — ⛔ Owner sign-off of v1.1, merge to `main`, tag `v1.1.0` (deps: P6-21)
+
+Not verified yet (carried from Checkpoint 6)
+- [ ] P6-23 — Try accounts, cloud save and leaderboards against a real Firebase project with a real Google login; test the Firestore rules in the emulator
+- [ ] P6-24 — Play with a real gamepad and on a real touch device; listen to the new music themes and stings
+- [ ] P6-25 — Measure performance on real hardware (the headless runs are software-rendered and vsync-capped)
+
+Deferred
+- [ ] P6-26 — Online co-op (next milestone, not started)
+- [ ] P6-27 — Firebase App Check (reCAPTCHA v3) and an in-game "delete account" button
+- [ ] P6-28 — Content-Security-Policy for the page
+- [ ] P6-29 — Hot-path allocation pooling (`Fx` objects, `collide()` results)
+- [ ] P6-30 — Generated or hand-drawn art for the new heroes (needs walk/attack/hurt/death frames and a pixel-art cleanup; the single generated still was not shipped)
+- [ ] P6-31 — Refresh `docs/BALANCE.md` and re-tune toward the 10:00 Wither target (the last simulator run reaches few bosses) and the newbie median (2:51, below the 4-6 minute target)

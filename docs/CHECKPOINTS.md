@@ -61,3 +61,84 @@ Reviews: a second independent read-only review of the Phase 4 code found 13 issu
 Open item for the owner: enabling GitHub Pages (Settings > Pages > GitHub Actions) once `main` is merged so the workflow can deploy. Sprite credits are complete (Askywalker, with the seven source links, in `CREDITS.md` and About).
 
 Screenshots: `p5-title.png`, `p5-hub.png`, `p5-hub-small.png`, `p5-crowd150.png`, `p4-tutorial.png`.
+
+## Checkpoint 6 — v1.1
+
+Status: **the owner has not signed off v1.1 yet, and nothing is merged to `main`.** `main` (local and `origin/main`) is still at `42c6948` (v1.0 plus the sprite credits); the v1.1 work is the commits after it on the branch `claude/sleepy-bardeen-wme7gt` (`git log 42c6948..HEAD`, 31 commits including work-in-progress checkpoints). The game reports version 1.1.0 in About.
+
+Built (the v1.1 waves 0-4 by area; details in `docs/DECISIONS.md`, entries dated 2026-10-13):
+- Feel and input: Tiny5 pixel text layer, render interpolation, acceleration/braking, integer camera with look-ahead, procedural walk cycle, data-driven hero abilities on Q, keyboard + gamepad + touch input, repository hygiene (`CLAUDE.md` and `.claude/` untracked, `.env.example`).
+- Content: spatial biome map with 10 overworld biomes, per-biome rosters (35 new enemy defs from 37 newly packaged sheets), 16x16 block textures with animated water and lava, voxel-style props, ambient particles, five new music themes (13 in total), minimap (M), 8 new heroes (11 in total) with kits and abilities, 15 new pets (30) and 12 new allies (22).
+- Accounts: `src/net` (auth, cloud save with conflict handling, leaderboards, Firebase backend plus an in-memory twin), Firestore rules and indexes, `docs/FIREBASE_SETUP.md`.
+- Meta and UI: profile, ranking and tabbed settings, accessibility (colour-blind cues, reduce flash, text size, camera lead, touch mode), missions, achievements (55), 7-day daily reward, run statistics and a detailed results screen, hub/collection/run setup/upgrades/Spawner redesigned.
+- Hardening and polish: two independent reviews (below), keyboard and gamepad navigation on every canvas screen, Spawner layout down to 213x120, two-step save import, minimap touch toggle.
+
+### Evidence (run on the committed state `8dba03e`, working tree clean apart from docs)
+
+| Check | Result |
+|---|---|
+| `npx vitest run` | 51 test files, **715 tests passed**, 0 failed (about 12 s) |
+| `npx tsc --noEmit` (`npm run typecheck`) | clean |
+| `npm run lint` (ESLint + Prettier check) | clean |
+| `npm run build` | succeeds; Vite warns that the lazily loaded Firebase chunk (578 kB, 172 kB gzip) is over 500 kB; the main bundle is 462 kB (165 kB gzip) |
+| `public/atlas` | two pages, about 2.3 MiB (budget 5 MiB) |
+
+### Performance
+
+- Reported by the lead: 60 fps with `?run&debug&crowd=150` in each of the 10 overworld biomes, in a headless browser. That browser is software-rendered and vsync-capped at 60 fps, so the result says "no frames dropped below 60", not how much headroom there is, and it is not a measurement on real hardware.
+- Earlier uncapped headless readings with 150 enemies (biome-content round): 136-270 fps, minimap on or off within noise. Minimap repaint 0.4-0.7 ms about every 2 s; ambient particles update in about 0.01 ms.
+- Screenshots: `docs/screenshots/` (prefixes `a1`, `a2`, `b`, `c2`, `w0`-`w2`, `p`; for example `w1-biome-jungle-crowd150.png`, `p-focus-*.png`).
+
+### Balance (`docs/BALANCE_RESULTS.md`, `npm run balance`, 12 seeds, cap 20 min, bot plays a fresh Steve)
+
+| Cell | Median survival | p10-p90 | Kills (median) |
+|---|---|---|---|
+| newbie policy | 2:51 | 1:57-3:58 | 47 |
+| smart policy | 5:00 | 3:26-6:40 | 51 |
+| smart, start biome plains / forest / badlands | 4:38 / 3:51 / 5:21 | | 44 / 50 / 83 |
+| smart, all 10 start biomes | 3:51 (forest) to 5:21 (badlands) | | |
+| smart, per starting weapon | 4:24 (poison) to 6:57 (lightning rod); sword 5:18 | | |
+
+The smart bot sits inside the 4-6 minute new-player target in 9 of the 10 start biomes (Forest 3:51 is the exception; the sample is 12 seeds, so the noise is large). The newbie policy (2:51) is below the target. The 10:00 Wither target from the brief is **not** reproduced in the last run: most starting weapons record 0.0 bosses; the sim bot does not use companions, upgrades, abilities, chests, rifts or trades, so it is a fresh-save baseline and not a measure of real play. `docs/BALANCE.md` still carries the older v1.0 table (for example bow 9:27) next to a short v1.1 note; the two are not directly comparable.
+
+### Reviews
+
+Two independent reviews were run on the v1.1 code, one for gameplay and performance and one for security. Fixes that came out of them (commits `2be561c` and `f2bede9`, tests in `tests/reviewFixes.test.ts`, `tests/loop.test.ts`, `tests/save-v2.test.ts`, `tests/serviceWorker.test.ts`, `tests/abilities.test.ts` and `tests/net-leaderboard.test.ts`):
+
+Gameplay and performance:
+- The game loop survives an exception in update or render (the rAF chain stays alive, the error is reported and throttled).
+- A temporary resistance now triggers the stat recompute when it expires; hits queued in a frame where the hero is dead no longer pile up; orbiting weapons forget re-hit memory per entry instead of all at once.
+- Rift edge cases: a hero who dies on the same step as the last foe escapes alive without reward; overworld decoys wait in the stash and return after the rift; callbacks queued in the arena are flushed on leave without touching the overworld queue.
+- The spawn ring never offers lava, or water to land mobs; the debug/setup start biome puts the hero on dry ground; a teleport (a NaN on either axis of the previous position) snaps instead of interpolating a streak.
+- Importing a save keeps the replaced one under `minesurvive.save.pre-import.bak`, and the import needs a second confirming click.
+
+Security:
+- Nickname squatting: deleting a profile must release its nickname claim in the same write (Firestore rules).
+- Save hardening: import capped at 512 KiB, caps on the number of owned/pity/upgrade/control entries, timestamps clamped to year 2100 so a huge value cannot freeze cloud sync.
+- Leaderboard: kill plausibility bound tightened from 100 + 30/s to 20 + 10/s (client and rules), board ids restricted to valid weeks and days.
+- Service worker: an error page is never cached as the offline shell; hashed assets are cache-first, everything else stale-while-revalidate (cache `v3`); a test requires every atlas page to be precached.
+- Deploy workflow: read-only default permissions, `pages: write` and `id-token: write` only on the deploy job.
+- Account dialog: keys cannot leak to the game while the modal is open (focus is pulled back inside); autocomplete attributes corrected.
+- A hardening checklist (restrict the API key, App Check, budget alert, email enumeration protection, dedicated Pages origin) was added to `docs/FIREBASE_SETUP.md`.
+
+### What is NOT verified
+
+- **Real Firebase and real Google login.** Nothing was tried against a real Firebase project. The cloud code is exercised only against the in-memory backend, which mirrors the rules; the Firestore rules themselves are not unit-tested (that needs the Firebase emulator).
+- **Real gamepad.** Gamepad input and menu navigation are unit-tested with mocked pad objects only; no physical controller was used.
+- **Audio by ear.** The music is covered by note-range tests only; nobody has listened to the new themes, the crossfades or the stings.
+- **Touch on a real device.** Touch logic is unit-tested; no phone or tablet was used.
+- **Real hardware performance.** See Performance above (headless, software rendering, vsync-capped).
+- **Cross-browser behaviour.** Only headless Chromium was used.
+
+### Known gaps and deferred
+
+- Online co-op is not started (the next milestone).
+- Firebase App Check is not implemented (the hardening checklist says so); there is no in-game "delete account" button; the leaderboard anti-cheat is bounded by elapsed time but a determined cheater can still submit a time up to the real elapsed time.
+- No Content-Security-Policy is set on the page.
+- Hot-path allocation pooling is still open (`Fx` objects and `collide()` results are allocated per use); pre-rendered damage digits were solved by the text-layer cache.
+- Generated hero art was tried once and not shipped (`docs/DECISIONS.md`); no AI-generated art is in the game.
+- Layered armor/sword sprites exist only for Steve, Alex and Rana; the eight sprite heroes show tiers as stats only.
+- Colour-blind support remaps the critical cues only (telegraphs, boss bar, low-HP vignette, card borders, rarity colours), not the whole canvas; text size 2x covers the in-run HUD and account dialogs, not the other canvas menus.
+- The minimap is not drawn on views under 150 px high; the supported minimum view is 320x180.
+- The balance bot is a fresh-Steve baseline (see Balance).
+- GitHub Pages must be enabled for the repository (Settings > Pages > GitHub Actions) and, for cloud features, the `FIREBASE_*` repository variables must be set; `v*` tags cannot be pushed from the build session.

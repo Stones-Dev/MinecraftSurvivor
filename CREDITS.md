@@ -18,9 +18,13 @@ All seven character sprite sheets (heroes, enemies, allies, animals, villagers) 
 
 The sheets are sliced and packed by the tools in `tools/`; the source files stay untouched in `assets-src/`. The same credit appears in the game under About.
 
+Version 1.1 added no new source pack. The extra mobs, animals, villagers and golems used by the new heroes, pets, allies and biome enemies (the lists in `tools/ship_heroes.json`, `tools/ship_companions.json` and `tools/ship_biome_mobs.json`) are cut from the Enemies, Allies, Animals and Villagers sheets above; every frame in `public/atlas/atlas.json` comes from one of these seven sheets (checked by frame-key prefix). Some sprite heroes are tinted or scaled in code. Terrain, block textures, props and icons are drawn in code and use no third-party art.
+
+No AI-generated art is included in the game or its assets.
+
 ## Font
 
-Tiny5, Copyright 2022-2024 The Tiny5 Project Authors (https://github.com/Gissio/font_tiny5), licensed under the SIL Open Font License 1.1. Bundled as WOFF2 (Latin subset) in `public/fonts/` (via the `@fontsource/tiny5` npm package) together with its licence, `public/fonts/OFL.txt`. The game rasterizes it once into a 1-bit glyph atlas at its native 8 px size.
+Tiny5, Copyright 2022-2024 The Tiny5 Project Authors (https://github.com/Gissio/font_tiny5), licensed under the SIL Open Font License 1.1. Bundled as WOFF2 (Latin subset) in `public/fonts/` (the file comes from the `@fontsource/tiny5` npm package, which is not a project dependency) together with its licence, `public/fonts/OFL.txt`. The game rasterizes it once into a 1-bit glyph atlas at its native 8 px size.
 
 ## Audio
 
@@ -29,3 +33,16 @@ No audio files. All music and sound effects are generated at runtime with the We
 ## Code
 
 MineSurvive's code is original work for this project (Vite, TypeScript, Vitest, ESLint and Prettier are used as build tooling only). The reference project named in the brief was read for ideas, not copied.
+
+### Third-party code in the production build
+
+Optional cloud accounts, cloud save and leaderboards use the Firebase JavaScript SDK, which is loaded on demand and only on deployments configured with Firebase settings (see `docs/FIREBASE_SETUP.md`). It is the only runtime dependency (`package.json`). The packages that end up in the production bundle (read from the build's source map) and their licences:
+
+| Package | Licence | Author |
+|---|---|---|
+| `firebase` (with `@firebase/app`, `auth`, `firestore`, `util`, `component`, `logger`, `webchannel-wrapper`) | Apache-2.0 | Google / Firebase, https://github.com/firebase/firebase-js-sdk |
+| `idb` | ISC | Jake Archibald, https://github.com/jakearchibald/idb |
+| `tslib` | 0BSD | Microsoft Corp., https://github.com/Microsoft/tslib |
+| `re2js` | MIT | Oleksii Vasyliev, https://github.com/le0pard/re2js |
+
+The full licence texts ship with each package in `node_modules/` (`npm ci`). "Firebase" and "Google" are trademarks of Google LLC; MineSurvive is not affiliated with or endorsed by Google.

@@ -1,16 +1,16 @@
 # MineSurvive — Plan (v1.0)
 
-Status: draft for owner review, before Phase 0. Source of truth for scope is `docs/BRIEF.md`; this file is the *how*. Task breakdown lives in `docs/TASKS.md`.
+Status: this is the original v1.0 plan, kept for history. v1.0 shipped (Phases 0-5) and v1.1 is described in `docs/TASKS.md` (Phase 6), `docs/DECISIONS.md`, `docs/GDD.md` and `docs/CHECKPOINTS.md`; where this file differs (for example the notes below), those win. Source of truth for scope is `docs/BRIEF.md`; this file is the *how*. Task breakdown lives in `docs/TASKS.md`.
 
 ---
 
 ## 1. Goals and hard constraints (recap)
 
 - Browser bullet-heaven, Minecraft fan aesthetic, roguelike runs, meta-progression, companion gacha. 15:00 run to the Warden, then Endless.
-- **Stack:** Vite + TypeScript strict + Canvas 2D. Runtime deps: none. Dev deps: `vite`, `vitest`, `eslint` (+ `typescript-eslint` config, see §9), `prettier`, `typescript`.
-- **Static & offline:** GitHub Pages via Actions; service worker added in Phase 5. No runtime network calls.
+- **Stack:** Vite + TypeScript strict + Canvas 2D. Runtime deps: none in v1.0; v1.1 adds the Firebase SDK, loaded lazily and only when cloud accounts are configured. Dev deps: `vite`, `vitest`, `eslint` (+ `typescript-eslint` config, see §9), `prettier`, `typescript`.
+- **Static & offline:** GitHub Pages via Actions; service worker added in Phase 5. No runtime network calls in v1.0; v1.1 talks to Firebase only when configured and signed in.
 - **Save:** `localStorage` behind `SaveStore` with versioned schema and migrations; cloud-pluggable later.
-- **Input:** `InputSource` abstraction; PC keyboard + mouse in v1.0.
+- **Input:** `InputSource` abstraction; PC keyboard + mouse in v1.0, plus gamepad and touch in v1.1 (`MergedInput`).
 - **Rendering:** pixel-perfect (`imageSmoothingEnabled = false`), integer zoom (×3 default, ×2 on small viewports), letterboxed, 16 px tiles. All terrain/props/icons/UI art drawn in code; only character sprites come from the sheets.
 - **Audio:** procedural Web Audio chiptune, original compositions only.
 - **Perf:** 60 FPS with 150 enemies on screen on a 2020 laptop in Chrome.
