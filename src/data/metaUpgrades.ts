@@ -145,5 +145,5 @@ export function applyUpgradeMods(ranks: Record<string, number>, m: Mods): void {
   m.regen += r('mending') * 0.1;
   m.magnet *= 1 + r('magnet') * 0.08;
   m.xpMult += r('wisdom') * 0.04;
-  m.lootMult *= 1 + r('looting') * 0.04;
+  m.payoutMult *= 1 + r('looting') * 0.04;
 }

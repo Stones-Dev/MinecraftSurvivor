@@ -252,7 +252,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       app.audio.setTheme(run.status === 'dead' ? null : runTheme(run));
       for (const ev of new Set(run.events)) app.audio.play(ev);
       run.events.length = 0;
-      if (run.status === 'dead' && run.deadT > 1.4) router.replace(resultsScreen(app, run));
+      if (run.status === 'dead' && run.deadT > 1.4)
+        router.replace(resultsScreen(app, run, !opts.debug));
     },
     render(view: View) {
       const { ctx, width, height } = view;

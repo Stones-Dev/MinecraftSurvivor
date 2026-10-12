@@ -51,7 +51,7 @@ async function boot(): Promise<void> {
   /** `?hero=alex&pet=cat&ally=wolf,horse&lv=3` overrides the equipped loadout (reviews and tests). */
   const debugLoadout = (): RunLoadout => {
     const base = loadoutFromSave(store.load());
-    if (!params.has('hero') && !params.has('pet') && !params.has('ally')) return base;
+    if (!params.has('debug')) return base; // debug-only: ownership and slot limits are not checked here
     const lv = num('lv', 3);
     const petId = params.get('pet');
     return {
@@ -62,9 +62,11 @@ async function boot(): Promise<void> {
         ? (params.get('ally') ?? '')
             .split(',')
             .filter(Boolean)
+            .slice(0, 2)
             .map((id) => ({ id, level: lv }))
         : base.allies,
-      kennel: num('kennel', base.kennel),
+      upgrades: { ...(store.load().upgrades[params.get('hero') ?? base.hero] ?? {}) },
+      kennel: Math.min(5, num('kennel', base.kennel)),
     };
   };
 
@@ -93,13 +95,16 @@ async function boot(): Promise<void> {
           seed: num('seed', Date.now() % 1_000_000_000),
           startTime: params.has('debug') ? num('t', 0) : 0,
           debug: params.has('debug'),
-          weapons: params.get('weapons')?.split(',') as WeaponId[] | undefined,
-          startXp: num('xp', 0),
-          hp: num('hp', 0),
-          crowd: num('crowd', 0),
-          portal: params.has('portal'),
-          trader: params.has('trader'),
-          villager: params.has('villager'),
+          // Test hooks only work together with `debug`, and debug runs never touch the save.
+          weapons: params.has('debug')
+            ? (params.get('weapons')?.split(',') as WeaponId[] | undefined)
+            : undefined,
+          startXp: params.has('debug') ? num('xp', 0) : 0,
+          hp: params.has('debug') ? num('hp', 0) : 0,
+          crowd: params.has('debug') ? num('crowd', 0) : 0,
+          portal: params.has('debug') && params.has('portal'),
+          trader: params.has('debug') && params.has('trader'),
+          villager: params.has('debug') && params.has('villager'),
         }),
       ),
   };
@@ -141,7 +146,11 @@ async function boot(): Promise<void> {
   window.addEventListener('keydown', unlock);
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
-    router.top?.onKey?.(e.code);
+    if (e.repeat) return; // auto-repeat must not skip offers or dismiss results
+    const before = router.top;
+    before?.onKey?.(e.code);
+    // A key that closed or opened a screen must not also act on the screen underneath (Esc un-pausing then re-pausing).
+    if (router.top !== before) input.endStep();
   });
   const toArt = (e: PointerEvent): { x: number; y: number } => {
     const r = canvas.getBoundingClientRect();

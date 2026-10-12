@@ -275,11 +275,11 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
 
       // Tray (x10).
       if (tenMode && (phase === 'spin' || phase === 'tray' || shown.length > 0)) {
-        const cell = { w: 36, h: 46 };
-        const cols = Math.min(10, Math.max(5, Math.floor((width - 16) / cell.w)));
+        const cell = { w: Math.min(36, Math.floor((width - 8) / 5)), h: 46 };
+        const cols = 5;
         const rows = Math.ceil(10 / cols);
         const x0 = Math.floor((width - cols * cell.w) / 2);
-        const y0 = cy + 36;
+        const y0 = Math.min(cy + 36, height - 22 - 12 - rows * (cell.h + 2) - 10);
         for (let i = 0; i < 10; i++) {
           const rx = x0 + (i % cols) * cell.w;
           const ry = y0 + Math.floor(i / cols) * (cell.h + 2);
@@ -322,20 +322,15 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
       // Buttons.
       buttons.begin();
       const by = height - 22;
-      const bw = 78;
+      const bw = Math.min(78, Math.floor((width - 12 - 18) / 4));
       const gap = 6;
       const x0 = Math.floor((width - (4 * bw + 3 * gap)) / 2);
-      buttons.add(
-        { x: x0, y: by, w: bw, h: 16 },
-        'Pull x1  (1 egg)',
-        () => startPull(1),
-        busy() || data.currencies.spawnEggs < 1,
-      );
+      buttons.add({ x: x0, y: by, w: bw, h: 16 }, 'Pull x1  (1 egg)', () => startPull(1), busy());
       buttons.add(
         { x: x0 + bw + gap, y: by, w: bw, h: 16 },
         'Pull x10  (rare)',
         () => startPull(10),
-        busy() || data.currencies.rareSpawnEggs < 1,
+        busy(),
       );
       buttons.add(
         { x: x0 + 2 * (bw + gap), y: by, w: bw, h: 16 },
@@ -380,7 +375,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
       buttons.move(x, y);
     },
     onClick(x, y) {
-      if (buttons.click(x, y)) return;
+      if (buttons.click(x, y) || buttons.over(x, y)) return;
       if (showRates && inRect(ratesRect, x, y)) return;
       skip();
     },

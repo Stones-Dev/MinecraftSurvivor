@@ -37,6 +37,11 @@ export class Buttons {
     this.my = y;
   }
 
+  /** Is the point over any button (enabled or not)? Used to stop clicks falling through to the screen. */
+  over(x: number, y: number): boolean {
+    return this.list.some((b) => inRect(b.rect, x, y));
+  }
+
   /** Returns true when a button handled the click. */
   click(x: number, y: number): boolean {
     this.mx = x;

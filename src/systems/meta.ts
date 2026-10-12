@@ -35,12 +35,15 @@ export function loadoutFromSave(save: SaveData): RunLoadout {
     const o = save.owned[id];
     return o ? { id, level: o.level } : null;
   };
-  const hero = save.owned[save.loadout.hero] ? save.loadout.hero : 'steve';
+  const hero =
+    save.owned[save.loadout.hero] && heroById(save.loadout.hero).id === save.loadout.hero
+      ? save.loadout.hero
+      : 'steve';
   const petId = save.loadout.pet;
   const pet = petId && petById(petId) ? owned(petId) : null;
   const slots = maxAllySlots(save);
   const allies: LoadoutCompanion[] = [];
-  for (const id of save.loadout.allies) {
+  for (const id of new Set(save.loadout.allies)) {
     const c = allyById(id) ? owned(id) : null;
     if (c && allies.length < slots) allies.push(c);
   }
@@ -64,12 +67,13 @@ function applyPet(l: RunLoadout, m: Mods): void {
   const def = l.pet ? petById(l.pet.id) : undefined;
   if (!def || !l.pet) return;
   const v = petValue(def, l.pet.level, l.kennel);
+  const kennelK = 1 + l.kennel * 0.1;
   switch (def.effect) {
     case 'xp':
       m.xpMult += v / 100;
       break;
     case 'emeralds':
-      m.lootMult *= 1 + v / 100;
+      m.payoutMult *= 1 + v / 100;
       break;
     case 'max_hp':
       m.maxHpBonus += v;
@@ -82,7 +86,7 @@ function applyPet(l: RunLoadout, m: Mods): void {
       break;
     case 'cat':
       m.explosionResist += v / 100;
-      m.fuseBonus += 0.5 + (l.pet.level - 1) * 0.25;
+      m.fuseBonus += (0.5 + (l.pet.level - 1) * 0.25) * kennelK;
       break;
     case 'parrot':
       m.magnet *= 1 + v / 100;
@@ -95,14 +99,14 @@ function applyPet(l: RunLoadout, m: Mods): void {
       break;
     case 'fox':
       m.luck += v / 100;
-      m.emeraldDrop += 0.02 + (l.pet.level - 1) * 0.01;
+      m.emeraldDrop += (0.02 + (l.pet.level - 1) * 0.01) * kennelK;
       break;
     case 'turtle':
       m.turtleShield += v;
       break;
     case 'axolotl':
       m.healWater += v / 100;
-      m.regen += 0.1 * l.pet.level;
+      m.regen += 0.1 * l.pet.level * kennelK;
       break;
     case 'wolf_pup':
       m.dmg *= 1 + v / 100;

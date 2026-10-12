@@ -55,6 +55,8 @@ export interface Mods {
   healWater: number;
   /** Turtle: shield HP that refills when standing still. */
   turtleShield: number;
+  /** End-of-run Emerald payout multiplier (Looting upgrade, Pig); in-run drops use `lootMult` only. */
+  payoutMult: number;
 }
 
 export function baseMods(): Mods {
@@ -94,6 +96,7 @@ export function baseMods(): Mods {
     lavaSpeed: 0,
     healWater: 0,
     turtleShield: 0,
+    payoutMult: 1,
   };
 }
 

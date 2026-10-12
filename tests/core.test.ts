@@ -106,6 +106,17 @@ describe('save', () => {
 });
 
 describe('save hardening', () => {
+  it('caps upgrade ranks, drops unknown upgrades and dedupes allies', () => {
+    const s = migrate({
+      saveVersion: 1,
+      owned: { wolf: { level: 1, shards: 0, obtainedAt: 1 } },
+      upgrades: { steve: { strength: 500, nonsense: 3 }, __proto__: { x: { y: 1 } } },
+      loadout: { hero: 'steve', pet: null, allies: ['wolf', 'wolf'] },
+    });
+    expect(s.upgrades['steve']).toEqual({ strength: 8 });
+    expect(s.loadout.allies).toEqual(['wolf']);
+  });
+
   it('drops mistyped fields, keeps Steve and clamps levels', () => {
     const s = migrate({
       saveVersion: 1,
@@ -122,7 +133,8 @@ describe('save hardening', () => {
     expect(s.owned['alex']?.shards).toBe(0);
     expect(s.owned['bad']).toBeUndefined();
     expect(s.loadout.hero).toBe('steve');
-    expect(s.loadout.allies).toEqual(['alex']);
+    expect(s.loadout.allies).toEqual([]); // heroes are not allies
+    expect(s.loadout.pet).toBeNull();
     expect(s.upgrades).toEqual({});
   });
 

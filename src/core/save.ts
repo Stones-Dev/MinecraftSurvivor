@@ -1,3 +1,6 @@
+import { COMPANION_BY_ID } from '../data/companions';
+import { META_BY_ID } from '../data/metaUpgrades';
+
 /** Versioned save data behind a SaveStore interface (BRIEF section 2); a cloud store can implement it later. */
 export const SAVE_VERSION = 1;
 
@@ -92,6 +95,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const num = (v: unknown, fallback: number, min = -Infinity): number =>
   typeof v === 'number' && Number.isFinite(v) && v >= min ? v : fallback;
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
@@ -106,7 +110,7 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const owned: SaveData['owned'] = {};
   if (isRecord(data.owned)) {
     for (const [id, o] of Object.entries(data.owned)) {
-      if (!isRecord(o)) continue;
+      if (!isRecord(o) || UNSAFE_KEYS.has(id)) continue;
       owned[id] = {
         level: Math.min(5, Math.max(1, Math.floor(num(o.level, 1)))),
         shards: Math.max(0, Math.floor(num(o.shards, 0))),
@@ -116,13 +120,19 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   }
   if (!owned['steve']) owned['steve'] = { level: 1, shards: 0, obtainedAt: d.createdAt };
   const pity: SaveData['pity'] = {};
-  if (isRecord(data.pity)) for (const [k, v] of Object.entries(data.pity)) pity[k] = num(v, 0, 0);
+  if (isRecord(data.pity)) {
+    for (const [k, v] of Object.entries(data.pity)) if (!UNSAFE_KEYS.has(k)) pity[k] = num(v, 0, 0);
+  }
   const upgrades: SaveData['upgrades'] = {};
   if (isRecord(data.upgrades)) {
     for (const [hero, ranks] of Object.entries(data.upgrades)) {
-      if (!isRecord(ranks)) continue;
+      if (!isRecord(ranks) || UNSAFE_KEYS.has(hero)) continue;
       const out: Record<string, number> = {};
-      for (const [id, r] of Object.entries(ranks)) out[id] = Math.max(0, Math.floor(num(r, 0)));
+      for (const [id, r] of Object.entries(ranks)) {
+        const def = META_BY_ID.get(id);
+        // Unknown upgrades are dropped; ranks are capped at the upgrade's maximum.
+        if (def) out[id] = Math.min(def.max, Math.max(0, Math.floor(num(r, 0))));
+      }
       upgrades[hero] = out;
     }
   }
@@ -130,7 +140,11 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
   const controls: SaveData['settings']['controls'] = {};
   if (isRecord(set.controls)) {
     for (const [action, keys] of Object.entries(set.controls)) {
-      if (Array.isArray(keys) && keys.every((k) => typeof k === 'string')) {
+      if (
+        !UNSAFE_KEYS.has(action) &&
+        Array.isArray(keys) &&
+        keys.every((k) => typeof k === 'string')
+      ) {
         (controls as Record<string, string[]>)[action] = keys as string[];
       }
     }
@@ -148,10 +162,21 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
     },
     owned,
     loadout: {
-      hero: typeof lo.hero === 'string' && owned[lo.hero] ? lo.hero : 'steve',
-      pet: typeof lo.pet === 'string' && owned[lo.pet] ? lo.pet : null,
+      hero:
+        typeof lo.hero === 'string' &&
+        owned[lo.hero] &&
+        COMPANION_BY_ID.get(lo.hero)?.kind === 'hero'
+          ? lo.hero
+          : 'steve',
+      pet:
+        typeof lo.pet === 'string' && owned[lo.pet] && COMPANION_BY_ID.get(lo.pet)?.kind === 'pet'
+          ? lo.pet
+          : null,
       allies: Array.isArray(lo.allies)
-        ? lo.allies.filter((a): a is string => typeof a === 'string' && !!owned[a])
+        ? [...new Set(lo.allies)].filter(
+            (a): a is string =>
+              typeof a === 'string' && !!owned[a] && COMPANION_BY_ID.get(a)?.kind === 'ally',
+          )
         : [],
     },
     upgrades,

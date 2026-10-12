@@ -45,7 +45,7 @@ export function useItem(run: RunState, dirX: number, dirY: number): void {
   switch (id) {
     case 'golden_apple':
       p.heal(p.maxHp * 0.5);
-      run.absorb = 20;
+      run.absorb = Math.max(run.absorb, 20);
       floatText(run, 'Golden Apple', '#ffe27a');
       run.item = null;
       break;

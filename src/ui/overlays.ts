@@ -30,8 +30,8 @@ export function levelupScreen(app: App, run: RunState): Screen {
   let hoverBtn = -1;
   const cardRect = (view: View, i: number): Rect => {
     const n = run.offer?.length ?? 3;
-    const w = 96;
     const gap = 8;
+    const w = Math.min(96, Math.floor((view.width - 12 - (n - 1) * gap) / n));
     const x0 = Math.floor((view.width - (n * w + (n - 1) * gap)) / 2);
     return { x: x0 + i * (w + gap), y: Math.floor(view.height / 2) - 52, w, h: 108 };
   };
@@ -285,13 +285,13 @@ export function pauseScreen(app: App, onQuit: () => void): Screen {
       if (i === 1) onQuit();
     },
     onKey(code) {
-      if (code === 'Escape' || code === 'KeyP') resume();
+      if (code === 'Escape' || code === 'KeyP' || app.input.pausePressed()) resume();
     },
   };
 }
 
 /** Results: totals, emeralds earned, records. Saves progress when created. */
-export function resultsScreen(app: App, run: RunState): Screen {
+export function resultsScreen(app: App, run: RunState, persist = true): Screen {
   const data = app.data();
   // Permanent bonuses only (Looting, Pig): Golden Hour and other timed buffs must not depend on the final second.
   const meta = baseMods();
@@ -304,19 +304,21 @@ export function resultsScreen(app: App, run: RunState): Screen {
       miniBosses: run.miniKills,
       picked: run.emeraldsPicked,
     },
-    meta.lootMult,
+    meta.payoutMult,
   );
   const newTime = Math.floor(run.time) > Math.floor(data.records.bestTimeSec);
   const newKills = run.kills > data.records.bestKills;
-  data.currencies.emeralds += earned;
-  data.records.runs += 1;
-  data.flags.tutorialDone = true;
-  if (run.won) data.records.wins += 1;
-  data.currencies.spawnEggs += run.spawnEggs;
-  data.currencies.rareSpawnEggs += run.rareSpawnEggs;
-  data.records.bestTimeSec = Math.max(data.records.bestTimeSec, Math.floor(run.time));
-  data.records.bestKills = Math.max(data.records.bestKills, run.kills);
-  app.store.save(data);
+  if (persist) {
+    data.currencies.emeralds += earned;
+    data.records.runs += 1;
+    data.flags.tutorialDone = true;
+    if (run.won) data.records.wins += 1;
+    data.currencies.spawnEggs += run.spawnEggs;
+    data.currencies.rareSpawnEggs += run.rareSpawnEggs;
+    data.records.bestTimeSec = Math.max(data.records.bestTimeSec, Math.floor(run.time));
+    data.records.bestKills = Math.max(data.records.bestKills, run.kills);
+    app.store.save(data);
+  }
   let hover = false;
   let lastView: View | null = null;
   const btn = (view: View): Rect => ({

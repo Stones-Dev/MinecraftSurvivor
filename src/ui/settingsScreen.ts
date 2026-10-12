@@ -293,7 +293,15 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
     onKey(code) {
       if (capture) {
         if (code !== 'Escape') {
-          app.data().settings.controls[capture] = [code];
+          const controls = app.data().settings.controls;
+          // A key can only do one thing: take it away from every other action first.
+          for (const a of ACTIONS) {
+            if (a === capture) continue;
+            const keys = (controls[a] ?? DEFAULT_BINDINGS[a]).filter((k) => k !== code);
+            controls[a] =
+              keys.length > 0 ? keys : [...DEFAULT_BINDINGS[a]].filter((k) => k !== code);
+          }
+          controls[capture] = [code];
           commit();
         }
         capture = null;

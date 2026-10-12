@@ -172,7 +172,7 @@ export function hubScreen(app: App): Screen {
           ctx,
           `Best ${m}:${sec}  Kills ${data.records.bestKills}`,
           width / 2,
-          height - 6,
+          54,
           '#e8d8c8',
           'center',
         );

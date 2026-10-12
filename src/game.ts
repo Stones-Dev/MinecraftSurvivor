@@ -241,6 +241,7 @@ export class RunState {
     this.applyLoadoutStart();
     this.recomputeStats();
     this.player.hp = this.player.maxHp;
+    this.absorb = this.mods.turtleShield;
     spawnCompanions(this, loadout);
   }
 

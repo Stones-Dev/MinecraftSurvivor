@@ -66,7 +66,6 @@ function enter(run: RunState): void {
   run.storm = false;
   run.chargedBonus = 0;
   run.world = run.arenaWorld;
-  gatherCompanions(run);
   r.active = true;
   r.timer = RIFT_DURATION;
   r.portal = null;
@@ -74,6 +73,7 @@ function enter(run: RunState): void {
   p.y = 90;
   p.vx = p.vy = 0;
   p.iframes = 1.5;
+  gatherCompanions(run);
   r.foes = [];
   const kind = run.rng.events.pick(['blaze_lord', 'ghast', 'brute', 'hoglins'] as const);
   const spawn = (id: string, x: number, y: number, hpMult: number): Enemy | null => {
