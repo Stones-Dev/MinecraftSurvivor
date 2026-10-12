@@ -4,9 +4,19 @@ MineSurvive is a non-commercial fan project. Not affiliated with Mojang or Micro
 
 ## Sprites
 
-The character sheets (Steve, Alex, Rana, enemies, allies, animals, villagers) are fan customs supplied by the project owner. **Author names are still to be filled in before a public release:** none of the label text decoded from the sheets names an author (the unused Blocks sheet was signed "AerospaceGoat35" per the brief), and the project owner did not supply any when asked at Checkpoint 0. The in-game About screen points here. Owner: add the names below.
+All seven character sprite sheets (heroes, enemies, allies, animals, villagers) were created and uploaded by **Askywalker** on The Spriters Resource, in the Minecraft Customs collection (Custom / Edited section). The author allows their use with credit.
 
-- _(author names to be added by the project owner)_
+| Sheet | Source |
+|---|---|
+| Steve (Deltarune Battle-Style) | https://www.spriters-resource.com/custom_edited/minecraftcustoms/asset/144121/ |
+| Alex (Deltarune Battle-Style) | https://www.spriters-resource.com/custom_edited/minecraftcustoms/asset/156769/ |
+| Rana (Deltarune Battle-Style) | https://www.spriters-resource.com/custom_edited/minecraftcustoms/asset/156770/ |
+| Enemies (Deltarune Battle-Style) | https://www.spriters-resource.com/custom_edited/minecraftcustoms/asset/138730/ |
+| Allies (Deltarune Battle-Style) | https://www.spriters-resource.com/custom_edited/minecraftcustoms/asset/156864/ |
+| Animals (Deltarune Battle-Style) | https://www.spriters-resource.com/custom_edited/minecraftcustoms/asset/154783/ |
+| Villagers (Undertale Overworld-Style) | https://www.spriters-resource.com/custom_edited/minecraftcustoms/asset/156322/ |
+
+The sheets are sliced and packed by the tools in `tools/`; the source files stay untouched in `assets-src/`. The same credit appears in the game under About.
 
 ## Font
 

@@ -111,7 +111,7 @@ Runtime skeleton
 - [x] P5-01 — Music: themes in `data/music.ts` + sequencer (hub, plains, night, forest, taiga, desert, nether, boss, stings) (deps: P4-13)
 - [x] P5-02 — Full SFX pass, volume sliders + mute persisted (deps: P5-01)
 - [x] P5-03 — Title screen, hub live world background at dusk (deps: P4-13)
-- [x] P5-04 — About/credits/legal screen, final `CREDITS.md` (sprite author names still pending from the owner) (deps: P4-13)
+- [x] P5-04 — About/credits/legal screen, final `CREDITS.md` (deps: P4-13)
 - [x] P5-05 — Service worker / offline (deps: P4-13)
 - [x] P5-06 — GitHub Pages deploy workflow `.github/workflows/deploy.yml` (deps: P5-05)
 - [x] P5-07 — Performance pass: 150 enemies at 60 FPS, quality tiers (deps: P4-13)

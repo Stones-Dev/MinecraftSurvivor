@@ -113,7 +113,10 @@ export function candidateCards(run: RunState): Card[] {
       level: run.armorTier + 1,
       isNew: false,
       title: `${nextArmor.name} armor`,
-      desc: nextArmor.blurb,
+      desc:
+        run.armorCardCost() > 1
+          ? `${nextArmor.blurb} Card ${run.armorProgress + 1} of ${run.armorCardCost()}.`
+          : nextArmor.blurb,
       icon: 'helmet',
       rarity: tierRarity(run.armorTier + 1),
       gold: false,
@@ -223,7 +226,12 @@ export function applyCard(run: RunState, card: Card): void {
       break;
     }
     case 'armor':
-      run.armorTier = card.level;
+      // Each tier takes several cards (Steve needs one fewer): the last one raises the tier.
+      run.armorProgress++;
+      if (run.armorProgress >= run.armorCardCost()) {
+        run.armorTier = card.level;
+        run.armorProgress = 0;
+      }
       break;
     case 'sword':
       run.swordTier = card.level;

@@ -185,8 +185,10 @@ export function updateInteract(run: RunState, dt: number): void {
           const armor = run.armorTier < 7;
           const sword = run.swordTier < 6;
           const pickArmor = armor && (!sword || run.rng.drops.chance(0.5));
-          if (pickArmor) run.armorTier++;
-          else if (sword) run.swordTier++;
+          if (pickArmor) {
+            run.armorTier++;
+            run.armorProgress = 0;
+          } else if (sword) run.swordTier++;
           run.recomputeStats();
           text(run, prop.x, prop.y, pickArmor ? 'Armor upgraded!' : 'Sword upgraded!', '#ffd84a');
           run.world.removeProp(prop);

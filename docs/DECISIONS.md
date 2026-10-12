@@ -20,7 +20,7 @@ Dated entries; newest last. Anything that deviates from `docs/BRIEF.md` is marke
 ## 2026-10-11 — Checkpoint 0 answer
 
 - **Owner approved Checkpoint 0 ("apruebo todo").** Accepted: the proposed v1.0 roster and its substitutions (5:00 boss = Pillager Captain instead of Ravager; Elder Guardian mini-boss replaced by an enlarged tinted Guardian or another mini-boss; Allay and Sniffer out of v1.0 or replaced; Polar Bear to 1.1 unless the adult sprite is found), and the defaults taken for PLAN section 9.
-- **Still open:** no author names were provided, so `CREDITS.md` keeps its placeholder; it must be filled before the v1.0 release (Phase 5, task P5-04).
+- **Resolved later:** the owner supplied the sprite author (Askywalker, The Spriters Resource, Minecraft Customs) and the seven source links; they are in `CREDITS.md` and in the About screen (see the 2026-10-12 hero and credits entry).
 
 ## 2026-10-11 — New working agreement
 
@@ -40,8 +40,6 @@ Dated entries; newest last. Anything that deviates from `docs/BRIEF.md` is marke
 
 - **Pet roster is 15 and ally roster is 10** (Allay, Sniffer and the adult Polar Bear were dropped at Checkpoint 0). Trader Llama uses the wandering-trader llama sprites.
 - **Alex starts with the Sword and a level-2 Bow** (the brief says "bow starts at level 2"; it does not say Alex loses the sword, and the sword drives the swing animation and tiers). Her lower HP (90) is the counterweight.
-- **Deviation: Steve's "armor tier upgrades cost one fewer card" is not implemented**; only the free Leather tier at minute 1 and +10% HP (he starts at 110 HP).
-- **Deviation: Rana's slimes "never split more than once"** is implemented as one split level (a big slime yields two mediums that do not split again); she gets double XP from slimes and magma cubes.
 - **Ally strength scales with companion level** (+20% HP and damage per level above 1); pet buff tables are in `data/companions.ts` and Kennel multiplies them by 1 + 10% per rank.
 - **Permanent upgrade costs:** rank n costs `base x (1 + 0.7 n)`; Repertoire (second starting weapon, random from TNT/Crossbow/Snowball/Trident/Axe) and Leadership are single-rank and expensive (600 / 900).
 - **Gacha seeding:** pull `n` uses `Rng(hash(gachaSeed, n))`. The x10 guarantee only applies to exactly ten pulls; pity is checked before it.
@@ -51,3 +49,10 @@ Dated entries; newest last. Anything that deviates from `docs/BRIEF.md` is marke
 ## 2026-10-12 — Release tag
 
 - **`v1.0.0` is created locally but could not be pushed from the build session:** the session's git proxy answers HTTP 403 to tag pushes (branch pushes to `claude/sleepy-bardeen-wme7gt` work). It was not worked around. The tag points at the commit that carries this note's parent state; to publish it run `git fetch origin claude/sleepy-bardeen-wme7gt && git tag -a v1.0.0 -m "MineSurvive v1.0.0" origin/claude/sleepy-bardeen-wme7gt && git push origin v1.0.0` (or create the release in GitHub). The Pages workflow also runs on pushes to `main`, so merging the branch deploys the game.
+
+## 2026-10-12 — Hero clauses, credits and release (owner instructions)
+
+- **Sprite credits supplied by the owner:** all seven sheets are by Askywalker (The Spriters Resource, Minecraft Customs, Custom / Edited), allowed with credit. They are in `CREDITS.md` and on a second page of the About screen with the seven source links. Every "pending authors" placeholder was removed.
+- **Steve's armor clause implemented as written (BRIEF section 6).** Armor tiers now cost 2 cards for every hero (the offer shows "Card 1 of 2"), and 1 card for Steve (*Builder's Grit*: "armor tier upgrades cost one fewer card"); his first Leather tier is still handed out free at minute 1. Anvils and the Armorer ally grant tiers outside the card cost and reset partial progress. Consequence: Alex and Rana now build armor at half the speed of Steve; the balance simulator plays Steve, so its numbers are unchanged.
+- **Rana's slime rule implemented as written.** Slimes and magma cubes give her double XP, and a slime lineage splits at most once: a Big Slime still splits into two Mediums, but those children never split again (they carry `splitDepth` 1). Other heroes keep Big > Medium > Small. Tests: `tests/heroes.test.ts`.
+- **Release:** at the owner's instruction (tags are not pushed from the build session), the work branch is merged into `main` and `main` is pushed; `v1.0.0` can be created from that commit by the owner.

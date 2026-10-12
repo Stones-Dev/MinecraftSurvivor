@@ -182,6 +182,8 @@ export class RunState {
 
   /** Armor tier 0..7 and sword tier 0..6 (indices into ARMOR_TIERS / SWORD_TIERS). */
   armorTier = 0;
+  /** Cards already spent on the next armor tier (tiers cost 2 cards, Steve's Builder's Grit makes it 1). */
+  armorProgress = 0;
   swordTier = 0;
 
   time: number;
@@ -210,6 +212,11 @@ export class RunState {
   private dotAcc = 0;
   /** Base max HP before bonuses (Steve: 100 + 10%). */
   baseMaxHp = 110;
+  /** Cards one armor tier costs: 2 for everyone, 1 for Steve (Builder's Grit). */
+  armorCardCost(): number {
+    return this.loadout.hero === 'steve' ? 1 : 2;
+  }
+
   /** Seconds the hero has stood still (Turtle shield). */
   stillT = 0;
   /** Hostile-free companions: allies (fight, can be downed) and the pet. */
@@ -262,7 +269,7 @@ export class RunState {
     for (const a of l.allies) {
       const role = allyById(a.id)?.role;
       if (role === 'weaponsmith') this.swordTier = Math.max(this.swordTier, 2);
-      else if (role === 'armorer') this.armorTier = Math.max(this.armorTier, 2);
+      else if (role === 'armorer' && this.armorTier < 2) this.armorTier = 2;
       else if (role === 'librarian') this.offerSize = 4;
       else if (role === 'fletcher') {
         const bow = this.weapons.find((w) => w.id === 'bow');
@@ -430,6 +437,7 @@ export class RunState {
       this.freeLeather = true;
       if (this.armorTier === 0) {
         this.armorTier = 1;
+        this.armorProgress = 0;
         this.recomputeStats();
         this.announce("Builder's Grit: free Leather armor", '#c8a06a', 3);
       }

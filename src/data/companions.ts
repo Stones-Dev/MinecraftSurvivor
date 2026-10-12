@@ -119,7 +119,8 @@ export const HEROES: HeroDef[] = [
     dmg: 1,
     speed: 1,
     passiveName: "Builder's Grit",
-    passive: '+10% max HP. The first Leather armor tier is free at minute 1.',
+    passive:
+      '+10% max HP. Armor tiers cost one fewer card; the first Leather tier is free at minute 1.',
     quip: 'Punches trees for a living. It is going great.',
   },
   {
@@ -147,7 +148,8 @@ export const HEROES: HeroDef[] = [
     dmg: 1,
     speed: 1.04,
     passiveName: "Frog's Luck",
-    passive: '+10% luck, slimes give double XP and split once, water does not slow her.',
+    passive:
+      '+10% luck, double XP from slimes and magma cubes, slimes split at most once, water does not slow her.',
     quip: 'Jumps at every puddle. Lands on the right side of luck.',
   },
 ];
