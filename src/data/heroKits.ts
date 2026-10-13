@@ -8,6 +8,7 @@ import type { Enemy } from '../entities/enemy';
 import { makeFx } from '../entities/fx';
 import type { RunState } from '../game';
 import { damageEnemy } from '../systems/combat';
+import { keepOnIsland } from '../systems/endDimension';
 import { giveItem } from '../systems/items';
 import type { RunLoadout } from '../systems/meta';
 import { enemiesInCircle } from '../weapons/helpers';
@@ -132,12 +133,9 @@ export const HERO_KITS: Record<string, HeroKit> = {
         // Phase Step: blink a short hop away instead of taking the hit.
         const a = run.rng.ai.range(0, Math.PI * 2);
         run.fx.push(makeFx('ring', p.x, p.y - 12, 0.3, { r: 14, color: '#b06bff' }));
-        const c = run.world.collide(
-          p.x + Math.cos(a) * 34,
-          p.y + Math.sin(a) * 26,
-          p.radius,
-          run.biome(),
-        );
+        // Stopped by thin walls, and by the rim in the End (a Phase Step is never a fall).
+        const hop = keepOnIsland(run, p.x, p.y, p.x + Math.cos(a) * 34, p.y + Math.sin(a) * 26);
+        const c = run.world.collideSwept(p.x, p.y, hop.x, hop.y, p.radius);
         p.x = c.x;
         p.y = c.y;
         p.snap();

@@ -225,6 +225,46 @@ export class World {
     return d > max ? { x: (x / d) * max, y: (y / d) * max } : { x, y };
   }
 
+  /**
+   * `collide` for a move or a teleport from (x0, y0) to (x1, y1): walks the segment in steps of at most
+   * SWEEP_STEP_PX and stops at the last position before a solid structure tile, so a thin wall cannot be
+   * jumped. Props and water are crossed exactly as `collide` alone would (only the destination is pushed out
+   * of props); the arena wall is convex, so the final `collide` keeps the result inside it. Returns a fresh
+   * object.
+   */
+  collideSwept(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    r: number,
+  ): { x: number; y: number } {
+    const st = this.structures;
+    let ex = x1;
+    let ey = y1;
+    if (st) {
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / SWEEP_STEP_PX));
+      let lx = x0;
+      let ly = y0;
+      for (let i = 1; i <= n; i++) {
+        const px = x0 + (dx * i) / n;
+        const py = y0 + (dy * i) / n;
+        // A hair smaller than `r`: a hero hugging a wall sits exactly `r` from it.
+        if (st.overlapsSolid(px, py, r - 0.05)) {
+          ex = lx;
+          ey = ly;
+          break;
+        }
+        lx = px;
+        ly = py;
+      }
+    }
+    const c = this.collide(ex, ey, r);
+    return { x: c.x, y: c.y };
+  }
+
   /** Push a circle out of solid props (two passes so corners settle). */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy biome argument, ignored
   collide(x: number, y: number, r: number, _biome?: BiomeId): { x: number; y: number } {
@@ -289,6 +329,9 @@ export class World {
   }
 }
 
+/** Longest sub-step of a swept move: a quarter of a tile, so a 1-tile wall can never be stepped over. */
+export const SWEEP_STEP_PX = 4;
+
 /**
  * Nearest walkable spot (dry ground, clear of solid props) inside a biome, searching outward from the origin
  * deterministically. Used by the `?biome=` debug start and by tests. Biomes with big lakes (swamp, snowy
@@ -320,6 +363,12 @@ export function findBiomeGround(
           const tx = cell.tx + dx;
           const ty = cell.ty + dy;
           if (!accept(tx, ty)) continue;
+          // Never start inside (or hugging) a village, temple, trial hall...: the hero could be sealed in.
+          if (
+            world.structures &&
+            world.structures.inTileRect(tx - 3, ty - 3, tx + 3, ty + 3).length > 0
+          )
+            continue;
           const x = tx * TILE_PX + TILE_PX / 2;
           const y = ty * TILE_PX + TILE_PX / 2;
           if (!world.overlapsSolid(x, y, 8)) return { x, y };

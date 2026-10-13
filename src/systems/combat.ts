@@ -43,6 +43,7 @@ export function damageEnemy(
   // The End: the dragon is out of melee reach while it flies, perched it deflects arrows, caged crystals soak hits.
   if (e.def.id === 'ender_dragon' || e.def.id === 'end_crystal') {
     dmg = run.end.gate(run, e, dmg, fromX, fromY, knock, quiet, heavy);
+    run.end.blocked = dmg <= 0 ? e : null;
     if (dmg <= 0) return;
   }
   // Pet bonuses: Arctic Fox (chilled targets), Glare (elites and bosses), Bat (night), Ocelot (crits).

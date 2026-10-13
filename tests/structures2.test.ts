@@ -58,9 +58,11 @@ import {
   outpostRun,
   OUTPOST_CAPTAIN,
   RAID_BETWEEN_S,
+  RAID_FORGET_PX,
   RAID_INTRO_S,
   RAID_WAVES,
   raidState,
+  updatePillagerOutpost,
   stepRaid,
   type RaidEvent,
   waveSize,
@@ -108,7 +110,11 @@ import { CAT_AURA_PX, CAT_KEEP_PX } from '../src/systems/structureEnemies';
 import { MARK_ORDERS } from '../src/world/structureSprites';
 import { MAX_WEAPON_LEVEL } from '../src/weapons';
 import { MAX_WEAPONS } from '../src/data/upgrades';
-import { findNearestStructure, type PlacedStructure } from '../src/world/structures';
+import {
+  findNearestStructure,
+  type PlacedStructure,
+  structuresInRect,
+} from '../src/world/structures';
 import type { StructureId } from '../src/world/structures';
 import { TILE_PX } from '../src/world/terrain';
 import { World } from '../src/world/world';
@@ -581,6 +587,83 @@ describe('trial chamber in a run', () => {
   });
 });
 
+describe('trial chamber containment (wind bursts cannot throw the hero out)', () => {
+  /** Inside the hall rectangle (blueprint tiles 2..15), the hero's centre in px. */
+  const inHall = (run: RunState, s: PlacedStructure): boolean =>
+    run.player.x >= (s.tx + 2) * TILE_PX &&
+    run.player.x < (s.tx + 16) * TILE_PX &&
+    run.player.y >= (s.ty + 2) * TILE_PX &&
+    run.player.y < (s.ty + 16) * TILE_PX;
+
+  it('a burst that would push the hero through the 1-tile ring wall stops at the wall', () => {
+    for (const side of ['north', 'west', 'east', 'south'] as const) {
+      const { run, s } = runAt('trial_chamber');
+      step(run, 0.1);
+      run.player.x = (s.tx + 9) * TILE_PX;
+      run.player.y = (s.ty + 5.5) * TILE_PX;
+      step(run, 0.1);
+      const breeze = enemiesOf(run, s.key, 'breeze')[0];
+      if (!breeze) throw new Error('breeze');
+      for (const e of enemiesOf(run, s.key)) e.stunT = 99;
+      breeze.stunT = 0;
+      // The hero hugs the wall; the breeze stands on the inner side, so the shove points into the wall.
+      const cx = (s.tx + 5.5) * TILE_PX;
+      const cy = (s.ty + 5.5) * TILE_PX;
+      const near = 7;
+      const [hx, hy, bx, by] =
+        side === 'north'
+          ? [cx, (s.ty + 2) * TILE_PX + near, cx, (s.ty + 2) * TILE_PX + near + 40]
+          : side === 'south'
+            ? [cx, (s.ty + 16) * TILE_PX - near, cx, (s.ty + 16) * TILE_PX - near - 40]
+            : side === 'west'
+              ? [(s.tx + 2) * TILE_PX + near, cy, (s.tx + 2) * TILE_PX + near + 40, cy]
+              : [(s.tx + 16) * TILE_PX - near, cy, (s.tx + 16) * TILE_PX - near - 40, cy];
+      breeze.x = bx;
+      breeze.y = by;
+      run.player.x = hx;
+      run.player.y = hy;
+      let bursts = 0;
+      for (let i = 0; i < 60 * 40 && bursts < 2; i++) {
+        const tele = run.telegraphs.length;
+        step(run, 1 / 60);
+        if (tele > 0 && run.telegraphs.length === 0) bursts++;
+        // Keep the hero hugging the wall and the breeze where it is for the next burst.
+        run.player.hp = run.player.maxHp;
+        breeze.x = bx;
+        breeze.y = by;
+        expect(inHall(run, s)).toBe(true);
+        if (bursts === 0 && i % 30 === 0) {
+          run.player.x = hx;
+          run.player.y = hy;
+        }
+      }
+      expect(bursts, side).toBeGreaterThan(0);
+      expect(trialState(run, s.key)?.state.phase).toBe('fight');
+    }
+  });
+
+  it('puts a hero who somehow got out back into the hall while the doors are barred', () => {
+    const { run, s } = runAt('trial_chamber');
+    step(run, 0.1);
+    run.player.x = (s.tx + 9) * TILE_PX;
+    run.player.y = (s.ty + 5.5) * TILE_PX;
+    step(run, 0.1);
+    expect(trialState(run, s.key)?.state.phase).toBe('fight');
+    run.player.x = (s.tx + 9) * TILE_PX;
+    run.player.y = (s.ty - 3) * TILE_PX; // outside, north of the ring
+    step(run, 0.1);
+    expect(inHall(run, s)).toBe(true);
+    expect(trialState(run, s.key)?.state.phase).toBe('fight');
+  });
+
+  it('a sword bot never strands the trial on seeds 1..30', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const r = fightTrial(seed, L1, 0, { dodge: false, maxSeconds: 90, contain: true });
+      expect(r.escaped, `seed ${seed}`).toBe(false);
+    }
+  });
+});
+
 describe('raid (pure)', () => {
   const drive = (
     inputs: (t: number) => { omen: boolean; inVillage: boolean; far: boolean; alive: number },
@@ -750,6 +833,80 @@ describe('pillager outpost in a run', () => {
       }
       expect(run.world.isRemoved(cage)).toBe(false);
     }
+  });
+});
+
+describe('raid bookkeeping stays small and cheap', () => {
+  function village(): { run: RunState; v: PlacedStructure } {
+    const run = new RunState(11, 0);
+    const v = nearest(run.world, 'village');
+    run.player.x = v.entryX;
+    run.player.y = v.entryY;
+    run.player.snap();
+    return { run, v };
+  }
+
+  /** `run.enemies` that counts how often it is iterated (one full scan of the enemies per count). */
+  function countScans(run: RunState): () => number {
+    const arr: RunState['enemies'] = [];
+    let n = 0;
+    const iter = arr[Symbol.iterator].bind(arr);
+    arr[Symbol.iterator] = () => {
+      n++;
+      return iter();
+    };
+    run.enemies = arr;
+    return () => n;
+  }
+
+  it('does not scan the enemies for an idle, won or failed raid', () => {
+    const { run, v } = village();
+    step(run, 0.1);
+    expect(raidState(run, v.key)?.phase).toBe('idle');
+    const scans = countScans(run);
+    for (let i = 0; i < 30; i++) updatePillagerOutpost(run, 1 / 60);
+    expect(scans()).toBe(0);
+  });
+
+  it('drops an idle raid when the hero is far away and rebuilds it on return; a won raid stays', () => {
+    const { run, v } = village();
+    step(run, 0.1);
+    expect(raidState(run, v.key)).toBeDefined();
+    const far = { x: v.cx + RAID_FORGET_PX + 400, y: v.cy };
+    run.player.x = far.x;
+    run.player.y = far.y;
+    run.player.snap();
+    step(run, 0.5);
+    expect(raidState(run, v.key)).toBeUndefined();
+    run.player.x = v.entryX;
+    run.player.y = v.entryY;
+    step(run, 0.5);
+    expect(raidState(run, v.key)?.phase).toBe('idle');
+    // A finished raid keeps its result however far the hero goes (no second raid, the chest stays out).
+    const r = raidState(run, v.key);
+    if (!r) throw new Error('raid');
+    r.phase = 'won';
+    run.player.x = far.x;
+    run.player.y = far.y;
+    step(run, 0.5);
+    expect(raidState(run, v.key)?.phase).toBe('won');
+  });
+
+  it('the raid map does not grow with every village the hero walks past', () => {
+    const run = new RunState(11, 0);
+    let maxKept = 0;
+    for (let i = 0; i < 40; i++) {
+      run.player.x = i * 700;
+      run.player.y = (i % 5) * 300;
+      run.player.snap();
+      step(run, 0.3);
+      // Only villages within reach of the hero are kept.
+      let kept = 0;
+      for (const v of structuresInRect(run.world, -1000, -1000, 40 * 700 + 1000, 2500))
+        if (v.def.id === 'village' && raidState(run, v.key)) kept++;
+      maxKept = Math.max(maxKept, kept);
+    }
+    expect(maxKept).toBeLessThan(8);
   });
 });
 

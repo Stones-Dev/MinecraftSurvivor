@@ -64,6 +64,8 @@ export function onHitMods(
   source: 'melee' | 'projectile',
   baseDmg: number,
 ): void {
+  // The hit was stopped by the dragon rules (melee at a flying dragon, a caged crystal): no side effects either.
+  if (run.end.blocked === e) return;
   const chance = source === 'melee' ? run.mods.burnChance : run.mods.flame;
   if (chance > 0 && run.rng.ai.chance(chance))
     applyStatus(e, 'burn', 3 * run.mods.duration, Math.max(2, baseDmg * 0.3));

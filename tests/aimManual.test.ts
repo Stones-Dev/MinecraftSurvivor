@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { AimResolver, aimModeOf, mouseAim, stickAim, type AimFrame } from '../src/core/aim';
+import {
+  AIM_TARGET_DIST,
+  AimResolver,
+  aimModeOf,
+  aimTargetPoint,
+  mouseAim,
+  stickAim,
+  type AimFrame,
+} from '../src/core/aim';
 import { padAim } from '../src/core/gamepad';
 import { MergedInput, type InputSource } from '../src/core/input';
 import { SAVE_VERSION, defaultSave, tryMigrate, type SaveData } from '../src/core/save';
@@ -441,5 +449,43 @@ describe('weapons fire along the manual aim', () => {
       // Both still engage the enemy that is to the right.
       expect(e.hp < e.maxHp || run.mines.length > 0).toBe(true);
     }
+  });
+});
+
+describe('ability and pearl target follow a stick aim, not the stale pointer', () => {
+  const hero = { x: 100, y: 50 };
+  const stale = { x: -400, y: 900 };
+
+  it('a stick aim puts the target AIM_TARGET_DIST px from the hero along the stick', () => {
+    const t = aimTargetPoint({ x: 0, y: -1, dist: 0, source: 'stick' }, hero, stale);
+    expect(t.x).toBeCloseTo(100);
+    expect(t.y).toBeCloseTo(50 - AIM_TARGET_DIST);
+    const d = aimTargetPoint({ x: 0.6, y: 0.8, dist: 0, source: 'stick' }, hero, stale, 100);
+    expect(d).toEqual({ x: 160, y: 130 });
+  });
+
+  it('the mouse, auto mode and "nothing in force" keep the pointer point unchanged', () => {
+    expect(aimTargetPoint({ x: 1, y: 0, dist: 80, source: 'mouse' }, hero, stale)).toBe(stale);
+    expect(aimTargetPoint(null, hero, stale)).toBe(stale);
+  });
+
+  it('an Ender Pearl thrown with the stick pointing right goes right, whatever the pointer says', async () => {
+    const { useItem } = await import('../src/systems/items');
+    const run = new RunState(7, 0);
+    run.player.x = 50_000;
+    run.player.y = 50_000;
+    run.player.snap();
+    const t = aimTargetPoint(
+      { x: 1, y: 0, dist: 0, source: 'stick' },
+      run.player,
+      { x: run.player.x - 300, y: run.player.y + 200 }, // the stale pointer says "down-left"
+    );
+    run.targetX = t.x;
+    run.targetY = t.y;
+    run.item = 'ender_pearl';
+    run.itemCd = 0;
+    useItem(run, 0, 0);
+    expect(run.player.x).toBeCloseTo(50_140, 3);
+    expect(run.player.y).toBeCloseTo(50_000, 3);
   });
 });

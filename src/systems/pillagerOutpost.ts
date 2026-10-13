@@ -49,6 +49,8 @@ export const CAGE_REACH_PX = 22;
 export const CAGE_DWELL_S = 1.0;
 /** The raid ends when the hero is this far from the village. */
 export const RAID_LEASH_PX = 700;
+/** An idle raid of a village farther away than this is dropped from the bookkeeping. */
+export const RAID_FORGET_PX = 1500;
 export const RAID_INTRO_S = 3;
 export const RAID_BETWEEN_S = 4;
 /** Raiders appear on this ring around the village middle. */
@@ -393,9 +395,12 @@ function spawnWaveAt(run: RunState, s: PlacedStructure, wave: number): void {
 }
 
 function stepRaidRun(run: RunState, r: RaidRun, dt: number): void {
+  // A repelled or abandoned raid is over for the run: nothing to scan or step.
+  if (r.state.phase === 'won' || r.state.phase === 'failed') return;
   const m = meta(run);
   const p = run.player;
-  const alive = enemiesOf(run, r.s.key, 'raider').length;
+  // Only a running wave looks at the raiders (a scan of every enemy); idle/intro/between do not need it.
+  const alive = r.state.phase === 'wave' ? enemiesOf(run, r.s.key, 'raider').length : 0;
   const events = stepRaid(r.state, dt, {
     omen: m.omenUntil > run.time,
     inVillage: !p.dead && insideFootprint(r.s, p.x, p.y, 0),
@@ -456,7 +461,12 @@ export function updatePillagerOutpost(run: RunState, dt: number): void {
   for (const s of structuresAround(run)) {
     if (s.def.id === 'village' && !m.raids.has(s.key)) m.raids.set(s.key, setupRaid(run, s));
   }
-  for (const r of m.raids.values()) stepRaidRun(run, r, dt);
+  for (const [key, r] of m.raids) {
+    stepRaidRun(run, r, dt);
+    // A village the hero left far behind forgets its (still idle) raid; it is rebuilt when seen again. Won and
+    // failed raids stay: they hold the result (no second raid, the chest is not hidden again).
+    if (r.state.phase === 'idle' && heroDistance(run, r.s) > RAID_FORGET_PX) m.raids.delete(key);
+  }
 }
 
 export type { OutpostRun, RaidRun, StructureFoe };

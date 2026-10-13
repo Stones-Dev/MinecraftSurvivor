@@ -32,7 +32,8 @@ import { defaultLoadout } from '../src/systems/meta';
 import { MusicDirector } from '../src/data/music';
 import { damageEnemy, killEnemy } from '../src/systems/combat';
 import { xpToNext } from '../src/systems/economy';
-import { applyStatus } from '../src/systems/status';
+import { applyStatus, tickStatus } from '../src/systems/status';
+import { onHitMods } from '../src/weapons/helpers';
 import {
   DEATH_ANIM,
   EGG_EMERALDS,
@@ -40,6 +41,7 @@ import {
   END_START,
   EXIT_PORTAL,
   PILLAR_RADIUS,
+  PORTAL_DWELL_S,
   VICTORY_EMERALDS,
   XP_SHOWER_CAP,
   debugEnterEnd,
@@ -48,6 +50,7 @@ import {
   knockHero,
   leaveEnd,
   spawnEndPortal,
+  stepPortalDwell,
   xpShowerTotal,
 } from '../src/systems/endDimension';
 import { getMarkers } from '../src/systems/npcs';
@@ -267,11 +270,63 @@ describe('the End portal', () => {
     run.player.y = portal.y;
     step(run, 0.2);
     expect(portal.armed).toBe(true);
-    const input = new ScriptInput();
-    input.x = -1;
-    step(run, 1.2, input);
+    // Walk in and stop in the middle: the portal takes the hero only after PORTAL_DWELL_S.
+    run.player.x = portal.x + 10;
+    run.player.y = portal.y;
+    step(run, PORTAL_DWELL_S - 0.2);
+    expect(run.end.active).toBe(false);
+    expect(portal.dwell).toBeGreaterThan(0.4);
+    step(run, 0.4);
     expect(run.end.active).toBe(true);
     expect(run.world).toBe(run.endWorld);
+  });
+
+  it('needs a steady stand: running through, or stepping out, resets the dwell', () => {
+    expect(stepPortalDwell(0, 0.1, true)).toBeCloseTo(0.1);
+    expect(stepPortalDwell(0.5, 0.1, true)).toBeCloseTo(0.6);
+    expect(stepPortalDwell(0.7, 0.1, false)).toBe(0);
+    const run = new RunState(5, 960);
+    run.player.maxHp = run.player.hp = 99999;
+    run.spawnMult = 0;
+    run.won = true;
+    spawnEndPortal(run, run.player.x + 80, run.player.y);
+    const portal = run.end.portal;
+    if (!portal) throw new Error('no portal');
+    portal.armed = true;
+    run.enemies.length = 0;
+    const at = (dx: number): void => {
+      run.player.x = portal.x + dx;
+      run.player.y = portal.y;
+    };
+    // Stand in it for almost the whole time, step out for one step, come back: no entry yet.
+    at(0);
+    step(run, PORTAL_DWELL_S - 0.1);
+    expect(run.end.active).toBe(false);
+    at(60);
+    step(run, 1 / 60);
+    expect(portal.dwell).toBe(0);
+    at(0);
+    step(run, PORTAL_DWELL_S - 0.1);
+    expect(run.end.active).toBe(false);
+    // Only a full, unbroken stand takes him, and the hint was shown.
+    step(run, 0.3);
+    expect(run.end.active).toBe(true);
+  });
+
+  it('shows the Hold to enter hint while the hero stands in the portal', () => {
+    const run = new RunState(5, 960);
+    run.player.maxHp = run.player.hp = 99999;
+    run.spawnMult = 0;
+    run.won = true;
+    spawnEndPortal(run, run.player.x + 80, run.player.y);
+    const portal = run.end.portal;
+    if (!portal) throw new Error('no portal');
+    portal.armed = true;
+    run.enemies.length = 0;
+    run.player.x = portal.x;
+    run.player.y = portal.y;
+    step(run, 0.2);
+    expect(run.fx.some((f) => f.text === 'Hold to enter the End')).toBe(true);
   });
 
   it('is not entered while a rift is open', () => {
@@ -492,6 +547,56 @@ describe('damage rules', () => {
     const hp2 = d.hp;
     damageEnemy(run, d, 100, p.x, p.y, 0);
     expect(hp2 - d.hp).toBeCloseTo(100, 5);
+  });
+
+  it('a melee hit that the gate turned to 0 starts no burn or poison; a ranged one does', () => {
+    const run = plainEnd();
+    const d = dragonOf(run);
+    const p = run.player;
+    run.mods.burnChance = 1;
+    run.mods.flame = 1;
+    run.mods.poisonChance = 1;
+    expect(modeOf(run)).toBe('orbit');
+    damageEnemy(run, d, 50, p.x, p.y, 0);
+    onHitMods(run, d, 'melee', 50);
+    expect(d.burnT).toBe(0);
+    expect(d.poisonT).toBe(0);
+    // The same melee swing on an ordinary mob still burns it.
+    const z = makeEnemy(run, 'zombie', p.x + 10, p.y, false);
+    if (!z) throw new Error('no zombie');
+    damageEnemy(run, z, 1, p.x, p.y, 0);
+    onHitMods(run, z, 'melee', 50);
+    expect(z.burnT).toBeGreaterThan(0);
+    // A ranged hit on the flying dragon lands and may burn it.
+    damageEnemy(run, d, 50, p.x + 90, p.y, 0);
+    onHitMods(run, d, 'projectile', 50);
+    expect(d.burnT).toBeGreaterThan(0);
+  });
+
+  it('burn and poison ticks follow the dragon rules (perch x0.15, none while it dies)', () => {
+    const run = plainEnd();
+    const d = dragonOf(run);
+    const b = run.end.brain;
+    const tick = (): number => {
+      const hp = d.hp;
+      applyStatus(d, 'burn', 5, 20);
+      tickStatus(run, d, 0.5);
+      d.burnT = 0;
+      d.burnDps = 0;
+      d.statusAcc = 0;
+      return hp - d.hp;
+    };
+    b.mode = 'orbit';
+    expect(tick()).toBeCloseTo(10, 5);
+    b.mode = 'perch';
+    expect(tick()).toBeCloseTo(1.5, 5);
+    b.mode = 'stunned';
+    expect(tick()).toBeCloseTo(10, 5);
+    b.mode = 'dying';
+    expect(tick()).toBe(0);
+    b.mode = 'perch';
+    b.bypass = true;
+    expect(tick()).toBeCloseTo(10, 5);
   });
 
   it('the dragon cannot be stunned or frozen, crystals can', () => {

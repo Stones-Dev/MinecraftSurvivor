@@ -12,7 +12,7 @@ import {
 } from '../src/world/biomeMap';
 import { BIOME_IDS, BIOMES, type BiomeId, OVERWORLD_BIOMES } from '../src/world/biomes';
 import { genProps } from '../src/world/props';
-import { CHUNK_TILES, genTerrain, SPAWN_CLEAR, TILE, tileAt } from '../src/world/terrain';
+import { CHUNK_TILES, genTerrain, SPAWN_CLEAR, TILE, TILE_PX, tileAt } from '../src/world/terrain';
 import { findBiomeGround, World } from '../src/world/world';
 
 const SEEDS = [1, 2, 3, 7, 42];
@@ -336,4 +336,27 @@ describe('findBiomeGround', () => {
       }
     }
   }, 30_000);
+});
+
+describe('findBiomeGround and structures', () => {
+  it('never starts the hero inside or next to a structure footprint (3000 seeds x biomes)', () => {
+    let checked = 0;
+    for (let seed = 1; seed <= 3000; seed++) {
+      const world = new World(seed);
+      // Rotate through the biomes so every one is covered many times without 3000 x all searches.
+      const biome = OVERWORLD_BIOMES[seed % OVERWORLD_BIOMES.length];
+      if (!biome) continue;
+      const spot = findBiomeGround(world, biome);
+      if (!spot) continue;
+      checked++;
+      const tx = Math.floor(spot.x / TILE_PX);
+      const ty = Math.floor(spot.y / TILE_PX);
+      const hit = world.structures?.inTileRect(tx - 3, ty - 3, tx + 3, ty + 3) ?? [];
+      expect(
+        hit.map((s) => s.key),
+        `${biome} seed ${seed}`,
+      ).toEqual([]);
+    }
+    expect(checked).toBeGreaterThan(2900);
+  }, 120_000);
 });

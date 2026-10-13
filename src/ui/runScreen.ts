@@ -1,6 +1,12 @@
 import type { App } from '../app';
 import { cameraLead, cb, reduceFlash, textScale } from '../core/accessibility';
-import { AimResolver, aimModeOf, reticleDistance, type ManualAim } from '../core/aim';
+import {
+  AimResolver,
+  aimModeOf,
+  aimTargetPoint,
+  reticleDistance,
+  type ManualAim,
+} from '../core/aim';
 import { inputState } from '../core/input';
 import { aggregateEvents, stepMaterial, type StepMaterial } from '../core/sfxModel';
 import { Camera } from '../core/camera';
@@ -52,7 +58,13 @@ import { BIOMES, type BiomeId } from '../world/biomes';
 import type { Enemy } from '../entities/enemy';
 import { WorldRenderer, type PropItem } from '../world/renderer';
 import { isGrounded } from '../entities/bossDragon';
-import { DEATH_ANIM, debugEnterEnd, spawnEndPortal, type EndPillar } from '../systems/endDimension';
+import {
+  DEATH_ANIM,
+  debugEnterEnd,
+  PORTAL_DWELL_S,
+  spawnEndPortal,
+  type EndPillar,
+} from '../systems/endDimension';
 import { AmbientField } from '../render/ambient';
 import { drawDebug, FrameStats } from './debug';
 import { drawHud } from './hud';
@@ -397,6 +409,15 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       aimManual = aimModeOf(app.data().settings) === 'manual';
       app.touch.aimEnabled = aimManual;
       updateManualAim(dt);
+      {
+        // Pad/touch aim: abilities and the Ender Pearl follow the stick, not the stale pointer.
+        const t = aimTargetPoint(run.player.manualAim, run.player, {
+          x: run.targetX,
+          y: run.targetY,
+        });
+        run.targetX = t.x;
+        run.targetY = t.y;
+      }
       if (input.activePressed()) {
         const v = input.moveVector();
         const itemBefore = run.item;
@@ -481,7 +502,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       if (run.rescue) drawRescueFlag(ctx, run.rescue, camX, camY, run.time);
       if (run.rift.portal) drawPortal(ctx, run.rift.portal, camX, camY, run.time);
       if (run.end.portal && !run.end.active)
-        drawEndPortal(ctx, run.end.portal, camX, camY, run.time);
+        drawEndPortal(ctx, run.end.portal, camX, camY, run.time, PORTAL_DWELL_S);
       if (run.end.active) {
         drawFountain(ctx, camX, camY, run.time);
         if (run.end.exit) drawExitPortal(ctx, run.end.exit, camX, camY, run.time);

@@ -129,3 +129,21 @@ export class AimResolver {
 export function reticleDistance(a: ManualAim): number {
   return a.source === 'mouse' ? Math.min(48, Math.max(18, a.dist)) : 30;
 }
+
+/** Distance (world px) from the hero of the point that abilities and the Ender Pearl aim at with a stick. */
+export const AIM_TARGET_DIST = 150;
+
+/**
+ * The world point abilities and the Ender Pearl aim at. With a resolved stick aim (gamepad right stick, touch
+ * aim stick) it lies AIM_TARGET_DIST px from the hero along the aim; otherwise (mouse aim, auto mode, nothing in
+ * force) it is the pointer's world point, exactly as before. The pointer of a pad or touch player is stale.
+ */
+export function aimTargetPoint(
+  aim: ManualAim | null,
+  hero: Vec2,
+  pointerWorld: Vec2,
+  dist = AIM_TARGET_DIST,
+): Vec2 {
+  if (aim && aim.source === 'stick') return { x: hero.x + aim.x * dist, y: hero.y + aim.y * dist };
+  return pointerWorld;
+}

@@ -183,6 +183,31 @@ function heroInside(run: RunState, s: PlacedStructure): boolean {
   );
 }
 
+/** Is the hero's centre inside the hall rectangle (blueprint tiles 2..15), walls excluded? */
+function heroInHall(run: RunState, s: PlacedStructure): boolean {
+  const p = run.player;
+  return (
+    p.x >= (s.tx + 2) * TILE_PX &&
+    p.x < (s.tx + 16) * TILE_PX &&
+    p.y >= (s.ty + 2) * TILE_PX &&
+    p.y < (s.ty + 16) * TILE_PX
+  );
+}
+
+/**
+ * Safety net: while the doors are barred the hero must be in the hall. If anything (a knock-back, a teleport, a
+ * pet-carry) put him outside, he is set back on the hall tile; otherwise the trial could never end.
+ */
+function containHero(run: RunState, s: PlacedStructure): void {
+  const p = run.player;
+  if (p.dead || heroInHall(run, s)) return;
+  const spot = s.blueprint.inside ?? s.blueprint.entry;
+  p.x = (s.tx + spot.tx + 0.5) * TILE_PX;
+  p.y = (s.ty + spot.ty + 0.5) * TILE_PX;
+  p.snap();
+  run.fx.push(makeFx('ring', p.x, p.y - 8, 0.3, { r: 16, color: '#7ad8ff' }));
+}
+
 function spawnWave(run: RunState, s: PlacedStructure): void {
   let bogged = 0;
   for (const a of s.blueprint.actors) {
@@ -250,7 +275,14 @@ function burst(run: RunState, tr: TrialRun, s: PlacedStructure, dt: number): voi
         // Shove the hero away from the middle of the burst (away from the breeze if he stands on it).
         const ux = d > 1 ? dx / d : (p.x - e.x) / (Math.hypot(p.x - e.x, p.y - e.y) || 1);
         const uy = d > 1 ? dy / d : (p.y - e.y) / (Math.hypot(p.x - e.x, p.y - e.y) || 1);
-        const r = run.world.collide(p.x + ux * WIND_SHOVE_PX, p.y + uy * WIND_SHOVE_PX, p.radius);
+        // Swept in steps of at most 4 px: the ring wall is one tile thick and must stop the shove.
+        const r = run.world.collideSwept(
+          p.x,
+          p.y,
+          p.x + ux * WIND_SHOVE_PX,
+          p.y + uy * WIND_SHOVE_PX,
+          p.radius,
+        );
         p.x = r.x;
         p.y = r.y;
       }
@@ -342,7 +374,10 @@ export function updateTrialChamber(run: RunState, dt: number): void {
           break;
       }
     }
-    if (tr.state.phase === 'fight') burst(run, tr, s, dt);
+    if (tr.state.phase === 'fight') {
+      containHero(run, s);
+      burst(run, tr, s, dt);
+    }
     // The spawner's blue flame: sparks while it waits or fights.
     tr.spark -= dt;
     const sp = tr.spawner;

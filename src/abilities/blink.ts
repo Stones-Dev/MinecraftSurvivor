@@ -42,7 +42,7 @@ export const blink: AbilityDef = {
     const dist = Math.max(40, Math.min(RANGE, want > 6 ? want : RANGE));
     const dmg = 16 * run.mods.dmg * run.mods.abilityPower;
     pop(run, p.x, p.y, dmg);
-    const c = run.world.collide(p.x + dir.x * dist, p.y + dir.y * dist, p.radius, run.biome());
+    const c = run.world.collideSwept(p.x, p.y, p.x + dir.x * dist, p.y + dir.y * dist, p.radius);
     p.x = c.x;
     p.y = c.y;
     p.snap();

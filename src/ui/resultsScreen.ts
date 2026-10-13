@@ -76,6 +76,8 @@ export function resultsScreen(
     miniBosses: run.miniKills,
     picked: run.emeraldsPicked,
   };
+  // The record carries the same capped clock: best time, play time, missions and the leaderboard read it.
+  rec.timeSec = summary.timeSec;
   const earned = runReward(summary, meta.payoutMult);
   const parts = runRewardBreakdown(summary, meta.payoutMult);
 

@@ -1427,10 +1427,12 @@ function portalSwirl(
 /** The End portal in the overworld: 12 end-stone-brick frame blocks with eyes of ender around a starfield. */
 export function drawEndPortal(
   ctx: CanvasRenderingContext2D,
-  portal: { x: number; y: number },
+  portal: { x: number; y: number; dwell?: number },
   camX: number,
   camY: number,
   time: number,
+  /** Seconds of dwell that take the hero in (the progress ring around the portal fills up to it). */
+  dwellNeeded = 0.8,
 ): void {
   const B = FRAME_BLOCK;
   const cx = Math.round(portal.x - camX);
@@ -1456,6 +1458,23 @@ export function drawEndPortal(
     ctx.fillRect(Math.round(cx - 14 + ((k * 7) % 29)), Math.round(cy - half - life), 1, 2);
   }
   ctx.globalAlpha = prev;
+  // Steady progress ring while the hero stands in the portal: it fills clockwise from the top.
+  const dwell = portal.dwell ?? 0;
+  if (dwell > 0) {
+    const f = Math.min(1, dwell / dwellNeeded);
+    const ringR = half + 11;
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(223,124,255,0.25)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#f2c4ff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 /** Exit portal after the dragon: a bedrock ring, a starfield and a column of light. */

@@ -52,6 +52,8 @@ export interface FightResult {
   kills: number;
   /** Wave members still standing at the end (id and tile inside the chamber), for diagnosing a stalemate. */
   left: string[];
+  /** With `contain`: the hero was found outside the hall during the fight (the trial would be stranded). */
+  escaped: boolean;
 }
 
 /**
@@ -62,7 +64,7 @@ export function fightTrial(
   seed: number,
   build: HeroBuild,
   time: number,
-  opts: { dodge: boolean; maxSeconds?: number } = { dodge: false },
+  opts: { dodge: boolean; maxSeconds?: number; contain?: boolean } = { dodge: false },
 ): FightResult {
   const run = new RunState(seed, time);
   const t = run.world.structures?.nearest('trial_chamber', 0, 0, 40000);
@@ -88,6 +90,7 @@ export function fightTrial(
   let stuckT = 0;
   let slideT = 0;
   let slideDir = 1;
+  let escaped = false;
   for (; steps < max; steps++) {
     // Only the wave exists.
     run.enemies = run.enemies.filter((e) => isStructureEnemy(e));
@@ -157,6 +160,16 @@ export function fightTrial(
     run.update(dt, pad);
     pad.endStep();
     const ts = trialState(run, t.key);
+    if (opts.contain && ts?.state.phase === 'fight') {
+      const q = run.player;
+      if (
+        q.x < (t.tx + 2) * TILE_PX ||
+        q.x >= (t.tx + 16) * TILE_PX ||
+        q.y < (t.ty + 2) * TILE_PX ||
+        q.y >= (t.ty + 16) * TILE_PX
+      )
+        escaped = true;
+    }
     if (run.player.dead || ts?.state.phase === 'key' || ts?.state.phase === 'done') break;
   }
   const ts = trialState(run, t.key);
@@ -167,6 +180,7 @@ export function fightTrial(
     hpLeftFrac: Math.max(0, run.player.hp) / hp0,
     damageTaken: run.stats.damageTaken,
     kills: run.kills,
+    escaped,
     left: run.enemies
       .filter((e) => !e.dying)
       .map(

@@ -54,6 +54,13 @@ export const END_ISLAND_PX = END_ISLAND_TILES * TILE_PX;
 export const END_ARENA_TILES = 44;
 /** The hero enters a portal when closer than this. */
 export const PORTAL_ENTER_R = 16;
+/** Seconds the hero must stand in the portal before it takes him: the End is a one-way trip. */
+export const PORTAL_DWELL_S = 0.8;
+
+/** Next dwell time of the End portal: grows while the hero stands in it, resets the moment he leaves. */
+export function stepPortalDwell(dwell: number, dt: number, inside: boolean): number {
+  return inside ? dwell + dt : 0;
+}
 /** How far above its pillar's foot a crystal floats, and the pillar's collision radius. */
 export const PILLAR_LIFT = 52;
 export const PILLAR_RADIUS = 12;
@@ -112,7 +119,16 @@ export interface EndPillar {
 
 export class EndState {
   /** The permanent portal in the overworld (set when the Warden dies). */
-  portal: { x: number; y: number; armed: boolean; t: number } | null = null;
+  portal: {
+    x: number;
+    y: number;
+    armed: boolean;
+    t: number;
+    /** Seconds the hero has stood inside the portal (0 once he steps out): entering needs PORTAL_DWELL_S. */
+    dwell: number;
+    /** Cooldown of the floating 'Hold to enter' hint. */
+    hint: number;
+  } | null = null;
   active = false;
   stash: Stash | null = null;
   crystals: EndCrystal[] = [];
@@ -137,6 +153,11 @@ export class EndState {
   kb = { ux: 0, uy: 0, left: 0, v0: 0 };
   /** Seconds before another "Caged!" text. */
   cageMsgT = 0;
+  /**
+   * The dragon or crystal whose last hit the gate turned to 0 (out of reach, caged, dying). Hit side effects
+   * that follow `damageEnemy` (burn/poison from `onHitMods`, projectile statuses) must not apply to it.
+   */
+  blocked: Enemy | null = null;
 
   /** Number of crystals still standing. */
   crystalsAlive(): number {
@@ -178,7 +199,10 @@ export class EndState {
       return 0;
     }
     const b = this.brain;
-    if (b.bypass || quiet) return dmg;
+    if (b.bypass) return dmg;
+    // Damage-over-time and zone ticks are ranged damage: the perch deflects them like arrows, and nothing lands
+    // while the dragon dies. Melee-applied burn/poison never starts while it is out of reach (onHitMods).
+    if (quiet) return dmg * dragonFactor(b.mode, false);
     const p = run.player;
     const melee = isMeleeOrigin(fromX, fromY, p.x, p.y, run.allies);
     const f = dragonFactor(b.mode, melee);
@@ -230,7 +254,7 @@ export function spawnEndPortal(run: RunState, x: number, y: number): void {
   const end = run.end;
   if (end.portal || end.active || end.deathT >= 0) return;
   const at = groundNear(run, x, y);
-  end.portal = { x: at.x, y: at.y, armed: false, t: 0 };
+  end.portal = { x: at.x, y: at.y, armed: false, t: 0, dwell: 0, hint: 0 };
   run.announce('An End portal has opened!', '#df7cff', 5);
   run.emit('portal');
 }
@@ -403,6 +427,46 @@ export function leaveEnd(run: RunState, keepLoot = true): void {
 export function isVoid(world: World, x: number, y: number): boolean {
   return world.tileAtPx(x, y) === TILE.VOID;
 }
+
+/**
+ * Shorten an automatic move (dash, lunge, Phase Step) so that, in the End, it never ends over the void: walks
+ * the segment in steps of at most 4 px and stops at the last position whose point (and a few px ahead of it)
+ * is still island. Outside the End the target is returned unchanged. Deliberate dashes are stopped at the
+ * rim too, never dropped into the void.
+ */
+export function keepOnIsland(
+  run: RunState,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): { x: number; y: number } {
+  if (!run.end.active) return { x: x1, y: y1 };
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return { x: x1, y: y1 };
+  const ux = dx / len;
+  const uy = dy / len;
+  const n = Math.max(1, Math.ceil(len / 4));
+  let lx = x0;
+  let ly = y0;
+  for (let i = 1; i <= n; i++) {
+    const px = x0 + (dx * i) / n;
+    const py = y0 + (dy * i) / n;
+    if (
+      isVoid(run.world, px, py) ||
+      isVoid(run.world, px + ux * VOID_MARGIN_PX, py + uy * VOID_MARGIN_PX)
+    )
+      break;
+    lx = px;
+    ly = py;
+  }
+  return { x: lx, y: ly };
+}
+
+/** Look-ahead of `keepOnIsland`: a lunge stops this far before the rim. */
+const VOID_MARGIN_PX = 3;
 
 /** The hero has fallen off the island: a Totem of Undying saves them once, anything else is instant death. */
 function voidFall(run: RunState): void {
@@ -656,7 +720,20 @@ export function updateEnd(run: RunState, dt: number): void {
     const d = Math.hypot(p.x - portal.x, p.y - portal.y);
     // Armed once the hero has stepped away from where the Warden fell: never an accidental entry.
     if (d > 30) portal.armed = true;
-    if (portal.armed && d < PORTAL_ENTER_R) enterEnd(run);
+    const inside = portal.armed && d < PORTAL_ENTER_R;
+    portal.dwell = stepPortalDwell(portal.dwell, dt, inside);
+    portal.hint = Math.max(0, portal.hint - dt);
+    if (inside && portal.hint <= 0) {
+      portal.hint = 1.4;
+      run.fx.push(
+        makeFx('text', portal.x, portal.y - 34, 1.5, {
+          text: 'Hold to enter the End',
+          vy: -6,
+          color: '#df7cff',
+        }),
+      );
+    }
+    if (portal.dwell >= PORTAL_DWELL_S) enterEnd(run);
     return;
   }
   end.time += dt;

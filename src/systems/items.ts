@@ -2,6 +2,7 @@
 import { ITEMS, type ItemId } from '../data/items';
 import { makeFx } from '../entities/fx';
 import type { RunState } from '../game';
+import { keepOnIsland } from './endDimension';
 
 /** Equip an item, or queue a choice if one is already held (the screen pauses to ask). */
 export function giveItem(run: RunState, id: ItemId): void {
@@ -72,7 +73,7 @@ export function useItem(run: RunState, dirX: number, dirY: number): void {
       const reach = Math.min(d, 140);
       const tx = d > 0 ? p.x + (dx / d) * reach : p.x + p.facing * 60;
       const ty = d > 0 ? p.y + (dy / d) * reach : p.y;
-      const r = run.world.collide(tx, ty, p.radius);
+      const r = run.world.collideSwept(p.x, p.y, tx, ty, p.radius);
       run.fx.push(makeFx('ring', p.x, p.y - 8, 0.3, { r: 16, color: '#7a5cff' }));
       p.x = r.x;
       p.y = r.y;
@@ -94,11 +95,15 @@ export function updateItems(run: RunState, dt: number): void {
   if (run.dash) {
     const d = run.dash;
     const step = 320 * dt;
-    const r = run.world.collide(p.x + d.dx * step, p.y + d.dy * step, p.radius);
+    const nx = p.x + d.dx * step;
+    const ny = p.y + d.dy * step;
+    // In the End a dash or lunge stops at the rim instead of carrying the hero over the void.
+    const safe = keepOnIsland(run, p.x, p.y, nx, ny);
+    const r = run.world.collideSwept(p.x, p.y, safe.x, safe.y, p.radius);
     p.x = r.x;
     p.y = r.y;
     d.t -= dt;
-    if (d.t <= 0) run.dash = null;
+    if (d.t <= 0 || safe.x !== nx || safe.y !== ny) run.dash = null;
   }
   if (run.item === 'turtle_shell' && !p.moving && !p.dead) p.heal(1.5 * dt);
   if (run.item === 'totem' && p.dead) {
