@@ -16,20 +16,19 @@ import {
   chestIndexFromId,
   chestRng,
   chestTable,
-  type LootDrop,
-  type IronResult,
-  resolveIronUpgrade,
   rollLoot,
+  type StructureChestKind,
 } from '../data/lootTables';
-import { ITEMS } from '../data/items';
 import { makeFx } from '../entities/fx';
 import type { RunState, Telegraph } from '../game';
 import { MAX_WEAPON_LEVEL, WEAPONS } from '../weapons';
+import { applyLoot, say } from './structureLoot';
+
+export { applyLoot };
 import type { Prop } from '../world/props';
 import { structuresInRect, type PlacedStructure } from '../world/structures';
 import { TILE_PX } from '../world/terrain';
 import { explode, hurtPlayer } from './combat';
-import { giveItem } from './items';
 import type { Npc } from './npcs';
 import {
   FUSE_S,
@@ -138,101 +137,8 @@ function rt(run: RunState): Runtime {
   return r;
 }
 
-function say(run: RunState, x: number, y: number, s: string, color: string, life = 1.3): void {
-  run.fx.push(makeFx('text', x, y - 14, life, { text: s, vy: -14, color }));
-}
-
-// ---------------------------------------------------------------------------------------------------
-// Loot
-
-/** Apply the drops of a chest to the run; each drop prints one floating line above (x, y). */
-export function applyLoot(run: RunState, drops: readonly LootDrop[], x: number, y: number): void {
-  let line = 0;
-  const out = (s: string, color: string): void => {
-    run.fx.push(makeFx('text', x, y - 14 - line * 9, 1.9, { text: s, vy: -10, color }));
-    line++;
-  };
-  for (const d of drops) {
-    switch (d.kind) {
-      case 'emeralds': {
-        const n = Math.round(d.n * run.mods.lootMult * run.mods.chestMult);
-        run.emeraldsPicked += n;
-        out(`+${n} emeralds`, '#7dff9a');
-        break;
-      }
-      case 'spawnEgg':
-        run.spawnEggs += d.n;
-        run.emit('egg');
-        out(d.n > 1 ? `${d.n} Spawn Eggs!` : 'Spawn Egg!', '#ff9ad0');
-        break;
-      case 'rareSpawnEgg':
-        run.rareSpawnEggs += d.n;
-        run.emit('egg');
-        out('Rare Spawn Egg!', '#ffd84a');
-        break;
-      case 'item':
-        giveItem(run, d.id);
-        out(ITEMS[d.id].name, '#ffe27a');
-        break;
-      case 'heal':
-        run.player.heal(run.player.maxHp * d.frac);
-        out('Golden Apple (eaten)', '#ff8a8a');
-        break;
-      case 'enchantBook':
-        run.bonusOffers += d.n;
-        run.emit('levelup');
-        out('Enchanted Book!', '#d9a6ff');
-        break;
-      case 'ironUpgrade':
-        out(
-          applyIronUpgrade(
-            run,
-            resolveIronUpgrade(
-              {
-                swordTier: run.swordTier,
-                armorTier: run.armorTier,
-                weapons: run.weapons,
-                maxWeaponLevel: MAX_WEAPON_LEVEL,
-              },
-              chestRng(run.seed, `iron|${x}|${y}`),
-            ),
-          ),
-          '#c8d0e0',
-        );
-        break;
-    }
-  }
-}
-
-function applyIronUpgrade(run: RunState, r: IronResult): string {
-  let label: string;
-  switch (r.kind) {
-    case 'sword':
-      run.swordTier = Math.max(run.swordTier, r.tier);
-      label = 'Iron sword!';
-      break;
-    case 'armor':
-      run.armorTier = Math.max(run.armorTier, r.tier);
-      run.armorProgress = 0;
-      label = 'Iron armor!';
-      break;
-    case 'weapon': {
-      const w = run.weapons[r.index];
-      if (w) w.level = Math.min(MAX_WEAPON_LEVEL, w.level + 1);
-      label = w ? `${WEAPONS[w.id].name} Lv ${w.level}` : 'Weapon upgrade';
-      break;
-    }
-    default:
-      run.emeraldsPicked += r.n;
-      label = `+${r.n} emeralds`;
-  }
-  run.recomputeStats();
-  return label;
-}
-
 function openChest(run: RunState, prop: Prop): void {
-  const kind = prop.kind === 'chest_pyramid' ? 'chest_pyramid' : 'chest_village';
-  const table = chestTable(kind, chestIndexFromId(prop.id));
+  const table = chestTable(prop.kind as StructureChestKind, chestIndexFromId(prop.id));
   const drops = rollLoot(table, chestRng(run.seed, prop.id));
   run.world.removeProp(prop);
   run.propState.delete(`${prop.id}|${prop.kind}`);
@@ -422,10 +328,10 @@ function spawnVillage(run: RunState, v: PlacedStructure): void {
   const r = rt(run);
   const ids: number[] = [];
   for (const a of v.blueprint.actors) {
-    if (a.role === 'golem') continue; // systems/villageGolem.ts
+    if (!(a.role in NPC_SPRITE)) continue; // the golem is systems/villageGolem.ts
     const x = (v.tx + a.tx + 0.5) * TILE_PX;
     const y = (v.ty + a.ty + 0.5) * TILE_PX;
-    const n = villagerNpc(run, a.role, x, y);
+    const n = villagerNpc(run, a.role as VillagerRole, x, y);
     r.memo.set(n.id, { dwell: 0, cool: 0, msg: 0, greeted: false, homeX: x, homeY: y });
     ids.push(n.id);
   }

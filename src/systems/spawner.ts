@@ -5,6 +5,7 @@ import { Enemy } from '../entities/enemy';
 import type { RunState } from '../game';
 import { TILE } from '../world/terrain';
 import { nightFactor } from './daynight';
+import { isStructureEnemy, spawnCount } from './structureEnemies';
 
 export const ENEMY_CAP = 64;
 const ELITE_FROM = 0.85;
@@ -129,13 +130,13 @@ function applyBiomeHp(e: Enemy, hpMult: number): void {
 }
 
 function spawnOne(run: RunState, angle: number, limit: number): boolean {
-  if (run.enemies.length >= limit) return false;
+  if (spawnCount(run) >= limit) return false;
   const id = pickType(run);
   const def = ENEMIES[id];
   if (!def) return false;
   const pt = ringPoint(run, angle, def.radius, def.nearWater);
   if (!pt) return false;
-  const elite = run.enemies.length >= ENEMY_CAP * ELITE_FROM;
+  const elite = spawnCount(run) >= ENEMY_CAP * ELITE_FROM;
   const n = def.pack ?? 1;
   const hpMult = biomeHpMult(run.biome());
   for (let i = 0; i < n; i++) {
@@ -167,7 +168,7 @@ export function updateSpawner(run: RunState, dt: number): void {
   s.acc += rate * dt;
   while (s.acc >= 1) {
     s.acc -= 1;
-    if (run.enemies.length < ENEMY_CAP)
+    if (spawnCount(run) < ENEMY_CAP)
       spawnOne(run, run.rng.spawn.range(0, Math.PI * 2), ENEMY_CAP);
   }
   s.tideT -= dt * run.spawnMult;
@@ -184,7 +185,7 @@ export function updateSpawner(run: RunState, dt: number): void {
   const list = run.enemies;
   for (let i = 0; i < list.length; i++) {
     const e = list[i];
-    if (!e || e.dying || e.boss) continue;
+    if (!e || e.dying || e.boss || isStructureEnemy(e)) continue;
     const d = Math.hypot(e.x - p.x, e.y - p.y);
     e.farT = d > SPAWN_RING * 1.6 ? e.farT + dt : 0;
     if (e.farT > 2.5 || d > SPAWN_RING * 2.6) {

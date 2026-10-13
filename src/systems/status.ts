@@ -8,6 +8,8 @@ export type StatusKind = 'burn' | 'poison' | 'wither' | 'slow' | 'freeze' | 'stu
 /** `power` is damage per second for DoTs and the speed factor (0..1) for slow/levitate. */
 export function applyStatus(e: Enemy, kind: StatusKind, dur: number, power = 0): void {
   if (e.dying || dur <= 0) return;
+  // The Ender Dragon cannot be stunned or frozen: its own grounded states are the crystal overload and the parry.
+  if (e.def.boss === 'dragon' && (kind === 'stun' || kind === 'freeze')) return;
   switch (kind) {
     case 'burn':
       e.burnT = Math.max(e.burnT, dur);

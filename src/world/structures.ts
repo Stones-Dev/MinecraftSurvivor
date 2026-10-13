@@ -9,7 +9,8 @@
  *   hash(seed, cell, def), up to ATTEMPTS jitters until one site is valid;
  * - a site is valid when the footprint keeps `minDistFromSpawn` tiles from the origin, its middle and
  *   corners lie in the def's biomes, no tile within 2 of the footprint is water or lava, and it does not
- *   touch an instance of a def with a smaller `priority` (evaluated first, so there is no cycle);
+ *   touch an instance of a def with a smaller `priority` (evaluated first, so there is no cycle); a def with
+ *   `allowWaterNear` (the Witch Hut on stilts) may stand in shallows: no lava, at most half of the footprint wet;
  * - blueprints are built once per site (`def.build`), props get stable ids `s:<key>:<n>`.
  *
  * The World owns one `StructureIndex` per overworld (null in arenas and with a fixed debug biome) and hooks
@@ -148,10 +149,25 @@ export class StructureIndex {
     ] as const) {
       if (!def.allowedBiomes.includes(biomeAtTile(x, y, this.seed))) return null;
     }
-    if (!this.dry(tx - DRY_MARGIN, ty - DRY_MARGIN, w + 2 * DRY_MARGIN, h + 2 * DRY_MARGIN))
+    if (def.allowWaterNear) {
+      if (!this.stiltSite(tx, ty, w, h)) return null;
+    } else if (!this.dry(tx - DRY_MARGIN, ty - DRY_MARGIN, w + 2 * DRY_MARGIN, h + 2 * DRY_MARGIN))
       return null;
     if (this.conflicts(rank, tx - GAP, ty - GAP, w + 2 * GAP, h + 2 * GAP)) return null;
     return mid;
+  }
+
+  /** `allowWaterNear` defs: no lava within the dry margin and at most half of the footprint under water. */
+  private stiltSite(tx: number, ty: number, w: number, h: number): boolean {
+    let water = 0;
+    for (let y = ty - DRY_MARGIN; y < ty + h + DRY_MARGIN; y++) {
+      for (let x = tx - DRY_MARGIN; x < tx + w + DRY_MARGIN; x++) {
+        const t = tileAt(x, y, this.seed);
+        if (t === TILE.LAVA) return false;
+        if (t === TILE.WATER && x >= tx && x < tx + w && y >= ty && y < ty + h) water++;
+      }
+    }
+    return water * 2 <= w * h;
   }
 
   /** No water or lava in the rectangle (coarse probe first: lakes are big). */

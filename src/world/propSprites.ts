@@ -11,6 +11,7 @@ import { hash2 } from '../core/noise';
 import { mix, pack, PixBuffer, shade, type RGB } from '../core/pixelart';
 import { type Biome, BIOMES, type BiomeId } from './biomes';
 import { type PropKind, type PropStyle, propStyleFor } from './props';
+import { STRUCTURE2_GALLERY, STRUCTURE2_PAINTERS } from './structureSprites';
 
 export interface Sprite {
   canvas: HTMLCanvasElement;
@@ -1760,6 +1761,8 @@ const PAINTERS: Record<PropStyle, Painter> = {
   bed,
   lantern,
   hay_bale: hayBale,
+  // Jungle temple, trial chamber, pillager outpost, witch hut (world/structureSprites.ts).
+  ...STRUCTURE2_PAINTERS,
 };
 
 /** Every style the painters handle (tests check propStyleFor never leaves this set). */
@@ -1869,6 +1872,8 @@ export const PROP_GALLERY: [PropKind, number][][] = [
     ['lantern', 0],
     ['hay_bale', 0],
   ],
+  STRUCTURE2_GALLERY.slice(0, 11),
+  STRUCTURE2_GALLERY.slice(11),
 ];
 
 let shadow: HTMLCanvasElement | null = null;

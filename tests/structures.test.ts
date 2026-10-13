@@ -55,6 +55,7 @@ import {
   type PlacedStructure,
   poiMarkers,
   StructureIndex,
+  type StructureId,
   structuresInRect,
   findNearestStructure,
 } from '../src/world/structures';
@@ -71,6 +72,9 @@ import {
 import { paintChunk } from '../src/world/tilePaint';
 import { World } from '../src/world/world';
 
+/** Props that close a doorway until a mechanism opens it (the registry test removes them before the flood fill). */
+const GATE_KINDS = new Set<string>(['stone_door', 'copper_bars']);
+
 const SEEDS = Array.from({ length: 50 }, (_, i) => i * 977 + 13);
 
 /** Every instance within +-`r` tiles of the origin. */
@@ -78,14 +82,14 @@ function placedAround(world: World, r: number): PlacedStructure[] {
   return world.structures?.inTileRect(-r, -r, r, r) ?? [];
 }
 
-function nearest(world: World, id: 'village' | 'desert_temple'): PlacedStructure {
+function nearest(world: World, id: StructureId): PlacedStructure {
   const s = findNearestStructure(world, id, 0, 0, 40000);
   if (!s) throw new Error(`no ${id} near the origin`);
   return s;
 }
 
 /** Seeds whose nearest `id` stands in one of the biomes (a few of each so every style is covered). */
-function seedsWith(id: 'village' | 'desert_temple', perBiome = 1): number[] {
+function seedsWith(id: StructureId, perBiome = 1): number[] {
   const out: number[] = [];
   const count = new Map<string, number>();
   for (let seed = 1; seed <= 160; seed++) {
@@ -140,11 +144,24 @@ describe('structure placement', () => {
         expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(Math.max(60, d.minDistFromSpawn));
         expect(Math.hypot(dx, dy)).toBeGreaterThan(SPAWN_CLEAR * 4);
         // Dry land (with a 2-tile margin) in the allowed biomes.
+        let wet = 0;
         for (let y = p.ty - 2; y < p.ty + p.height + 2; y++)
           for (let x = p.tx - 2; x < p.tx + p.width + 2; x++) {
             const t = tileAt(x, y, seed);
-            expect(t === TILE.WATER || t === TILE.LAVA, `${p.key} ${x},${y}`).toBe(false);
+            if (d.allowWaterNear) {
+              // Stilt sites may stand in the shallows: never lava, at most half of the footprint wet.
+              expect(t === TILE.LAVA, `${p.key} ${x},${y}`).toBe(false);
+              if (
+                t === TILE.WATER &&
+                x >= p.tx &&
+                x < p.tx + p.width &&
+                y >= p.ty &&
+                y < p.ty + p.height
+              )
+                wet++;
+            } else expect(t === TILE.WATER || t === TILE.LAVA, `${p.key} ${x},${y}`).toBe(false);
           }
+        expect(wet * 2).toBeLessThanOrEqual(p.width * p.height);
         expect(d.allowedBiomes).toContain(
           biomeAtTile(p.tx + (p.width >> 1), p.ty + (p.height >> 1), seed),
         );
@@ -193,7 +210,14 @@ describe('structure placement', () => {
     }
     expect(t).toBeGreaterThan(0);
     expect(v).toBeGreaterThan(t * 3);
-    expect(STRUCTURE_DEFS.map((d) => d.id).sort()).toEqual(['desert_temple', 'village']);
+    expect(STRUCTURE_DEFS.map((d) => d.id).sort()).toEqual([
+      'desert_temple',
+      'jungle_temple',
+      'pillager_outpost',
+      'trial_chamber',
+      'village',
+      'witch_hut',
+    ]);
   });
 
   it('offers minimap markers for the structures around a point', () => {
@@ -350,7 +374,7 @@ describe('structure terrain in the world', () => {
   });
 
   it('adds new ground materials with names', () => {
-    expect(MATERIAL_COUNT).toBe(31);
+    expect(MATERIAL_COUNT).toBe(38);
     for (const m of [
       MAT.OAK_PLANKS,
       MAT.CUT_SANDSTONE,
@@ -551,6 +575,20 @@ describe('every registered structure (a new def is covered by adding it to the r
         for (const a of bp.actors) {
           expect(inside(a.tx, a.ty), `${def.id} ${a.role}`).toBe(true);
           expect(bp.solid[a.ty * bp.width + a.tx], `${def.id} ${a.role} in a wall`).toBe(0);
+        }
+        // Gates (the jungle temple's stone door, the trial chamber's copper bars) really seal what is behind
+        // them while they stand: the chest or the hall's enemy markers cannot be reached.
+        const gates = p.props.filter((pr) => GATE_KINDS.has(pr.kind));
+        const gated = gates.length > 0 ? reachable(world, p) : null;
+        if (gated) {
+          const behind = [
+            ...p.props.filter((pr) => pr.kind.startsWith('chest')).map((pr) => [pr.x, pr.y]),
+            ...bp.actors.map((a) => [(p.tx + a.tx + 0.5) * TILE_PX, (p.ty + a.ty + 0.5) * TILE_PX]),
+          ];
+          expect(behind.length, `${p.key} has something behind its gates`).toBeGreaterThan(0);
+          for (const [x, y] of behind)
+            expect(gated.has(x ?? 0, y ?? 0, 6), `${p.key} gate leaks at ${x},${y}`).toBe(false);
+          for (const g of gates) world.removeProp(g);
         }
         const fill = reachable(world, p);
         expect(fill.count, `${p.key} entry`).toBeGreaterThan(100);

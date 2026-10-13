@@ -30,10 +30,30 @@ import type { PropKind } from '../props';
 /** Radius (tiles) of the generous zone around the starting meadow, see `StructureDef.nearChance`. */
 export const NEAR_SPAWN_TILES = 170;
 
-export type StructureId = 'village' | 'desert_temple';
+export type StructureId =
+  | 'village'
+  | 'desert_temple'
+  | 'jungle_temple'
+  | 'trial_chamber'
+  | 'pillager_outpost'
+  | 'witch_hut';
 
-/** Who stands at an actor marker. 'golem' is the village's iron golem (patrols, defends). */
-export type ActorRole = 'smith' | 'cleric' | 'librarian' | 'farmer' | 'golem';
+/**
+ * Who stands at an actor marker. 'golem' is the village's iron golem (patrols, defends). The enemy roles are
+ * spawn points of systems/structureEnemies.ts: the Pillager Outpost's guards and Captain, the Trial Chamber's
+ * 'bogged' (skeleton family) and 'breeze' (fast hopper) waves and the Witch Hut's witch.
+ */
+export type ActorRole =
+  | 'smith'
+  | 'cleric'
+  | 'librarian'
+  | 'farmer'
+  | 'golem'
+  | 'pillager'
+  | 'captain'
+  | 'trial_bogged'
+  | 'trial_breeze'
+  | 'witch';
 
 export interface StampProp {
   kind: PropKind;
@@ -107,6 +127,12 @@ export interface StructureDef {
   priority: number;
   /** Natural props (trees, rocks, flowers) within this many tiles of the footprint are removed. */
   clearance: number;
+  /**
+   * Allow water in the footprint and around it (a Witch Hut on stilts in a swamp). Lava is still refused and
+   * at most half of the footprint may be water, so the door side is wadeable land or shallows. Default: the
+   * footprint and 2 tiles around it must be dry.
+   */
+  allowWaterNear?: boolean;
   build(ctx: BuildContext): Blueprint;
   /** Marker colour for the minimap hook (`poiMarkers`). */
   color: string;

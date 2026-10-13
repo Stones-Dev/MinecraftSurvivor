@@ -380,11 +380,17 @@ export function finalVictoryScreen(app: App, run: RunState, persist = true): Scr
       const total = lines.length * LINE;
       const rest = view.height - 40 - total;
       const y0 = Math.max(rest, view.height - t * SPEED);
+      // The text never runs under the button.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, view.width, view.height - 34);
+      ctx.clip();
       lines.forEach((l, i) => {
         const y = Math.round(y0 + i * LINE);
         if (y < -LINE || y > view.height) return;
         drawText(ctx, l.text, view.width / 2, y, l.color, 'center');
       });
+      ctx.restore();
       buttons.begin();
       buttons.add(btn(view), 'Results', finish);
       buttons.draw(view);

@@ -1495,7 +1495,7 @@ export function drawExitPortal(
   ] as const) {
     ctx.fillStyle = '#6b4a2a';
     ctx.fillRect(cx + dx, cy + dy - 5, 2, 6);
-    ctx.fillStyle = Math.floor(time * 6 + dx) % 2 === 0 ? '#ffd84a' : '#ff9a3a';
+    ctx.fillStyle = reduceFlash() || Math.floor(time * 6 + dx) % 2 === 0 ? '#ffd84a' : '#ff9a3a';
     ctx.fillRect(cx + dx, cy + dy - 8, 2, 3);
   }
   ctx.globalAlpha = prev;

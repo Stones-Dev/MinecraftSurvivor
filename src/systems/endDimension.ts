@@ -340,8 +340,7 @@ export function enterEnd(run: RunState, dragonPct = 100): void {
     end.dragon.x = PERCH_SPOT.x;
     end.dragon.y = PERCH_SPOT.y;
   }
-  run.announce('The End', '#df7cff', 4);
-  run.announce('Beware the void. Break the crystals.', '#c9c9d4', 5);
+  run.announce('The End: mind the void, break the crystals', '#df7cff', 5);
   run.emit('portal');
   run.fx.push(makeFx('ring', p.x, p.y, 0.7, { r: 44, color: '#df7cff' }));
 }
@@ -680,6 +679,9 @@ export function debugEnterEnd(run: RunState, pct = 100): void {
     // A hero with a sky-high level, so that the XP shower (capped at 5000 XP) opens no level-up screen
     // in a visual check or a screenshot.
     run.level = Math.max(run.level, 5000);
+    // It dies over the hero, so the rising and the beams are in view.
+    run.end.dragon.x = run.player.x;
+    run.end.dragon.y = run.player.y - 20;
     killEnemy(run, run.end.dragon, true);
   }
 }

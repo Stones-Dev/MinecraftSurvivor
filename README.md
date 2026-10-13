@@ -13,7 +13,7 @@ Status: version 1.1.0 (in the game's About screen). v1.1 is on a work branch; it
 - **A spatial world.** 10 overworld biomes laid out on a climate map (Plains around the spawn, then Forest, Dark Forest, Snowy Taiga, Desert, Badlands, Swamp, Jungle, Cherry Grove, Mushroom Fields) plus the Nether rift arena. 16x16 block textures, animated water and lava, voxel-style props, ambient particles, a music theme and a mob roster per biome.
 - **11 heroes with an active ability (Q).** Steve, Alex and Rana use the layered armor/sword sprites; Skeleton, Wandering Trader, Village Smith, Enderman, Witch, Illusioner, Piglin and Creeper play from mob/NPC sprite sets. Each has a passive and an ability whose rank grows with hero shards.
 - **30 pets and 22 allies** from the Spawner (gacha) with levels 1-5, per-level buffs and real in-run effects; permanent upgrades bought with Emeralds.
-- **Runs:** 14 weapons with evolutions, 24 passives, visible armor and sword tiers, items, interactables, events (raids, thunderstorms, Golden Hour, trader, lost villager), the Nether rift, three bosses (5:00 / 10:00 / 15:00) and Endless mode after the Warden.
+- **Runs:** 14 weapons with evolutions, 24 passives, visible armor and sword tiers, items, interactables, events (raids, thunderstorms, Golden Hour, trader, lost villager), the Nether rift, three bosses (5:00 / 10:00 / 15:00) and Endless mode after the Warden. The Warden also opens a permanent End portal: the optional final fight against the Ender Dragon (v1.4).
 - **Meta:** daily and weekly missions, achievements, a 7-day daily reward, run statistics and a detailed results screen, profile and ranking screens.
 - **Accounts (optional):** guest, local profile, or a Firebase account (Google or email) with cloud save and global leaderboards. Without Firebase everything works locally.
 - **Minimap (M)** with fog of war, biome colours and markers.
@@ -66,6 +66,7 @@ Survive 15 minutes and defeat the Warden to win, or keep going in Endless. Colle
 Most of these only work together with `debug`, and debug runs never touch the save or the leaderboard.
 
 - Run: `?run&debug&t=<sec>&seed=<n>&weapons=a,b,c&xp=<n>&hp=<n>&hero=alex&pet=cat&ally=wolf,horse&lv=3&kennel=<n>&biome=<biome id>&portal&trader&villager`
+- The End: `?run&debug&end[&dragon=<hp percent>][&t=960]` starts inside the End (the Ender Dragon at that percent of its HP: 100 = phase 1, 70 = phase 2, 30 = phase 3 perched, `0` = it is already dying: XP shower, Dragon Egg, exit portal); `?run&debug&endportal` opens the overworld End portal next to the hero. `t=960` gives the dragon its real minute-16 HP and damage (the default `t=0` makes it weak)
 - World structures: `?run&debug&struct=village|desert_temple[&structAt=door|in|mid][&seed=<n>]` starts next to the nearest one (in front of its door by default, just inside, or in its middle; `seed=11` is a desert village, `seed=1` a desert temple)
 - Stress test: `?crowd=<n>` (with `?run&debug`; half of the mobs come from the start biome's own roster)
 - Galleries: `?gallery=<page>` (prop pages per biome, then block-texture pages), `?mobs=<biome|new|all>[:page]` (every mob walking left and right)

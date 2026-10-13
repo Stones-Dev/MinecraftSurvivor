@@ -33,7 +33,26 @@ export type PropKind =
   | 'bookshelf'
   | 'bed'
   | 'lantern'
-  | 'hay_bale';
+  | 'hay_bale'
+  // Structure props, part 2 (jungle temple, trial chamber, pillager outpost, witch hut, legendary chest).
+  | 'chest_jungle'
+  | 'dispenser'
+  | 'lever'
+  | 'lever_on'
+  | 'color_marks'
+  | 'stone_door'
+  | 'vine_curtain'
+  | 'trial_spawner'
+  | 'trial_key'
+  | 'vault'
+  | 'copper_bars'
+  | 'outpost_banner'
+  | 'cage'
+  | 'cage_open'
+  | 'chest_legendary'
+  | 'cauldron'
+  | 'cauldron_empty'
+  | 'black_cat';
 
 /** Ore types stored in `variant % 8`. */
 export const ORE_TYPES = ['coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond'] as const;
@@ -103,6 +122,24 @@ const RADIUS: Record<PropKind, number> = {
   bed: 6,
   lantern: 0,
   hay_bale: 5,
+  chest_jungle: 5,
+  dispenser: 5,
+  lever: 4,
+  lever_on: 4,
+  color_marks: 0,
+  stone_door: 8,
+  vine_curtain: 0,
+  trial_spawner: 7,
+  trial_key: 0,
+  vault: 6,
+  copper_bars: 8,
+  outpost_banner: 3,
+  cage: 7,
+  cage_open: 0,
+  chest_legendary: 5,
+  cauldron: 6,
+  cauldron_empty: 6,
+  black_cat: 0,
 };
 
 /** Collision radius of a prop kind (0 = walk-through decoration). Structure stamps use it too. */

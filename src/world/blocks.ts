@@ -55,9 +55,17 @@ export const MAT = {
   ROOF_SHINGLES: 28,
   SNOWY_ROOF: 29,
   SMOOTH_SANDSTONE: 30,
+  // Structure materials (v1.4 part 2): jungle temple, trial chamber, outpost and witch hut.
+  MOSSY_BRICKS: 31,
+  VINE_COBBLE: 32,
+  TUFF: 33,
+  TUFF_BRICKS: 34,
+  OXIDIZED_COPPER: 35,
+  CUT_COPPER: 36,
+  DARK_OAK_PLANKS: 37,
 } as const;
 export type MaterialId = (typeof MAT)[keyof typeof MAT];
-export const MATERIAL_COUNT = 31;
+export const MATERIAL_COUNT = 38;
 
 /** Liquids: per-biome water (tinted) and lava, each 16 shore masks x LIQUID_FRAMES frames. */
 export const LIQUID = { WATER: 0, LAVA: 1 } as const;
@@ -490,6 +498,75 @@ function shingleTones(seed: number): Uint8Array {
       const xx = row & 1 ? (x + 4) & 15 : x;
       if ((y & 3) === 3 || (xx & 7) === 7) put(t, x, y, 4);
       else if ((y & 3) === 0) put(t, x, y, 5);
+    }
+  }
+  return t;
+}
+
+
+// Structure materials, part 2: palettes.
+const MOSSY_BRICK_PAL: readonly RGB[] = [
+  [104, 108, 100],
+  [116, 120, 110],
+  [128, 132, 120],
+  [140, 144, 130],
+  [64, 70, 60],
+  [156, 160, 146],
+  [66, 96, 44],
+  [92, 128, 58],
+];
+const TUFF_PAL: readonly RGB[] = [
+  [98, 102, 94],
+  [108, 109, 102],
+  [118, 119, 111],
+  [128, 129, 120],
+  [76, 80, 74],
+  [144, 145, 134],
+];
+const OXIDIZED_COPPER_PAL: readonly RGB[] = [
+  [64, 140, 118],
+  [76, 156, 130],
+  [88, 170, 142],
+  [102, 184, 154],
+  [44, 104, 90],
+  [140, 214, 180],
+];
+const CUT_COPPER_PAL: readonly RGB[] = [
+  [176, 98, 68],
+  [190, 108, 76],
+  [202, 120, 86],
+  [214, 134, 98],
+  [124, 64, 44],
+  [234, 168, 128],
+];
+const DARK_OAK_PAL: readonly RGB[] = [
+  [68, 48, 24],
+  [76, 54, 28],
+  [86, 62, 32],
+  [96, 70, 38],
+  [42, 28, 14],
+  [112, 84, 48],
+];
+
+/** Stone bricks 8x8 with the lower course shifted by half a brick: dark seam right and below, lit rim above and left. */
+function brickTones(seed: number, weights: readonly number[]): Uint8Array {
+  const t = rankTones(
+    field(
+      seed,
+      [
+        [4, 0.4],
+        [2, 0.25],
+      ],
+      0.4,
+    ),
+    weights,
+  );
+  for (let y = 0; y < TEX; y++) {
+    const half = y >> 3;
+    for (let x = 0; x < TEX; x++) {
+      const xx = half === 0 ? x : (x + 4) & 15;
+      if ((y & 7) === 7 || (xx & 7) === 7) put(t, x, y, 4);
+      else if ((y & 7) === 0 || (xx & 7) === 0) put(t, x, y, 5);
     }
   }
   return t;
@@ -1252,6 +1329,166 @@ const RECIPES: readonly Recipe[] = [
       speckles(t, stream(s), 3, 4, 1);
       return { tones: t, palette: SMOOTH_SANDSTONE_PAL.map(opaque) };
     },
+  },
+  // ---- Structure materials, part 2 (jungle temple, trial chamber, outpost, witch hut): ids follow MAT. ----
+  {
+    name: 'mossy bricks',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => {
+      const s = 32000 + v;
+      const t = brickTones(s, [0.18, 0.34, 0.32, 0.16]);
+      const moss = field(
+        s + 3,
+        [
+          [4, 0.6],
+          [2, 0.4],
+        ],
+        0.25,
+      );
+      const cut = [...moss].sort((a, b) => a - b)[Math.floor(TEX_AREA * 0.55)] ?? 1;
+      for (let k = 0; k < TEX_AREA; k++) {
+        if ((moss[k] ?? 0) > cut) t[k] = (t[k] ?? 0) === 4 ? 6 : 7;
+      }
+      return { tones: t, palette: MOSSY_BRICK_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'vine cobble',
+    variants: 8,
+    orient: 8,
+    framed: false,
+    build: (v) => {
+      const s = 33000 + v;
+      const t = cobbleTones(s);
+      const rnd = stream(s);
+      // Moss patches, then hanging vine strands (dark green with a lit leaf here and there).
+      const moss = field(
+        s + 3,
+        [
+          [4, 0.6],
+          [2, 0.4],
+        ],
+        0.25,
+      );
+      const cut = [...moss].sort((a, b) => a - b)[Math.floor(TEX_AREA * 0.5)] ?? 1;
+      for (let k = 0; k < TEX_AREA; k++) {
+        if ((moss[k] ?? 0) > cut) t[k] = (t[k] ?? 0) <= 1 ? 6 : 7;
+      }
+      for (let n = 0; n < 4; n++) {
+        const x = Math.floor(rnd() * TEX);
+        const y0 = Math.floor(rnd() * 6);
+        const len = 5 + Math.floor(rnd() * 8);
+        for (let j = 0; j < len; j++) put(t, x + (j % 5 === 3 ? 1 : 0), y0 + j, 8);
+        put(t, x + 1, y0 + 2, 9);
+        put(t, x - 1, y0 + len - 3, 9);
+      }
+      const pal: RGB[] = [...COBBLE_PAL, [62, 84, 40], [88, 114, 54], [36, 84, 34], [76, 150, 52]];
+      return { tones: t, palette: pal.map(opaque) };
+    },
+  },
+  {
+    name: 'tuff',
+    variants: 8,
+    orient: 8,
+    framed: false,
+    build: (v) => {
+      const s = 34000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [8, 0.3],
+            [4, 0.35],
+            [2, 0.25],
+          ],
+          0.5,
+        ),
+        [0.14, 0.3, 0.3, 0.18, 0.08],
+      );
+      speckles(t, stream(s), 5, 4, 2);
+      speckles(t, stream(s + 1), 3, 5, 1);
+      return { tones: t, palette: TUFF_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'tuff bricks',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => ({
+      tones: brickTones(35000 + v, [0.16, 0.34, 0.32, 0.18]),
+      palette: TUFF_PAL.map(opaque),
+    }),
+  },
+  {
+    name: 'oxidized copper',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => {
+      const s = 36000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.4],
+            [2, 0.3],
+          ],
+          0.5,
+        ),
+        [0.2, 0.32, 0.3, 0.18],
+      );
+      // Block border, then a lighter inset diamond-ish pattern like the cut copper tiles.
+      for (let i = 0; i < TEX; i++) {
+        put(t, i, 0, 5);
+        put(t, 0, i, 5);
+        put(t, i, 15, 4);
+        put(t, 15, i, 4);
+      }
+      for (let k = 3; k < 13; k++) {
+        if (k === 3 || k === 12) continue;
+        put(t, k, 3, 4);
+        put(t, k, 12, 5);
+      }
+      speckles(t, stream(s), 3, 5, 1);
+      return { tones: t, palette: OXIDIZED_COPPER_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'cut copper',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => {
+      const s = 37000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.35],
+            [2, 0.3],
+          ],
+          0.5,
+        ),
+        [0.2, 0.32, 0.3, 0.18],
+      );
+      for (let y = 0; y < TEX; y++) {
+        for (let x = 0; x < TEX; x++) {
+          if ((y & 7) === 7 || (x & 7) === 7) put(t, x, y, 4);
+          else if ((y & 7) === 0 || (x & 7) === 0) put(t, x, y, 5);
+        }
+      }
+      return { tones: t, palette: CUT_COPPER_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'dark oak planks',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => ({ tones: boardTones(38000 + v), palette: DARK_OAK_PAL.map(opaque) }),
   },
 ];
 

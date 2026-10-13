@@ -25,7 +25,7 @@ import { allyById, heroById } from './data/companions';
 import { kitOf, type HeroKit } from './data/heroKits';
 import { type Decoy, updateDecoys } from './abilities/decoys';
 import { RiftState, updateRift } from './systems/rift';
-import { EndState, updateEnd } from './systems/endDimension';
+import { END_ARENA_TILES, EndState, updateEnd } from './systems/endDimension';
 import { updateInteract, type PropState } from './systems/interact';
 import { updateItems } from './systems/items';
 import { xpToNext } from './systems/economy';
@@ -292,7 +292,7 @@ export class RunState {
     };
     this.overworld = new World(seed);
     this.arenaWorld = new World(seed ^ 0x51ed27, { r: 22 });
-    this.endWorld = new World(seed ^ 0x3d1e6e, { r: 44, kind: 'end' });
+    this.endWorld = new World(seed ^ 0x3d1e6e, { r: END_ARENA_TILES, kind: 'end' });
     this.world = this.overworld;
     this.time = startTime;
     this.baseMaxHp = heroBaseHp(loadout.hero);

@@ -161,8 +161,7 @@ export function steer(run: RunState, input: ScriptInput): void {
     const crystal = end.crystals
       .filter((c) => !c.done && !c.e.dying)
       .sort(
-        (a, b) =>
-          Math.hypot(a.e.x - p.x, a.e.y - p.y) - Math.hypot(b.e.x - p.x, b.e.y - p.y),
+        (a, b) => Math.hypot(a.e.x - p.x, a.e.y - p.y) - Math.hypot(b.e.x - p.x, b.e.y - p.y),
       )[0];
     let tx = 0;
     let ty = 0;
@@ -210,7 +209,11 @@ export interface FightResult {
 }
 
 /** Fight until the dragon dies, the hero dies or `cap` seconds pass. */
-export function fight(run: RunState, cap = 600, onStep?: (run: RunState, t: number) => void): FightResult {
+export function fight(
+  run: RunState,
+  cap = 600,
+  onStep?: (run: RunState, t: number) => void,
+): FightResult {
   const input = new ScriptInput();
   const phaseAt: Record<number, number> = { 1: 0 };
   let minHp = 1;
