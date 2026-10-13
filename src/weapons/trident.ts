@@ -48,7 +48,7 @@ export const trident: WeaponDef = {
     const target = nearestEnemy(run, RANGE);
     if (!target || Math.hypot(target.x - p.x, target.y - p.y) > RANGE) return false;
     faceToward(run, target.x);
-    run.emit('swing');
+    run.emit('bow'); // a thrown spear sounds like a launch, not a blade swing
     const evolved = w.evolved;
     const reach = areaOf(run, s);
     const speed = SPEED * run.mods.projSpeed;

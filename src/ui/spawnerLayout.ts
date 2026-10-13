@@ -15,7 +15,12 @@ export interface SpawnerLayout {
   top: number;
   /** Last y modal content may use (just above the buttons). */
   bottom: number;
-  buttons: { y: number; h: number; w: number; gap: number; x0: number };
+  buttons: { y: number; h: number; w: number; gap: number; x0: number; count: number };
+  /**
+   * The "Buy egg" button. Roomy layouts give it its own row above the main buttons; compact ones (< 150 px)
+   * make it the fifth button of the main row (`inRow`), where only a short label fits.
+   */
+  buy: { rect: Rect; inRow: boolean };
   /** Baseline of the hint line (null when there is no room) and of an error message. */
   hintY: number | null;
   msgY: number;
@@ -45,16 +50,24 @@ export function spawnerLayout(width: number, height: number): SpawnerLayout {
   const rowH = 16;
   const top = rowY + rowH + 2;
 
-  // Buttons: one row along the bottom edge.
+  // Buttons: one row along the bottom edge (five in compact layouts, where "Buy" joins the row); roomy
+  // layouts put the wide "Buy egg (400)" button on a row of its own just above, with the hint / message line
+  // above that.
   const bh = compact ? 14 : 16;
   const by = height - (compact ? 19 : 22);
   const gap = compact ? 3 : 6;
-  const bw = Math.max(20, Math.min(78, Math.floor((width - 12 - 3 * gap) / 4)));
-  const bx0 = Math.floor((width - (4 * bw + 3 * gap)) / 2);
-  const bottom = by - 3;
-  const cageBottom = by - 14; // leaves the hint / message line between the cage and the buttons
-  const hintY = compact ? null : by - 5;
-  const msgY = by - 4;
+  const count = compact ? 5 : 4;
+  const bw = Math.max(20, Math.min(78, Math.floor((width - 12 - (count - 1) * gap) / count)));
+  const bx0 = Math.floor((width - (count * bw + (count - 1) * gap)) / 2);
+  const buyW = Math.min(112, width - 12);
+  const buy = compact
+    ? { rect: { x: bx0 + 4 * (bw + gap), y: by, w: bw, h: bh }, inRow: true }
+    : { rect: { x: Math.floor((width - buyW) / 2), y: by - 17, w: buyW, h: 14 }, inRow: false };
+  const above = compact ? by : buy.rect.y; // first y of the stack under the modal content
+  const bottom = above - 3;
+  const cageBottom = above - 14; // leaves the hint / message line between the cage and the buttons
+  const hintY = compact ? null : above - 5;
+  const msgY = compact ? by - 4 : above - 5;
   const cx = Math.floor(width / 2);
 
   // Cage: as tall as the room allows (flames on top, 10 px of frame and base), centred in the room.
@@ -115,9 +128,9 @@ export function spawnerLayout(width: number, height: number): SpawnerLayout {
 
   // Tray.
   const cw = Math.min(36, Math.floor((width - 8) / 5));
-  const ch = compact ? 22 : 46;
-  const trayH = 2 * (ch + 2);
   const trayRoom = bottom - top - 12; // the "Click to continue" line sits under the cells
+  const ch = compact ? 22 : clamp(Math.floor(trayRoom / 2) - 2, 42, 46); // 42 is the least a name row needs
+  const trayH = 2 * (ch + 2);
   const ty = top + Math.max(0, Math.floor((trayRoom - trayH) / 2));
   const tray = {
     x: Math.floor((width - 5 * cw) / 2),
@@ -135,7 +148,8 @@ export function spawnerLayout(width: number, height: number): SpawnerLayout {
     rowH,
     top,
     bottom,
-    buttons: { y: by, h: bh, w: bw, gap, x0: bx0 },
+    buttons: { y: by, h: bh, w: bw, gap, x0: bx0, count },
+    buy,
     hintY,
     msgY,
     cage,

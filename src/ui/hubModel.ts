@@ -5,7 +5,9 @@
  */
 import type { SaveData } from '../core/save';
 import { Rng } from '../core/rng';
+import { COMPANION_BY_ID, type CompanionRarity } from '../data/companions';
 import { baseMods } from '../data/upgrades';
+import type { PullResult } from '../systems/gacha';
 import { applyLoadoutMods, heroBaseHp, type RunLoadout } from '../systems/meta';
 import { OVERWORLD_BIOMES, type BiomeId } from '../world/biomes';
 
@@ -825,4 +827,46 @@ export function upgradeStep(
   if (dir === 'left') return { ...cur, hero: -1 };
   if (dir === 'right') return { ...cur, hero: 1 };
   return { ...cur, hero: 0 };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Spawner follow-ups: the "unopened eggs" hub badge and the auto-equip toasts.
+
+/** True while the player still holds an unopened Spawn Egg or Rare Spawn Egg (drives the SPAWNER tile badge). */
+export function hasUnopenedEggs(
+  c: Pick<SaveData['currencies'], 'spawnEggs' | 'rareSpawnEggs'>,
+): boolean {
+  return c.spawnEggs + c.rareSpawnEggs > 0;
+}
+
+/** Most auto-equip toasts one pull batch may raise (a x10 can equip several; the queue should not flood). */
+export const MAX_EQUIP_TOASTS = 2;
+
+export interface EquipToast {
+  text: string;
+  rarity: CompanionRarity;
+}
+
+/**
+ * One toast per companion the pulls auto-equipped, in pull order, at most `MAX_EQUIP_TOASTS`:
+ * "Iron Golem joined your team", or "... , replacing Wolf" when it took the starter Wolf's slot.
+ */
+export function equipToasts(
+  results: readonly Pick<PullResult, 'id' | 'equipped' | 'replaced'>[],
+  nameOf: (id: string) => string | undefined = (id) => COMPANION_BY_ID.get(id)?.name,
+): EquipToast[] {
+  const out: EquipToast[] = [];
+  for (const r of results) {
+    if (out.length >= MAX_EQUIP_TOASTS) break;
+    if (!r.equipped) continue;
+    const name = nameOf(r.id);
+    if (!name) continue;
+    const old = r.replaced ? nameOf(r.replaced) : undefined;
+    const rarity = COMPANION_BY_ID.get(r.id)?.rarity ?? 'common';
+    out.push({
+      text: old ? `${name} joined your team, replacing ${old}` : `${name} joined your team`,
+      rarity,
+    });
+  }
+  return out;
 }

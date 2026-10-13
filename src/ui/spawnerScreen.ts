@@ -13,8 +13,14 @@ import {
   RARITY_ORDER,
   type CompanionRarity,
 } from '../data/companions';
-import { OVERWORLD_BANNER, type PullResult, spendAndPull } from '../systems/gacha';
-import { keyToNav, type NavEvent } from './hubModel';
+import {
+  EGG_PRICE,
+  OVERWORLD_BANNER,
+  type PullResult,
+  buyEggs,
+  spendAndPull,
+} from '../systems/gacha';
+import { equipToasts, keyToNav, type NavEvent } from './hubModel';
 import type { IconName } from './icons';
 import {
   UI,
@@ -30,6 +36,7 @@ import {
 } from './panel';
 import type { Screen } from './router';
 import { spawnerLayout } from './spawnerLayout';
+import { pushToast } from './toast';
 import {
   Buttons,
   PadNav,
@@ -229,6 +236,9 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
   let tenMode = false;
   let showRates = false;
   let message = '';
+  let messageOk = false;
+  /** Auto-equip toasts of the current pull batch; they wait for the reveal so they do not spoil the spin. */
+  let pendingToasts: ReturnType<typeof equipToasts> = [];
   let ratesRect = { x: 0, y: 0, w: 0, h: 0 };
   let pills: { r: Rect; tip: string }[] = [];
   let mx = -1;
@@ -236,15 +246,38 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
 
   const save = () => app.data();
 
+  const flushToasts = (): void => {
+    for (const t of pendingToasts) {
+      pushToast({ text: t.text, icon: 'egg', color: rarityColor(t.rarity) });
+    }
+    pendingToasts = [];
+  };
+
+  const buyEgg = (): void => {
+    if (phase === 'spin' || phase === 'reveal') return;
+    const data = save();
+    if (buyEggs(data, 1) < 1) {
+      message = `You need ${EGG_PRICE} Emeralds.`;
+      messageOk = false;
+      return;
+    }
+    app.store.save(data);
+    app.audio.play('emerald');
+    message = '+1 Spawn Egg';
+    messageOk = true;
+  };
+
   const startPull = (count: 1 | 10): void => {
     if (phase === 'spin' || phase === 'reveal') return;
     const data = save();
     const results = spendAndPull(data, OVERWORLD_BANNER, count);
     if (!results) {
       message = count === 1 ? 'You need a Spawn Egg.' : 'You need a Rare Spawn Egg.';
+      messageOk = false;
       return;
     }
     message = '';
+    pendingToasts = equipToasts(results);
     app.store.save(data);
     app.audio.play('click');
     queue = results.slice();
@@ -257,6 +290,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
     cur = queue.shift() ?? null;
     if (!cur) {
       phase = tenMode ? 'tray' : 'idle';
+      flushToasts();
       return;
     }
     phase = 'spin';
@@ -275,6 +309,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
     } else {
       phase = 'reveal';
       t = 0;
+      flushToasts();
     }
   };
 
@@ -286,6 +321,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
           cur = queue.shift() ?? null;
         }
         phase = 'tray';
+        flushToasts();
       } else {
         finishSpin();
       }
@@ -530,6 +566,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
       const canOne = data.currencies.spawnEggs >= 1;
       const canTen = data.currencies.rareSpawnEggs >= 1;
       const slot = (i: number): Rect => ({ x: B.x0 + i * (B.w + B.gap), y: B.y, w: B.w, h: B.h });
+      const canBuy = data.currencies.emeralds >= EGG_PRICE;
       buttons.add(slot(0), short ? 'x1' : 'Pull x1', () => startPull(1), busy(), {
         key: 'pull1',
         icon: 'egg',
@@ -552,8 +589,29 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
         { key: 'rates', icon: short ? undefined : 'info', tooltip: 'Drop rates and pity.' },
       );
       buttons.add(slot(3), 'Back', onBack, false, { key: 'back' });
+      buttons.add(
+        L.buy.rect,
+        L.buy.inRow ? 'Buy' : `Buy egg (${EGG_PRICE})`,
+        buyEgg,
+        busy() || !canBuy,
+        {
+          key: 'buy',
+          icon: 'emerald',
+          tooltip: canBuy
+            ? `Buy one Spawn Egg for ${EGG_PRICE} Emeralds.`
+            : `A Spawn Egg costs ${EGG_PRICE} Emeralds (you have ${data.currencies.emeralds}).`,
+        },
+      );
       buttons.draw(view);
-      if (message) drawText(ctx, fitText(message, width - 12), cx, L.msgY, '#ff9a9a', 'center');
+      if (message)
+        drawText(
+          ctx,
+          fitText(message, width - 12),
+          cx,
+          L.msgY,
+          messageOk ? UI.green : '#ff9a9a',
+          'center',
+        );
       else if (phase === 'idle' && !showRates && L.hintY !== null) {
         drawText(
           ctx,

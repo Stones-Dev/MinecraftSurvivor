@@ -218,13 +218,31 @@ describe('spawner layout', () => {
       expect(L.compact).toBe(h < 150);
       // Buttons: four, on screen, below everything else.
       expect(B.x0).toBeGreaterThanOrEqual(0);
-      expect(B.x0 + 4 * B.w + 3 * B.gap).toBeLessThanOrEqual(w);
+      expect(B.count).toBe(L.compact ? 5 : 4);
+      expect(B.x0).toBeGreaterThanOrEqual(0);
+      expect(B.x0 + B.count * B.w + (B.count - 1) * B.gap).toBeLessThanOrEqual(w);
       expect(B.y + B.h).toBeLessThanOrEqual(h);
-      expect(B.w).toBeGreaterThanOrEqual(40);
+      expect(B.w).toBeGreaterThanOrEqual(L.compact ? 34 : 40);
+      // The Buy egg button: on screen, and apart from the four main buttons and the message line.
+      const buy = L.buy.rect;
+      expect(buy.x).toBeGreaterThanOrEqual(0);
+      expect(buy.x + buy.w).toBeLessThanOrEqual(w);
+      expect(buy.y + buy.h).toBeLessThanOrEqual(h);
+      expect(buy.w).toBeGreaterThanOrEqual(34);
+      expect(L.buy.inRow).toBe(L.compact);
+      for (let i = 0; i < 4; i++) {
+        const slot = { x: B.x0 + i * (B.w + B.gap), y: B.y, w: B.w, h: B.h };
+        expect(overlap(buy, slot)).toBe(false);
+      }
+      if (!L.buy.inRow) {
+        expect(buy.y).toBeGreaterThanOrEqual(L.cage.y + L.cage.h + 8);
+        expect(L.msgY).toBeLessThan(buy.y);
+        expect(buy.y + buy.h).toBeLessThanOrEqual(B.y);
+      }
       // The cage and its flames sit between the header row and the message / hint line.
       const c = L.cage;
       expect(c.y - c.flame).toBeGreaterThanOrEqual(hdrBottom);
-      expect(c.y + c.h + 8).toBeLessThanOrEqual(B.y - 12);
+      expect(c.y + c.h + 8).toBeLessThanOrEqual((L.buy.inRow ? B.y : L.buy.rect.y) - 12);
       expect(c.h).toBeGreaterThanOrEqual(24);
       // Torches stay on screen.
       expect(c.cx - (c.w / 2 + 28) - 12).toBeGreaterThanOrEqual(0);
@@ -245,7 +263,7 @@ describe('spawner layout', () => {
       expect(lastLine).toBeLessThanOrEqual(R.box.y + R.box.h - 2);
       // Rates panel.
       const P = L.rates;
-      expect(P.y + P.h).toBeLessThanOrEqual(B.y);
+      expect(P.y + P.h).toBeLessThanOrEqual(L.buy.inRow ? B.y : L.buy.rect.y);
       expect(P.x).toBeGreaterThanOrEqual(0);
       expect(P.x + P.w).toBeLessThanOrEqual(w);
       expect(P.h).toBeGreaterThanOrEqual(L.compact ? 70 : 90);
@@ -256,9 +274,11 @@ describe('spawner layout', () => {
       expect(T.x).toBeGreaterThanOrEqual(0);
       expect(T.x + 5 * T.cw).toBeLessThanOrEqual(w);
       expect(trayBottom).toBeLessThanOrEqual(T.textY - 6);
-      expect(T.textY).toBeLessThanOrEqual(B.y - 2);
+      expect(T.textY).toBeLessThanOrEqual((L.buy.inRow ? B.y : L.buy.rect.y) - 2);
       // The reveal card never covers the buttons.
-      const btnRect = { x: B.x0, y: B.y, w: 4 * B.w + 3 * B.gap, h: B.h };
+      const btnRect = { x: B.x0, y: B.y, w: B.count * B.w + (B.count - 1) * B.gap, h: B.h };
+      expect(overlap(R.box, buy)).toBe(false);
+      expect(overlap(P, buy)).toBe(false);
       expect(overlap(R.box, btnRect)).toBe(false);
       expect(overlap({ x: T.x, y: T.y, w: 5 * T.cw, h: trayBottom - T.y }, btnRect)).toBe(false);
     });

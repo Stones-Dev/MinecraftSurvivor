@@ -13,6 +13,7 @@ import { achievementsScreen } from './achievementsScreen';
 import { collectionScreen } from './collectionScreen';
 import { drawAvatar } from './avatar';
 import {
+  hasUnopenedEggs,
   hubLayout,
   keyToNav,
   levelInfo,
@@ -538,8 +539,14 @@ export function hubScreen(app: App): Screen {
           tooltip:
             tile.label === 'MISSIONS' && claimable > 0
               ? `${claimable} mission${claimable > 1 ? 's' : ''} ready.`
-              : tile.tip,
-          badge: tile.label === 'MISSIONS' && claimable > 0 ? '!' : null,
+              : tile.label === 'SPAWNER' && hasUnopenedEggs(data.currencies)
+                ? 'You have unopened eggs. Spend them to find new companions.'
+                : tile.tip,
+          badge:
+            (tile.label === 'MISSIONS' && claimable > 0) ||
+            (tile.label === 'SPAWNER' && hasUnopenedEggs(data.currencies))
+              ? '!'
+              : null,
         });
       });
 

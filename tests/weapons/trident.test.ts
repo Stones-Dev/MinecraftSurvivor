@@ -25,6 +25,23 @@ class StillInput implements InputSource {
 }
 
 describe('trident', () => {
+  it('sounds like a throw (bow recipe), not a blade swing', () => {
+    const run = new RunState(5);
+    run.weapons = [newWeapon('trident')];
+    const zombie = makeEnemy(run, 'zombie', run.player.x + 60, run.player.y, false);
+    if (!zombie) throw new Error('no zombie');
+    run.enemies.push(zombie);
+    const heard = new Set<string>();
+    for (let i = 0; i < 120; i++) {
+      run.update(1 / 60, new StillInput());
+      for (const ev of run.events) heard.add(ev);
+      run.events.length = 0;
+      if (heard.has('bow')) break;
+    }
+    expect(heard.has('bow')).toBe(true);
+    expect(heard.has('swing')).toBe(false);
+  });
+
   it('throws a boomerang that hits the target and returns to the hero', () => {
     const run = new RunState(4);
     run.weapons = [newWeapon('trident')];
