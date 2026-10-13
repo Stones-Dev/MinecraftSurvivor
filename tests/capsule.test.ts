@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { bodyTop, segSegDist2, sweepHitCapsule } from '../src/core/geom';
+import {
+  aimPointY,
+  BODY_CAP,
+  bodyTop,
+  drawnHeight,
+  enemyBodyTop,
+  HERO_BODY_LOW,
+  HERO_BODY_TOP,
+  segSegDist2,
+  sweepHitCapsule,
+} from '../src/core/geom';
+import { ENEMIES, type EnemyDef } from '../src/data/enemies';
+
+function getEnemyDef(id: string): EnemyDef {
+  const def = ENEMIES[id];
+  if (!def) throw new Error(`no enemy ${id}`);
+  return def;
+}
 import { Projectile } from '../src/entities/projectile';
 import { RunState } from '../src/game';
 import { updateProjectiles } from '../src/systems/combat';
@@ -13,11 +30,51 @@ describe('capsule maths', () => {
     expect(segSegDist2(0, 0, 0, 0, 3, 4, 3, 4)).toBe(25); // two points
   });
 
-  it('caps the body height at 32 px and keeps at least the ankles', () => {
+  it('caps the body height at 56 px and keeps at least the ankles', () => {
+    expect(BODY_CAP).toBe(56);
     expect(bodyTop(40)).toBe(32);
     expect(bodyTop(35)).toBe(28);
-    expect(bodyTop(48)).toBe(32);
+    expect(bodyTop(48)).toBeCloseTo(38.4);
+    expect(bodyTop(100)).toBe(56);
     expect(bodyTop(2)).toBe(4);
+  });
+
+  it('BUG-15: the capsule covers about 80% of the DRAWN height, scale included', () => {
+    const captain = getEnemyDef('raid_captain');
+    const warden = getEnemyDef('warden');
+    for (const def of [captain, warden]) {
+      const drawn = drawnHeight(def);
+      expect(drawn).toBe((def.height ?? 28) * (def.scale ?? 1));
+      expect(drawn).toBeGreaterThan(45);
+      expect(enemyBodyTop(def)).toBeCloseTo(Math.min(BODY_CAP, drawn * 0.8));
+      expect(enemyBodyTop(def)).toBeGreaterThan(36);
+    }
+    // An unscaled mob is unchanged.
+    const zombie = getEnemyDef('zombie');
+    expect(enemyBodyTop(zombie)).toBe(bodyTop(zombie.height ?? 28));
+  });
+
+  it('aimPointY is the middle of the hit capsule, above the feet and inside the body', () => {
+    for (const id of ['zombie', 'skeleton', 'raid_captain', 'warden', 'silverfish']) {
+      const def = getEnemyDef(id);
+      const e = { y: 200, def };
+      const y = aimPointY(e);
+      expect(y).toBeCloseTo(200 - (4 + enemyBodyTop(def)) / 2);
+      expect(y).toBeLessThanOrEqual(200 - 4);
+      expect(y).toBeGreaterThanOrEqual(200 - enemyBodyTop(def));
+    }
+    // A zombie is aimed at the waist (about 12-14 px up), not the ankles.
+    expect(200 - aimPointY({ y: 200, def: getEnemyDef('zombie') })).toBeGreaterThan(10);
+  });
+
+  it('the hero hurtbox runs from the ankles to the shoulders', () => {
+    expect(HERO_BODY_LOW).toBe(4);
+    expect(HERO_BODY_TOP).toBe(22);
+    const hit = (y: number): boolean =>
+      sweepHitCapsule(-40, y, 40, y, 2, 0, -HERO_BODY_LOW, -HERO_BODY_TOP, 5);
+    expect(hit(-6)).toBe(true);
+    expect(hit(-20)).toBe(true);
+    expect(hit(-35)).toBe(false);
   });
 
   it('hits a shot at the head and misses one above the head or below the feet', () => {
@@ -88,17 +145,36 @@ describe('projectile vs body hit tests', () => {
     expect(p.pierce).toBe(2);
   });
 
-  it('keeps the hero hit circle at the ankles (hostile shots through the torso are not new hits)', () => {
-    const run = new RunState(4);
-    const pl = run.player;
-    const hp = pl.hp;
-    // A hostile arrow flying across the hero's torso passes over the old ankle circle.
-    run.projectiles.push(new Projectile(pl.x - 40, pl.y - 24, 240, 0, 2, 5, 0, false, 2));
+  it('BUG-15: an arrow at the shoulders of a Raid Captain hits it, one above the head misses', () => {
+    const run = new RunState(5);
+    const boss = makeEnemy(run, 'raid_captain', 100, 100, false);
+    if (!boss) throw new Error('no captain');
+    run.enemies.push(boss);
+    boss.x = 100;
+    boss.y = 100;
+    const hp = boss.hp;
+    run.projectiles.push(arrowAt(40, 100 - 38, 240)); // 38 px up: the old 32 px cap missed it
     for (let i = 0; i < 40; i++) step(run);
-    expect(pl.hp).toBe(hp);
-    // One at the ankles still hurts.
-    run.projectiles.push(new Projectile(pl.x - 40, pl.y - 6, 240, 0, 2, 5, 0, false, 2));
+    expect(boss.hp).toBeLessThan(hp);
+    const hp2 = boss.hp;
+    run.projectiles.push(arrowAt(40, 100 - 75, 240));
     for (let i = 0; i < 40; i++) step(run);
-    expect(pl.hp).toBeLessThan(hp);
+    expect(boss.hp).toBe(hp2);
+  });
+
+  it('the hero is hit anywhere from the ankles to the shoulders, not above the head', () => {
+    const shotAt = (dy: number): number => {
+      const run = new RunState(4);
+      const pl = run.player;
+      const hp = pl.hp;
+      run.projectiles.push(new Projectile(pl.x - 40, pl.y + dy, 240, 0, 2, 5, 0, false, 2));
+      for (let i = 0; i < 40; i++) step(run);
+      return hp - pl.hp;
+    };
+    expect(shotAt(-6)).toBeGreaterThan(0); // ankles
+    expect(shotAt(-18)).toBeGreaterThan(0); // torso, a miss before the capsule
+    expect(shotAt(-22)).toBeGreaterThan(0); // shoulders
+    expect(shotAt(-40)).toBe(0); // well above the head
+    expect(shotAt(20)).toBe(0); // well below the feet
   });
 });

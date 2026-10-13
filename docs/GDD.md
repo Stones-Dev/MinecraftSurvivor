@@ -20,7 +20,7 @@ The simulation runs at a fixed 60 Hz (`core/loop`, at most 5 catch-up steps per 
 
 - **Acceleration:** the hero accelerates at 720 px/s² and brakes at 1100 px/s² (full speed in about 0.1 s, a stop in about 0.07 s). On ice the rates drop to 170 / 95 (slippery). Water slows to ×0.6, a slow status to ×0.6.
 - **Facing:** the body faces where the hero moves (kept when idle or moving only vertically). Auto-aim records `aimFacing`/`aimT` and only turns the body when the hero is standing still; swing sprites use `attackFacing` (fresh aim, otherwise body). Sharp turns (input > ~80 degrees off the velocity) use `TURN_BRAKE` (1800 px/s^2) and accelerations scale with the speed multiplier, so a 180 degree reversal takes about 0.08 s at any speed. The velocity into a solid prop is removed so the hero slides along it.
-- **Walk cycle:** the sheets have no hero walk frames, so the cycle is procedural and distance-driven (one half-stride per 7 px): legs shuffle by -1/0/+1 px, the body lifts on the passing step, with dust and a footstep sound on every footfall.
+- **Walk cycle:** Steve, Alex and Rana use the sheets' own four-direction walk cycle (front, left, right, back; four frames each, stand-step-stand-step, advancing one frame per 7 px walked) in their armour tier, with the equipped sword drawn over the hand (the sheet walk frames are unarmed); the facing row follows the movement with hysteresis so diagonals do not flicker, and the left/right rows are real sprites, never mirrors. A locomotion state machine picks the pose: sword swing (absolute priority) > run > sword-guard idle, all placed on the same feet and body centre so changing pose or turning never hops. The sprite heroes keep their own walk frames. Dust and a footstep sound play on every footfall.
 - **Camera:** integer-snapped around the rounded hero, with a look-ahead of 0.16 s of travel (at most 14 px, easing at 5/s) and a fixed 8 px upward offset. The look-ahead is a setting (`cameraLead`, default on). Teleports reset it.
 - **Collision:** circle against solid props and tile flags, with push-out; walkers path around obstacles (§8).
 
@@ -30,7 +30,7 @@ All text is drawn from a 1-bit glyph atlas of the Tiny5 font (OFL) rasterized on
 
 ## 4. Input (v1.1)
 
-`MergedInput` combines three sources behind one `InputSource`: keyboard (remappable), gamepad (standard mapping; left stick or d-pad, A item, X or RB ability, Start pause, B back) and touch (floating joystick on the left 60% of the screen, ability / item / pause buttons; shown automatically on coarse pointers or after the first touch, or forced on/off in Settings). Every canvas screen can be driven without a mouse: arrows or d-pad move a focus ring, Enter or A presses, Q / E or LB / RB switch tabs, Esc or B goes back. A button already held when a screen opens is ignored, so one press never acts on two screens.
+`MergedInput` combines three sources behind one `InputSource`: keyboard (remappable), gamepad (standard mapping; left stick or d-pad, A item, X or RB ability, Start pause, B back; the item, ability and pause buttons are rebindable in Settings > Controls and stored as `pad.<action>` lists in `settings.controls`, so the save version is unchanged) and touch (floating joystick on the left 60% of the screen, ability / item / pause buttons; shown automatically on coarse pointers or after the first touch, or forced on/off in Settings). Every canvas screen can be driven without a mouse: arrows or d-pad move a focus ring, Enter or A presses, Q / E or LB / RB switch tabs, Esc or B goes back. On the Collection the cursor has three zones (card grid, detail tabs, footer buttons: Down past the last row reaches Prev / Next / Equip / Back, Right past the last column reaches the Ability / Passive / Lore tabs); on Upgrades Up from the top row reaches the hero strip, Left / Right there (and at the edge of the upgrade grid) switch hero, Q / E and LB / RB always do. A button already held when a screen opens is ignored, so one press never acts on two screens.
 
 ---
 
@@ -40,7 +40,7 @@ All text is drawn from a 1-bit glyph atlas of the Tiny5 font (OFL) rasterized on
 Title ("Click to start" — needed for audio)
   → Hub (main menu): background = a live slice of the world at dusk with the equipped hero idling;
         player level and rank (Wood → Netherite, derived from lifetime stats), a badge on MISSIONS when something can be claimed
-        PLAY → Run setup: pick Hero · Pet (1 slot) · Allies (1 slot; 2nd slot via upgrade) · start biome (Random by default) · [Start]. A new save already owns and equips the **Wolf** ally, so a companion fights next to the hero from the first minute
+        PLAY → Run setup: pick Hero · Pet (1 slot) · Allies (1 slot; 2nd slot via upgrade) · start biome (Random by default) · [Start]. A new save already owns and equips the **Wolf** ally, so a companion fights next to the hero from the first minute (a newly pulled ally of a higher rarity takes the Wolf's slot while the Wolf is still the untouched starter, see §12)
         COLLECTION → Heroes / Pets / Allies tabs, levels, buffs, hero ability and rank, lore line, "equip"
         SPAWNER (gacha) → pull ×1 / ×10, pity meter, rates, results
         UPGRADES → per-hero permanent upgrades (Emeralds) + account-wide ones
@@ -48,12 +48,12 @@ Title ("Click to start" — needed for audio)
         ACHIEVEMENTS → 55 achievements in 7 categories
         PROFILE (from the player card) → avatar, name, account badge, sync status, lifetime stats, best heroes; sign in / create account
         RANKING → Today / This week / All time leaderboards with a hero filter (online), or your own bests (offline)
-        SETTINGS → tabs Audio · Graphics (quality auto/high/med/low, damage numbers, screen shake, camera look-ahead, FPS counter) · Controls (remap) · Access (§18) · Account · Data (export/import save JSON with a confirming click, reset)
+        SETTINGS → tabs Audio · Graphics (quality auto/high/med/low, damage numbers, screen shake, camera look-ahead, FPS counter) · Controls (remap keys, and the item / ability / pause buttons of a gamepad; a prompt gives up after 8 s and B or Esc cancels it) · Access (§18) · Account · Data (export/import save JSON with a confirming click, reset)
         ABOUT → version, credits, legal
-  → Run → (pause) → Results (time, kills, level, bosses, Emeralds earned, Spawn Eggs found, new records, detailed breakdown and any missions or achievements completed) → Hub
+  → Run → (pause: resume, music and SFX volume bars, Settings, quit) → Results (time, kills, level, bosses, Emeralds earned, Spawn Eggs found, new records, detailed breakdown and any missions or achievements completed) → Hub
 ```
 
-Controls: `WASD`/arrows move · `Q`/`Left Shift` hero ability · `Space` use active item (if it has an active) · `M` minimap · `Esc`/`P` pause · `F3` debug overlay · all weapons auto-fire · mouse for menus. Movement, pause, item and ability keys are remappable in Settings. Gamepad and touch: §4.
+Controls: `WASD`/arrows move · `Q`/`Left Shift` hero ability · `Space` use active item (if it has an active) · `M` minimap · `Esc`/`P` pause · `F3` debug overlay · all weapons auto-fire · mouse for menus. Movement, pause, item and ability keys are remappable in Settings. The HUD prints the real binding above the ability and item slots: the bound key, the bound gamepad button after the last input came from a pad (A / X on Xbox naming, X / SQR on PlayStation), or TAP on touch. Gamepad and touch: §4.
 
 First run ever: skip setup, start as Steve with a 20-second in-run tutorial overlay (move, auto-attack, XP, level-up cards).
 
@@ -77,7 +77,7 @@ Eleven playable heroes. Steve is unlocked from the start; the rest come from the
 | **Piglin** | Legendary | 100 / ×1.08 / 100% | *Gold Digger*: +15% luck, heal 1 HP per kill; piglins and zombified piglins ignore him (bosses and rift foes do not) | *Gold Rush* (20 s): 6 s berserk, +30% damage, +25% speed, many more Emerald drops |
 | **Creeper** | Legendary | 95 / ×1.08 / 100% | *Short Fuse*: explosion damage taken -50%; 10% of his hits set off a mini explosion | *Charged Blast* (22 s): hiss for 1.2 s, then a huge blast that hurls enemies away and sets off TNT; it never hurts him |
 
-Stats are the hero's base values before upgrades; speed is shown relative to Steve. Steve, Alex and Rana use the layered hero sheets: sprite = `hero.<name>.<armorTier>.<swordTier>.<anim>`, with `idle` when still, `swing` when the Sword fires, `hurt` for 150 ms on damage, `punch` only before the first sword. The other eight are **sprite heroes** drawn from the mob/NPC sets (idle, walk, attack, hurt, death; some with a tint or a scale, and a dedicated cast animation while the ability is used). For them armor and sword tiers change stats only, not the sprite.
+Stats are the hero's base values before upgrades; speed is shown relative to Steve. Steve, Alex and Rana use the layered hero sheets: sprite = `hero.<name>.<armorTier>.<swordTier>.<anim>`, with `idle` when still, `walk_down|left|right|up` (unarmed, `none` weapon slot) while running, `swing` when the Sword fires, `hurt` for 150 ms on damage, `punch` only before the first sword. The other eight are **sprite heroes** drawn from the mob/NPC sets (idle, walk, attack, hurt, death; some with a tint or a scale, and a dedicated cast animation while the ability is used). For them armor and sword tiers change stats only, not the sprite.
 
 ---
 
@@ -227,7 +227,7 @@ Desired v1.0 roster (adapt to the sheets at Checkpoint 0). Each run draws a cast
 
 ### 9.1 Biome rosters (v1.1)
 
-The biome under the hero (spatial biome map, `RunState.biome()`) reweights the spawn pool; the data lives in `data/rosters.ts` (pure functions, tested). A mob with a `biomes` filter only spawns there; generic mobs are scaled per biome (`mult`) and some arrive earlier (`from`). **The Plains keeps the generic pool and curve and only adds low-weight early variants** (`add` in the roster: swamp rabbit, medium slime, jungle zombie from minute 0 about 16% of the spawns; plains chompers and the killer bunny from minute 1; forest wolves, frozen zombie and mossy skeleton from minute 2; silverfish from minute 3, about 25% by minute 3), all no tougher than a zombie, so the start stays gentle but is no longer 100% zombies. The Forest and Dark Forest get their chompers at minute 0, the Swamp its rabbits and lobbers. Each biome's `danger` scales spawn density (trickle and tides) and HP (60% of the distance from 1): Plains 1.0, Cherry Grove 0.9, Mushroom Fields 0.6, Forest/Taiga/Desert 1.05, Swamp/Jungle 1.1, Dark Forest/Badlands 1.15.
+The biome under the hero (spatial biome map, `RunState.biome()`) reweights the spawn pool; the data lives in `data/rosters.ts` (pure functions, tested). A mob with a `biomes` filter only spawns there; generic mobs are scaled per biome (`mult`) and some arrive earlier (`from`). **The Plains keeps the generic pool and curve and only adds early variants** (`add` in the roster; BUG-20 raised them from about 16% to about a third): from the first second a jungle zombie and three slime skins (plain, pink, tropical), all slow, status-free and no tougher than a zombie, so minute 0 is 66% zombies instead of 84% with five mob types; the swamp rabbit from 0:30; the plains chomper and killer bunny from 1:00 (ten types, 35% zombies); forest wolves, frozen zombies (their touch slows the hero) and the mossy skeleton from minute 2; silverfish from minute 3 (seventeen types by minute 3). The Forest and Dark Forest get their chompers at minute 0 plus a medium slime and a jungle zombie (zombies 63% / 55% at minute 0 instead of 77% / 70%), the Swamp its rabbits and lobbers. Each biome's `danger` scales spawn density (trickle and tides) and HP (60% of the distance from 1): Plains 1.0, Cherry Grove 0.9, Mushroom Fields 0.6, Forest/Taiga/Desert 1.05, Swamp/Jungle 1.1, Dark Forest/Badlands 1.15.
 
 | Biome | Cast (on top of the reweighted generic mobs) |
 |---|---|
@@ -243,7 +243,9 @@ The biome under the hero (spatial biome map, `RunState.biome()`) reweights the s
 
 **Chompers** are the tiny 14x13 biters of the sheets' "Great Hunger" family, one skin per ground type, in every overworld biome (the Plains uses its own skin from minute 1).
 
-Enemy AI archetypes to implement generically: `chaser`, `ranged-kiter`, `charger` (telegraphed), `kamikaze`, `splitter`, `summoner`, `healer`, `shielder`, `teleporter`, `flyer-diver`, `turret`, plus boss patterns. Telegraphs are drawn on the ground (red outline shapes) ≥ 0.6 s before damage.
+Enemy AI archetypes to implement generically: `chaser`, `ranged-kiter`, `charger` (telegraphed), `kamikaze`, `splitter`, `summoner`, `healer`, `shielder`, `teleporter`, `flyer-diver`, `turret`, plus boss patterns. Telegraphs are drawn on the ground (red outline shapes: a 9 px translucent strip for lines, a disc that starts at 35% alpha and fills toward its edge for areas) ≥ 0.6 s before damage.
+
+**Hit volumes (v1.3a):** every body is a vertical capsule from the ankles up to 80% of its drawn sprite height (scale included, at most 56 px), so tall bosses are hit anywhere on the sprite; the hero's capsule for hostile projectiles runs from 4 to 22 px above the feet. Ranged weapons aim at the middle of the target's capsule (`aimPointY`), lobbed potions at its feet. Hostile projectile shooters fire 20% less often to pay for the taller hero hurtbox.
 
 Damage model: simple, no type chart. Status effects: burn, poison, wither, slow, freeze, stun, levitate(slow). Armor = flat reduction with diminishing formula `dmg × 100/(100+armor)`.
 
@@ -341,11 +343,12 @@ The ten heroes besides Steve are pulled like any companion (rarity in §6). A he
 
 ## 12. Economy & gacha ("The Spawner")
 
-- **Emeralds** (soft currency): run reward = `time/5 + kills/4 + 80 per boss + 40 per mini-boss + Emeralds picked`, × *Looting* upgrade. New save: 500. Spent on permanent upgrades only.
-- **Spawn Eggs** (gacha ticket ×1): 1/400 drop per mob kill, locked chests 1–3, events, Charged mobs, achievements later.
+- **Emeralds** (soft currency): run reward = `time/5 + kills/4 + 80 per boss + 40 per mini-boss + Emeralds picked`, × *Looting* upgrade. New save: 500. Spent on permanent upgrades; a pure `buyEggs` action (400 Emeralds per Spawn Egg, `systems/gacha.ts`) exists for a future Spawner button but has no UI yet.
+- **Spawn Eggs** (gacha ticket ×1): a new save starts with **5** (so the Spawner works at once; migrated and existing saves are not given them, and they do not count as progress for cloud-conflict checks), then 1/400 drop per mob kill, locked chests 1–3, events, Charged mobs, achievements later.
 - **Rare Spawn Eggs** (×10 pull ticket): every boss, Nether rift win, 15% of locked chests, diamond ore (5%).
 - **Spawner screen:** a pixel-art mob spawner cage in the centre; ×1 = put an egg in, cage spins faster, flames by rarity color, mob pops out; ×10 = ten quick spins falling into a tray; click to skip/accelerate. Rarity colors: Common grey, Uncommon green, Rare blue, Epic purple, Legendary gold with lightning. Sound escalates with rarity; a special sting for Legendary.
 - **Rates:** Common 50% · Uncommon 28% · Rare 15% · Epic 5.5% · Legendary 1.5%. ×10 guarantees ≥ 1 Rare; **pity: Legendary guaranteed at 60 pulls** without one (counter visible). One banner in v1.0 ("Overworld Spawner"); make banners data-driven for 1.1 (Nether banner with Strider/Piglin allies etc.).
+- **Auto-equip:** a newly obtained (not duplicate) pet goes into an empty pet slot, an ally into a free ally slot within the Leadership count; heroes are never equipped. The one exception to "never replaces": with every ally slot full, a **higher-rarity** new ally replaces the **starter Wolf**, but only while the Wolf is untouched (level 1, no shards); every other equipped companion, and an equal or lower rarity, stays as is (the newcomer goes to the chest, the Wolf stays owned). `PullResult.equipped` / `replaced` report what happened.
 - All gacha RNG is seeded per save (`gachaSeed` + pull index) so it's testable; unit-test the rates (±1% over 1e6 pulls) and the pity.
 
 ### 12.1 Permanent upgrades (per hero, Emeralds, 5–10 ranks, rising costs)
@@ -359,8 +362,8 @@ Vitality (+HP), Strength (+dmg), Stride (+speed), Reflexes (+cooldown), Chainmai
 - **No emojis anywhere.** All icons are code-drawn pixel art (hearts, emeralds, spawn eggs, XP orb, weapon icons, enchant book, potion bottles, armor/sword tier icons, boss skull, arrows).
 - Text: pixel-perfect Tiny5 glyph atlas (§3). Menu screens use inventory-style panels (hub, collection, run setup, upgrades, Spawner) laid out for a 320x180 minimum view and scale up with the integer zoom.
 - Panels: dark stone / oak-plank style frames with 2-px bevels, Minecraft-ish grey buttons with the hover highlight, but original (don't copy GUI textures). Tooltips on hover for every card and stat.
-- HUD: HP bar (hearts style) top-left, XP bar full-width top with level, timer centre, kill counter, Emeralds/Eggs, weapon/passive slots bottom-left with levels, armor & sword tier icons next to the hero portrait, boss HP bar when a boss is alive, pet/ally portraits with ally HP, screen-edge arrows for portal/Charged/lost villager, and a corner **minimap** (toggle `M`, or tap / click the map; with touch controls up it sits clear of the touch buttons and a small chip marks it while hidden; not drawn on views under 150 px high): fog of war revealed around the hero in 8x8-tile cells (radius 4 cells, a sparse bitset), a 40x40 px window repainted only when the hero enters a new cell, biome ground colours, water and lava, dots for the portal, trader, lost villager and Charged mobs; a hero-ability slot (bottom right) shows the cooldown. "Hunger" and "Slow" tags appear next to the hearts while they apply.
-- Damage numbers (toggle), hit flash = pre-tinted white silhouette (not `ctx.filter`), screen shake (toggle), low-HP vignette.
+- HUD: HP bar (hearts style) top-left, XP bar full-width top with level, timer centre, kill counter, Emeralds/Eggs, weapon/passive slots bottom-left with levels, armor & sword tier icons next to the hero portrait, boss HP bar when a boss is alive, pet/ally portraits with ally HP, screen-edge arrows for portal/Charged/lost villager, and a corner **minimap** (toggle `M`, or tap / click the map; with touch controls up it sits clear of the touch buttons and a small chip marks it while hidden; not drawn on views under 150 px high): fog of war revealed around the hero in 8x8-tile cells (radius 4 cells, a sparse bitset), a 40x40 px window repainted only when the hero enters a new cell, biome ground colours, water and lava, dots for the portal, trader, lost villager and Charged mobs; a hero-ability slot (bottom right) shows the cooldown. The Collection's hero panel shows the hero's effective stats: max HP, damage and speed with the permanent upgrades bought for that hero applied (green when raised, with armor, regeneration and cooldowns in the tooltip and on large views), computed with the same `applyLoadoutMods` a run uses. "Hunger" and "Slow" tags appear next to the hearts while they apply.
+- Damage numbers (toggle), hit flash = pre-tinted white silhouette (not `ctx.filter`), low-HP vignette. **Screen shake** (toggle) is a trauma model: events add trauma, it decays 1.8/s, the shake is trauma squared (at most 8 px) as whole-pixel camera translations from deterministic noise, never a rotation. **Hit-stop** is tiered and counted in 60 Hz steps: a hurt enemy freezes 2 steps (4 on a crit; bosses never), the hero's sword/axe swing frame holds 2 steps when it lands a hit, and only a hero hit over 15 HP (3 steps) or the killing blow on an elite or boss (5 steps) pauses the whole game, at most once per 150 ms and never with reduce flashing.
 - Results screen with pixel confetti on a win; records highlighted.
 
 ---
@@ -379,7 +382,7 @@ Web Audio synth: square/triangle/noise channels, simple ADSR, delay/reverb send.
 | *Boss* | 150 bpm driving |
 | *Victory* / *Game over* stings | |
 
-SFX: hit, hurt, sword swing, bow, potion smash, TNT, snowball, lightning, level-up, pickup XP (pitch rises in streaks), emerald, egg, chest, portal, creeper hiss, boss roar, spawner spin/rarity stings, UI clicks. Volume sliders (music/SFX) + mute, persisted.
+SFX: hit, hurt, sword swing, bow, potion smash, TNT, snowball, lightning, level-up, pickup XP (pitch rises in streaks), emerald, egg, chest, portal, creeper hiss, boss roar, spawner spin/rarity stings, UI clicks. Volume sliders (music/SFX) + mute, persisted; the pause menu has the same two bars. **Weapon signatures** (no audio files): blade (`swing`: sword, axe) = 4.5 kHz band-passed noise 25 ms + a 420 -> 140 Hz square sweep 40 ms; arrow (`bow`: bow, crossbow) = a resonant 1.8 kHz band-pass (Q 4) 20 ms + a triangle click; heavy (`explode`: anvil, TNT blast) = a 70 -> 35 Hz sine sub 90 ms + a 350 Hz low-passed rumble. **Kill streak:** kills within 0.6 s of each other raise the base pitch of the hit sound by 3% per kill (compounding, capped at one octave). The Spawner's roulette tick rises from 300 to 900 Hz over the spin.
 
 ---
 
@@ -404,7 +407,7 @@ This section is the source of truth where it differs from the brief text above; 
 
 **Companions.** Pets follow with a lazy spring and are invulnerable; allies fight, take contact damage and return 20 s after being downed at 50% HP. Levels 2-5 need 1/2/3/4 more duplicates; further duplicates refund Emeralds (30/60/120/250/500 by rarity). Kennel multiplies pet buffs by 1 + 10% per rank; Leadership adds the second ally slot. Ally HP and damage grow 20% per level.
 
-**Economy.** Run reward = (time/5 + kills/4 + 80 per boss + 40 per mini-boss + Emeralds picked) x (Looting upgrade x Pig); Looting and Pig apply to the payout only, so in-run drop rates are unaffected. Spawn Egg: 1/400 per kill, locked chests 1-3, events, Charged mobs; Rare Spawn Egg: bosses, rift wins, 15% of locked chests, 5% of diamond ore. New saves start with 500 Emeralds. Permanent upgrades: 11 per hero plus the account-wide Leadership and Kennel; with `n` ranks already bought, the next rank costs `base x (1 + 0.7 n)`.
+**Economy.** Run reward = (time/5 + kills/4 + 80 per boss + 40 per mini-boss + Emeralds picked) x (Looting upgrade x Pig); Looting and Pig apply to the payout only, so in-run drop rates are unaffected. Spawn Egg: 1/400 per kill, locked chests 1-3, events, Charged mobs; Rare Spawn Egg: bosses, rift wins, 15% of locked chests, 5% of diamond ore. New saves start with 500 Emeralds and 5 Spawn Eggs. Permanent upgrades: 11 per hero plus the account-wide Leadership and Kennel; with `n` ranks already bought, the next rank costs `base x (1 + 0.7 n)`.
 
 **Gacha.** One banner ("Overworld Spawner") with rates 50 / 28 / 15 / 5.5 / 1.5, a x10 that always contains a Rare or better, Legendary pity at 60, seeded per save (`gachaSeed` + pull index). Banners are data (`systems/gacha.ts`).
 
@@ -430,7 +433,7 @@ This section is the source of truth where it differs from the brief text above; 
 Settings > Access (`core/accessibility.ts`):
 
 - **Colour-blind modes** (protanopia, deuteranopia, tritanopia): a remap of the critical colour-coded cues (hostile telegraphs, boss bar, low-HP vignette, level-up card borders, companion rarity colours), not a filter over the canvas; palettes were chosen with a Machado (2009) simulation and tests assert a minimum perceptual distance. Hearts, XP and pickups differ by shape, not only colour.
-- **Reduce flashing:** removes the lightning flash, hit-flash silhouettes, the invulnerability blink (steady 65% alpha instead) and the telegraph pulse, slows the creeper/TNT fuse blink to 2 Hz and turns screen shake off.
+- **Reduce flashing:** removes the lightning flash, hit-flash silhouettes, the invulnerability blink (steady 65% alpha instead) and the telegraph pulse, slows the creeper/TNT fuse blink to 2 Hz, turns screen shake off and skips the global hit-stop pauses.
 - **Text size 2x** for the in-run HUD (timer, counters) and the DOM account dialogs; the other canvas UI stays 1x (it is laid out for 320x180 and already zoomed by the integer scale).
 - **Camera look-ahead** on/off, **touch controls** auto / on / off, **remappable keys**, full keyboard and gamepad menu navigation (§4), "Hunger" and "Slow" status tags next to the hearts.
 

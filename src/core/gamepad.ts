@@ -1,5 +1,8 @@
-/** Gamepad input (standard mapping): left stick or d-pad moves, A item, X / right bumper ability, Start pause. */
-import type { InputSource } from './input';
+/**
+ * Gamepad input (standard mapping): left stick or d-pad moves; by default A item, X / right bumper ability and
+ * Start pause (rebindable in Settings > Controls, see `inputState.pad`). Menus keep A / Start = ok, B = back.
+ */
+import { inputState, noteInputDevice, type InputSource } from './input';
 
 const DEADZONE = 0.22;
 
@@ -30,6 +33,48 @@ export function padMove(pad: PadLike): { x: number; y: number } {
   return len > 1 ? { x: x / len, y: y / len } : { x, y };
 }
 
+/** The first connected gamepad, if any. */
+export function firstPad(): PadLike | null {
+  if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
+  for (const g of navigator.getGamepads()) if (g) return g;
+  return null;
+}
+
+/** Highest button index a binding may use (standard mapping has 17 buttons), and the d-pad that is reserved. */
+export const PAD_BUTTONS = 17;
+const isDpad = (i: number): boolean => i >= 12 && i <= 15;
+
+/**
+ * Finds the next gamepad button the player presses, for rebinding. Buttons already held when it is created
+ * (the A that opened the capture) are ignored until released; the d-pad is never reported (it moves).
+ */
+export class PadButtonCapture {
+  private held = new Set<number>();
+
+  constructor() {
+    const pad = firstPad();
+    pad?.buttons.forEach((b, i) => {
+      if (b.pressed) this.held.add(i);
+    });
+  }
+
+  /** The index of a newly pressed button this poll, or null. */
+  poll(): number | null {
+    const pad = firstPad();
+    if (!pad) return null;
+    let found: number | null = null;
+    pad.buttons.forEach((b, i) => {
+      if (!b.pressed) {
+        this.held.delete(i);
+      } else if (!this.held.has(i)) {
+        this.held.add(i);
+        if (found === null && !isDpad(i)) found = i;
+      }
+    });
+    return found;
+  }
+}
+
 export class GamepadInput implements InputSource {
   private prev = new Set<number>();
   private pressed = new Set<number>();
@@ -37,9 +82,7 @@ export class GamepadInput implements InputSource {
   connected = false;
 
   private pad(): PadLike | null {
-    if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
-    for (const g of navigator.getGamepads()) if (g) return g;
-    return null;
+    return firstPad();
   }
 
   /** Poll once per simulation step: records which buttons went down since the last poll. */
@@ -50,8 +93,18 @@ export class GamepadInput implements InputSource {
       return;
     }
     this.connected = true;
+    inputState.padConnected = true;
+    inputState.padStyle = /054c|playstation|dualshock|dualsense|sony/i.test(
+      (pad as { id?: string }).id ?? '',
+    )
+      ? 'playstation'
+      : 'xbox';
+    if (Math.hypot(pad.axes[0] ?? 0, pad.axes[1] ?? 0) > 0.5) noteInputDevice('pad');
     pad.buttons.forEach((btn, i) => {
-      if (btn.pressed && !this.prev.has(i)) this.pressed.add(i);
+      if (btn.pressed && !this.prev.has(i)) {
+        this.pressed.add(i);
+        noteInputDevice('pad');
+      }
       if (btn.pressed) this.prev.add(i);
       else this.prev.delete(i);
     });
@@ -61,8 +114,12 @@ export class GamepadInput implements InputSource {
     const pad = this.pad();
     return pad ? padMove(pad) : { x: 0, y: 0 };
   }
+  private any(buttons: readonly number[]): boolean {
+    return buttons.some((i) => this.pressed.has(i));
+  }
+
   pausePressed(): boolean {
-    return this.pressed.has(9);
+    return this.any(inputState.pad.pause);
   }
   confirmPressed(): boolean {
     return this.pressed.has(0) || this.pressed.has(9);
@@ -71,10 +128,10 @@ export class GamepadInput implements InputSource {
     return this.pressed.has(1);
   }
   activePressed(): boolean {
-    return this.pressed.has(0);
+    return this.any(inputState.pad.item);
   }
   abilityPressed(): boolean {
-    return this.pressed.has(2) || this.pressed.has(5);
+    return this.any(inputState.pad.ability);
   }
   endStep(): void {
     this.pressed.clear();

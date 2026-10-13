@@ -2,6 +2,7 @@ import type { App } from '../app';
 import { cameraLead, reduceFlash, textScale } from '../core/accessibility';
 import { aggregateEvents, stepMaterial, type StepMaterial } from '../core/sfxModel';
 import { Camera } from '../core/camera';
+import { Shake } from '../core/shake';
 import type { View } from '../core/canvas';
 import { makeEnemy } from '../systems/spawner';
 import { newWeapon } from '../weapons';
@@ -198,6 +199,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   const stats = new FrameStats();
   // True while the last update stepped the simulation (false when an overlay paused it).
   let simRan = false;
+  const screenShake = new Shake();
   let lastRenderMs = performance.now();
   // First run ever: a short overlay explains movement, auto-attack, XP and level-up cards.
   const tutorial = !opts.debug && !app.data().flags.tutorialDone && app.data().records.runs === 0;
@@ -306,6 +308,9 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         router.push(pauseScreen(app, () => app.goHub(), run));
         return;
       }
+      // Global hit-stop (core/hitstop.ts): a few skipped steps after a heavy hit; never with reduced flashing.
+      run.hitStop.globalEnabled = !reduceFlash() && !run.player.dead;
+      if (run.hitStop.tickGlobal()) return;
       run.update(dt, input);
       simRan = true;
       app.audio.setTheme(
@@ -318,6 +323,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
               biome: run.biome(),
             }),
       );
+      app.audio.noteKillTotal(run.kills); // kill-streak pitch of the hit sounds
       for (const [ev, count] of aggregateEvents(run.events)) {
         app.audio.play(ev, count, ev === 'step' ? stepMaterialUnder(run) : undefined);
       }
@@ -350,9 +356,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       // Settings: camera look-ahead off = follow the hero exactly; reduce-flashing also stops the shake.
       const lead = cameraLead();
       camera.follow(p.rx, p.ry, width, height, lead ? p.vx : 0, lead ? p.vy : 0, frameDt);
-      const shake = app.data().settings.screenShake && !reduceFlash() ? run.shake : 0;
-      const camX = camera.x + (shake > 0.5 ? Math.round(Math.sin(run.time * 97) * shake) : 0);
-      const camY = camera.y + (shake > 0.5 ? Math.round(Math.cos(run.time * 83) * shake) : 0);
+      const shakeOn = app.data().settings.screenShake && !reduceFlash();
+      const shakeOff = screenShake.step(run.shake, frameDt, shakeOn);
+      const camX = camera.x + shakeOff.x;
+      const camY = camera.y + shakeOff.y;
       lastCamX = camX;
       lastCamY = camY;
       if (!prebaked) {

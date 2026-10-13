@@ -45,6 +45,7 @@ export const sword: WeaponDef = {
     const half = w.evolved ? Math.PI : w.level >= 5 ? 1.4 : 1.1;
     const dmg = damageOf(run, s) * run.swordDmg * run.mods.swordMult * (w.evolved ? 1.15 : 1);
     enemiesInCircle(run, p.x, p.y, area, hits);
+    let landed = false;
     for (const e of hits) {
       const a = Math.atan2(e.y - p.y, e.x - p.x);
       let diff = Math.abs(a - angle);
@@ -52,7 +53,9 @@ export const sword: WeaponDef = {
       if (diff > half) continue;
       damageEnemy(run, e, dmg, p.x, p.y, 70);
       onHitMods(run, e, 'melee', dmg);
+      landed = true;
     }
+    if (landed) run.hitStop.holdSwing();
     run.fx.push(
       makeFx('arc', p.x, p.y - 8, 0.22, {
         a0: angle - half,

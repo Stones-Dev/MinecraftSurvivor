@@ -61,10 +61,10 @@ const circle = (t: number): Telegraph => ({
 });
 
 describe('telegraphs', () => {
-  it('draws a line as a 6 px strip with a translucent fill and a brighter edge', () => {
+  it('draws a line as a 9 px strip with a translucent fill and a brighter edge', () => {
     const { ctx, log } = rec();
     drawTelegraph(ctx, line(0.5), 0, 0);
-    // The corners are 3 px either side of the axis.
+    // The corners are 4.5 px either side of the axis.
     const ys = log.pts.map((p) => p[1]);
     expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(TELEGRAPH_STRIP, 6);
     expect(log.fills).toHaveLength(1);
@@ -85,6 +85,22 @@ describe('telegraphs', () => {
     expect(radii[0]).toBeLessThan(radii[1] ?? 0);
     expect(radii[1]).toBeLessThan(radii[2] ?? 0);
     expect(radii[2]).toBeLessThanOrEqual(20);
+  });
+
+  it('BUG-17/19: the strip is 8-10 px wide and the danger disc starts at about 35% alpha', () => {
+    expect(TELEGRAPH_STRIP).toBeGreaterThanOrEqual(8);
+    expect(TELEGRAPH_STRIP).toBeLessThanOrEqual(10);
+    const { ctx, log } = rec();
+    drawTelegraph(ctx, circle(0.1), 0, 0);
+    expect(log.fills[0]?.alpha).toBeGreaterThanOrEqual(0.3);
+    expect(log.fills[0]?.alpha).toBeLessThanOrEqual(0.45);
+    // With reduced flashing the same fill is steady (no pulse).
+    const s = defaultSave(1).settings;
+    s.accessibility.reduceFlash = true;
+    applyAccessibility(s);
+    const r = rec();
+    drawTelegraph(r.ctx, circle(0.1), 0, 0);
+    expect(r.log.fills[0]?.alpha).toBeCloseTo(0.35, 6);
   });
 
   it('goes through the colour-blind remap', () => {

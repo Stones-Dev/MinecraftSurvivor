@@ -4,10 +4,19 @@ import type { View } from '../core/canvas';
 import type { SaveData } from '../core/save';
 import { HEROES, heroById } from '../data/companions';
 import { ACCOUNT_KEY, META_UPGRADES, upgradeCost, type MetaUpgrade } from '../data/metaUpgrades';
-import { gridMove, keyToNav, layoutTier, pageCount, wrapIndex, type NavEvent } from './hubModel';
+import {
+  keyToNav,
+  layoutTier,
+  pageCount,
+  upgradeStep,
+  wrapIndex,
+  type NavEvent,
+  type UpgradeZone,
+} from './hubModel';
 import { drawIcon } from './icons';
 import {
   UI,
+  drawFocusRing,
   drawPanel,
   drawSlot,
   drawText,
@@ -74,6 +83,8 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
   let cols = 1;
   /** Last input was the keyboard or a pad: the row cursor shows instead of the hover. */
   let kbd = false;
+  /** Keyboard / pad cursor: on the upgrade rows, or up on the hero strip (left / right switch hero). */
+  let zone: UpgradeZone = 'rows';
 
   /** Owned heroes in roster order, then the account-wide section. */
   const tabs = (): string[] => [
@@ -118,18 +129,19 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
       case 'down':
       case 'left':
       case 'right': {
-        if (cols === 1 && (ev === 'left' || ev === 'right')) {
-          step(ev === 'left' ? -1 : 1);
+        const r = upgradeStep({ zone, index: idx }, ev, cols, list.length);
+        if (r.hero !== 0) {
+          step(r.hero);
           return;
         }
-        const next = gridMove(idx, ev, cols, list.length);
-        page = Math.floor(next / perPage);
-        cursor = next - page * perPage;
+        zone = r.zone;
+        page = Math.floor(r.index / perPage);
+        cursor = r.index - page * perPage;
         break;
       }
       case 'ok': {
         const u = list[idx];
-        if (u) buy(key, u.id);
+        if (u && zone === 'rows') buy(key, u.id);
         break;
       }
       case 'back':
@@ -182,6 +194,7 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
           hover: owned && inRect(r, mx, my),
           locked: !owned,
         });
+        if (zone === 'strip' && kbd && h.id === key) drawFocusRing(ctx, r, t);
         if (owned)
           drawPortrait(ctx, app.atlas, h, r.x + sw / 2, r.y + sh - 2, t, sw - 4, sh - 4, 2);
         else drawSilhouette(ctx, app.atlas, h, r.x + sw / 2, r.y + sh - 2, 0.4);
@@ -190,6 +203,7 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
         const r = { x: x0 + HEROES.length * (sw + 2), y: stripY, w: sw, h: sh };
         stripHits.push({ r, key: ACCOUNT_KEY, owned: true, name: 'Account' });
         drawSlot(ctx, r, { color: '#c8a23a', selected: isAccount, hover: inRect(r, mx, my) });
+        if (zone === 'strip' && kbd && isAccount) drawFocusRing(ctx, r, t);
         drawIcon(ctx, 'chest', r.x + Math.floor((sw - 12) / 2), r.y + Math.floor((sh - 12) / 2));
       }
 
@@ -226,7 +240,7 @@ export function upgradesScreen(app: App, onBack: () => void): Screen {
         const cost = upgradeCost(u, rank);
         const afford = data.currencies.emeralds >= cost;
         const hot = inRect(r, mx, my) && !kbd;
-        const isCursor = i === cursor && kbd;
+        const isCursor = i === cursor && kbd && zone === 'rows';
         drawPanel(ctx, r, hot || isCursor, maxed ? '#c8a23a' : null);
         if (flash && flash.id === u.id) {
           ctx.globalAlpha = Math.min(1, flash.t * 2) * 0.35;

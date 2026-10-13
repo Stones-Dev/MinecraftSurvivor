@@ -164,12 +164,16 @@ describe('gacha auto-equip (audit item 3)', () => {
 
   it('allies fill free slots up to the Leadership count and no further', () => {
     const s = defaultSave(1); // the wolf already holds the only slot
-    expect(pull(s, only('horse'), 1, 2)[0]?.equipped).toBeUndefined();
+    // An equal rarity (common) never replaces it; the newcomer goes to the chest.
+    expect(pull(s, only('butcher'), 1, 2)[0]?.equipped).toBeUndefined();
     expect(s.loadout.allies).toEqual(['wolf']);
     s.upgrades['account'] = { leadership: 1 };
     const r = pull(s, only('snow_golem'), 1, 3)[0];
     expect(r?.equipped).toBe('ally');
+    expect(r?.replaced).toBeUndefined();
     expect(s.loadout.allies).toEqual(['wolf', 'snow_golem']);
+    // Full again: a rarer ally may only displace the untouched starter wolf, see tests/starterEconomy.test.ts.
+    s.owned['wolf'] = { level: 2, shards: 1, obtainedAt: 1 };
     expect(pull(s, only('iron_golem'), 1, 4)[0]?.equipped).toBeUndefined();
     expect(s.loadout.allies).toEqual(['wolf', 'snow_golem']);
   });

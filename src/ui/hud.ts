@@ -7,6 +7,7 @@ import { WEAPONS } from '../weapons';
 import type { RunState } from '../game';
 import { xpToNext } from '../systems/economy';
 import { getMarkers } from '../systems/npcs';
+import { actionPrompt } from './inputLabels';
 import { drawIcon } from './icons';
 import { drawText, drawTextPlate } from './panel';
 import { HUD_TEXT, LOW_HP_FRACTION, lowHpVignetteAlpha } from './hudModel';
@@ -177,7 +178,7 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
       ctx.fillRect(x + 1, y + 15 - h, 14, h);
       drawText(ctx, String(Math.ceil(run.ability.cd)), x + 8, y + 12, '#fff', 'center');
     } else {
-      drawTextPlate(ctx, 'Q', x + 8, y - 3, HUD_TEXT.abilityKey, 'center');
+      drawTextPlate(ctx, actionPrompt('ability'), x + 8, y - 3, HUD_TEXT.abilityKey, 'center');
     }
   }
 
@@ -194,7 +195,7 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
       ctx.fillRect(x + 1, y + 15 - h, 14, h);
       drawText(ctx, String(Math.ceil(run.itemCd)), x + 8, y + 12, '#fff', 'center');
     } else if (def.active) {
-      drawTextPlate(ctx, 'SPACE', x + 8, y - 3, HUD_TEXT.itemKey, 'center');
+      drawTextPlate(ctx, actionPrompt('item'), x + 8, y - 3, HUD_TEXT.itemKey, 'center');
     }
   }
 

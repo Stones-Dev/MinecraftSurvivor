@@ -28,6 +28,74 @@ export const DEFAULT_BINDINGS: Bindings = {
 
 export const ACTIONS: Action[] = ['up', 'down', 'left', 'right', 'pause', 'item', 'ability'];
 
+// ---------------------------------------------------------------------------------------------------
+// Which device the player used last, and the bindings in force (read by the HUD for its prompts).
+
+export type InputDevice = 'keyboard' | 'pad' | 'touch';
+
+/** Actions a gamepad button can be bound to (movement stays on the stick and d-pad). */
+export type PadAction = 'pause' | 'item' | 'ability';
+export type PadBindings = Record<PadAction, number[]>;
+export const PAD_ACTIONS: readonly PadAction[] = ['pause', 'item', 'ability'];
+
+/** Standard-mapping buttons: A item, X / RB ability, Start pause (see gamepad.ts). */
+export const DEFAULT_PAD_BINDINGS: PadBindings = { pause: [9], item: [0], ability: [2, 5] };
+
+/** Key under which a gamepad binding is stored in `settings.controls` (the save keeps any string list there). */
+export const padControlKey = (a: PadAction): string => `pad.${a}`;
+
+/** A button index as stored in the save ("Pad2"). */
+export const encodePadButton = (i: number): string => `Pad${i}`;
+
+/** Parse stored gamepad bindings out of `settings.controls`; missing or invalid entries keep their defaults. */
+export function parsePadBindings(
+  controls: Readonly<Record<string, readonly string[] | undefined>>,
+): PadBindings {
+  const out: PadBindings = structuredClone(DEFAULT_PAD_BINDINGS);
+  for (const a of PAD_ACTIONS) {
+    const raw = controls[padControlKey(a)];
+    if (!Array.isArray(raw)) continue;
+    const nums = raw
+      .map((k) => /^Pad(\d{1,2})$/.exec(String(k))?.[1])
+      .filter((v): v is string => v !== undefined)
+      .map(Number)
+      .filter((n) => n >= 0 && n < 17);
+    if (nums.length > 0) out[a] = nums;
+  }
+  return out;
+}
+
+/** Shared, mutable view of the input state: filled by the input classes, read by the HUD and Settings. */
+export const inputState: {
+  device: InputDevice;
+  /** A gamepad has been seen this session. */
+  padConnected: boolean;
+  /** Button naming of the connected pad. */
+  padStyle: 'xbox' | 'playstation';
+  keys: Bindings;
+  pad: PadBindings;
+} = {
+  device: 'keyboard',
+  padConnected: false,
+  padStyle: 'xbox',
+  keys: structuredClone(DEFAULT_BINDINGS),
+  pad: structuredClone(DEFAULT_PAD_BINDINGS),
+};
+
+/** Record the device that produced the latest input. */
+export function noteInputDevice(d: InputDevice): void {
+  inputState.device = d;
+}
+
+/** Back to the defaults (tests). */
+export function resetInputState(): void {
+  inputState.device = 'keyboard';
+  inputState.padConnected = false;
+  inputState.padStyle = 'xbox';
+  inputState.keys = structuredClone(DEFAULT_BINDINGS);
+  inputState.pad = structuredClone(DEFAULT_PAD_BINDINGS);
+}
+
 export class KeyboardInput implements InputSource {
   private down = new Set<string>();
   private pressed = new Set<string>();
@@ -42,10 +110,15 @@ export class KeyboardInput implements InputSource {
         next[a] = keys.filter((k) => typeof k === 'string');
     }
     this.bindings = next;
+    inputState.keys = structuredClone(next);
+    // Gamepad bindings travel in the same settings.controls object under `pad.<action>` keys, so the one
+    // applySettings call reaches both devices.
+    inputState.pad = parsePadBindings(b as Record<string, readonly string[] | undefined>);
   }
 
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
+      noteInputDevice('keyboard');
       if (!this.down.has(e.code)) this.pressed.add(e.code);
       this.down.add(e.code);
     });

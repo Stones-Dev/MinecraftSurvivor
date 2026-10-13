@@ -58,6 +58,7 @@ Survive 15 minutes and defeat the Warden to win, or keep going in Endless. Colle
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint + Prettier check |
 | `npm run format` | Prettier write |
+| `node tools/dev-save-fixture.mjs` | Prints a DevTools-console snippet that seeds `localStorage['minesurvive.save']` with a rich save (5000 Emeralds, 50 + 20 eggs, several heroes / pets / allies) and reloads; `--key minesurvive.save.<uid>` for a cloud account |
 | `npm run balance` | Headless balance simulator, writes `docs/BALANCE_RESULTS.md` (`BAL_BIOMES=1` adds the per-start-biome table) |
 
 ## Debug URL parameters

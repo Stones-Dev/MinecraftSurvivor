@@ -23,6 +23,8 @@ export class Enemy {
   facing: 1 | -1 = 1;
   /** Seconds of white hit flash left. */
   hurtT = 0;
+  /** Simulation steps of hit-stun left: movement and animation stand still (core/hitstop.ts). */
+  hitStun = 0;
   animT = 0;
   state: EnemyState = 'move';
   stateT = 0;

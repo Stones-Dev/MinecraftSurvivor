@@ -5,6 +5,8 @@
  */
 import type { SaveData } from '../core/save';
 import { Rng } from '../core/rng';
+import { baseMods } from '../data/upgrades';
+import { applyLoadoutMods, heroBaseHp, type RunLoadout } from '../systems/meta';
 import { OVERWORLD_BIOMES, type BiomeId } from '../world/biomes';
 
 // ---------------------------------------------------------------------------------------------------
@@ -658,4 +660,169 @@ export function setupLayout(w: number, h: number): SetupLayout {
     detail: { x: picker.x, y: picker.y + picker.h - detailH, w: picker.w, h: detailH },
     barY,
   };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Volume sliders (Settings > Audio and the pause menu share these).
+
+/** One keyboard / pad step of a volume slider. */
+export const VOLUME_STEP = 0.1;
+
+/** A volume as the save stores it: clamped to 0..1 and rounded to a tenth. */
+export function clampVolume(v: number): number {
+  if (!Number.isFinite(v)) return 0;
+  return Math.round(Math.max(0, Math.min(1, v)) * 10) / 10;
+}
+
+/** The volume one step up (`dir` > 0) or down (`dir` < 0) from `v`. */
+export function stepVolume(v: number, dir: number): number {
+  return clampVolume(v + (dir < 0 ? -VOLUME_STEP : VOLUME_STEP));
+}
+
+/** The volume under a click at `frac` (0..1) along a bar. */
+export function volumeFromFrac(frac: number): number {
+  return clampVolume(frac);
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Effective hero stats (Collection detail): the hero's base kit with the permanent upgrades applied.
+
+export interface HeroStats {
+  /** Max HP including Vitality (and the hero's own HP kit, e.g. Steve's +10%). */
+  hp: number;
+  /** Damage multiplier (hero x Strength) and speed multiplier (hero x Stride). */
+  dmg: number;
+  speed: number;
+  armor: number;
+  /** HP per second, base regeneration plus Mending. */
+  regen: number;
+  /** Cooldown multiplier (1 = base, 0.84 = 16% faster); weapons and the hero ability. */
+  cd: number;
+  /** True when at least one permanent upgrade of this hero is bought (the UI then highlights the figures). */
+  upgraded: boolean;
+}
+
+/**
+ * What the hero brings into a run before passives, pet and allies: the same `applyLoadoutMods` the run uses,
+ * fed with the bought `ranks` and the hero's ability `shards`, so the Collection never disagrees with the game.
+ */
+export function heroStats(heroId: string, ranks: Record<string, number>, shards = 0): HeroStats {
+  const m = baseMods();
+  const loadout: RunLoadout = {
+    hero: heroId,
+    pet: null,
+    allies: [],
+    upgrades: { ...ranks },
+    kennel: 0,
+    leadership: false,
+    heroShards: shards,
+  };
+  applyLoadoutMods(loadout, m);
+  return {
+    hp: heroBaseHp(heroId) + m.maxHpBonus,
+    dmg: m.dmg,
+    speed: m.speed,
+    armor: m.armor,
+    regen: m.regen,
+    cd: Math.max(0.35, m.cd),
+    upgraded: Object.values(ranks).some((r) => r > 0),
+  };
+}
+
+/** A multiplier as "x1.08" (two decimals, trailing zeros trimmed: "x1", "x1.1"). */
+export function formatMult(v: number): string {
+  return `x${Number(v.toFixed(2))}`;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Collection cursor: the card grid, the detail tabs and the footer buttons form three zones, so a pad or
+// the keyboard reaches every control without a mouse.
+
+export type CollectionZone = 'grid' | 'chips' | 'footer';
+
+export interface CollectionCursor {
+  zone: CollectionZone;
+  /** Selected card (index into the tab's whole list) and the detail section shown. */
+  index: number;
+  chip: number;
+}
+
+export interface CollectionNavOpts {
+  cols: number;
+  count: number;
+  /** Detail-section chips on screen (0 when the sections are stacked and there is nothing to choose). */
+  chips: number;
+}
+
+/**
+ * One direction press. Grid: moves between cards; down past the last row drops to the footer buttons,
+ * right past the last column enters the detail chips (when there are any). Chips: left / right pick the
+ * section, left past the first returns to the grid, down goes to the footer. Footer: up returns to the
+ * grid; left / right are reported as `footer` for the button row to handle (spatially).
+ */
+export function collectionStep(
+  cur: CollectionCursor,
+  dir: Dir,
+  o: CollectionNavOpts,
+): CollectionCursor & { footer?: 'left' | 'right' } {
+  switch (cur.zone) {
+    case 'grid': {
+      const next = gridMove(cur.index, dir, o.cols, o.count);
+      if (next !== cur.index) return { ...cur, index: next, chip: 0 };
+      if (dir === 'down') return { ...cur, zone: 'footer' };
+      if (dir === 'right' && o.chips > 0) return { ...cur, zone: 'chips' };
+      return cur;
+    }
+    case 'chips': {
+      const last = Math.max(0, o.chips - 1);
+      if (dir === 'left') {
+        return cur.chip > 0 ? { ...cur, chip: cur.chip - 1 } : { ...cur, zone: 'grid' };
+      }
+      if (dir === 'right') return { ...cur, chip: Math.min(last, cur.chip + 1) };
+      if (dir === 'down') return { ...cur, zone: 'footer' };
+      return cur;
+    }
+    case 'footer': {
+      if (dir === 'up') return { ...cur, zone: o.chips > 0 && cur.chip > 0 ? 'chips' : 'grid' };
+      if (dir === 'left' || dir === 'right') return { ...cur, footer: dir };
+      return cur;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Upgrades cursor: the upgrade rows and the hero strip above them.
+
+export type UpgradeZone = 'strip' | 'rows';
+
+export interface UpgradeCursor {
+  zone: UpgradeZone;
+  /** Index of the row under the cursor in the hero's whole list. */
+  index: number;
+}
+
+/**
+ * One direction press on the Upgrades screen. Rows: up / down / left / right move through the grid (two
+ * columns on wide views); up from the top row enters the hero strip; left / right at the edge of the grid
+ * (no neighbour that way, which is always the case with one column) switch hero (`hero` is -1 / +1).
+ * Strip: left / right switch hero, down returns to the rows.
+ */
+export function upgradeStep(
+  cur: UpgradeCursor,
+  dir: Dir,
+  cols: number,
+  count: number,
+): UpgradeCursor & { hero: -1 | 0 | 1 } {
+  if (cur.zone === 'strip') {
+    if (dir === 'left') return { ...cur, hero: -1 };
+    if (dir === 'right') return { ...cur, hero: 1 };
+    if (dir === 'down' && count > 0) return { zone: 'rows', index: cur.index, hero: 0 };
+    return { ...cur, hero: 0 };
+  }
+  const next = gridMove(cur.index, dir, cols, count);
+  if (next !== cur.index) return { zone: 'rows', index: next, hero: 0 };
+  if (dir === 'up') return { zone: 'strip', index: cur.index, hero: 0 };
+  if (dir === 'left') return { ...cur, hero: -1 };
+  if (dir === 'right') return { ...cur, hero: 1 };
+  return { ...cur, hero: 0 };
 }

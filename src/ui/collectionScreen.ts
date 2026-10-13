@@ -20,11 +20,14 @@ import { dupesToReach } from '../systems/gacha';
 import { SHARDS_PER_RANK, abilityRank, maxAllySlots, MAX_ABILITY_RANK } from '../systems/meta';
 import {
   collectionLayout,
-  gridMove,
+  collectionStep,
+  formatMult,
+  heroStats,
   keyToNav,
   pageCount,
   pageOf,
   wrapIndex,
+  type CollectionZone,
   type NavEvent,
 } from './hubModel';
 import { drawIcon, type IconName } from './icons';
@@ -32,6 +35,7 @@ import {
   clipText,
   drawBar,
   drawDivider,
+  drawFocusRing,
   drawPanel,
   drawSlot,
   drawText,
@@ -211,6 +215,9 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
   /** Selected index per tab (into the full list). */
   const sel = TABS.map(() => 0);
   let section = 0;
+  /** Where the keyboard / pad cursor is: the card grid, the detail chips or the footer buttons. */
+  let zone: CollectionZone = 'grid';
+  let statsRect: Rect | null = null;
   let mx = -1;
   let my = -1;
   let tabRects: Rect[] = [];
@@ -269,15 +276,46 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
     app.router.push(spawnerScreen(app, () => app.router.pop()));
   };
 
+  /** Put the ring on a footer button: Equip when it can be pressed, else Back. */
+  const focusFooter = (): void => buttons.focusOn(buttons.isEnabled('equip') ? 'equip' : 'back');
+
   const nav = (ev: NavEvent, cols: number): void => {
     switch (ev) {
       case 'left':
       case 'right':
       case 'up':
-      case 'down':
-        select(gridMove(sel[tabIdx] ?? 0, ev, cols, tab().list.length));
+      case 'down': {
+        // The first key after the mouse switches to keyboard mode; no button is focused until the cursor
+        // reaches the footer.
+        if (!buttons.keyboardActive) buttons.hideFocus();
+        const list = tab().list;
+        const r = collectionStep(
+          { zone, index: Math.min(sel[tabIdx] ?? 0, list.length - 1), chip: section },
+          ev,
+          { cols, count: list.length, chips: chipRects.length },
+        );
+        if (r.footer) {
+          if (buttons.nav(r.footer)) app.audio.play('click');
+          break;
+        }
+        if (r.index !== (sel[tabIdx] ?? 0)) select(r.index);
+        if (r.chip !== section) {
+          section = r.chip;
+          app.audio.play('click');
+        }
+        if (r.zone !== zone) {
+          zone = r.zone;
+          if (zone === 'footer') focusFooter();
+          else buttons.hideFocus();
+        }
         break;
+      }
       case 'ok': {
+        if (zone === 'footer' && buttons.keyboardActive) {
+          if (buttons.activate()) app.audio.play('click');
+          break;
+        }
+        if (zone === 'chips') break;
         const def = current();
         if (app.data().owned[def.id]) toggleEquip(def);
         else toSpawner();
@@ -377,14 +415,60 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
     if (o && isEquipped(data, def)) drawIcon(ctx, 'star', slot.x + ps - 12, slot.y + 1);
     const sx = slot.x + ps + 6;
     let sy = slot.y + 1;
+    statsRect = null;
     if (def.kind === 'hero') {
-      stat(ctx, 'heart', o ? String(def.hp) : '?', sx, sy, o ? '#ff9a9a' : UI.faint);
-      stat(ctx, 'sword', o ? `x${def.dmg}` : '?', sx, sy + 12, o ? '#ffd0a0' : UI.faint);
-      stat(ctx, 'boots', o ? `x${def.speed}` : '?', sx, sy + 24, o ? '#a0e0ff' : UI.faint);
+      // Effective figures: the hero's kit with the permanent upgrades bought for it (the same maths as a run).
+      const hs = o ? heroStats(def.id, data.upgrades[def.id] ?? {}, o.shards) : null;
+      const base = o ? heroStats(def.id, {}, o.shards) : null;
+      const col = (now: number | undefined, was: number | undefined, plain: string): string =>
+        now !== undefined && was !== undefined && now > was + 1e-9 ? UI.green : plain;
+      stat(
+        ctx,
+        'heart',
+        hs ? String(hs.hp) : '?',
+        sx,
+        sy,
+        o ? col(hs?.hp, base?.hp, '#ff9a9a') : UI.faint,
+      );
+      stat(
+        ctx,
+        'sword',
+        hs ? formatMult(hs.dmg) : '?',
+        sx,
+        sy + 12,
+        o ? col(hs?.dmg, base?.dmg, '#ffd0a0') : UI.faint,
+      );
+      stat(
+        ctx,
+        'boots',
+        hs ? formatMult(hs.speed) : '?',
+        sx,
+        sy + 24,
+        o ? col(hs?.speed, base?.speed, '#a0e0ff') : UI.faint,
+      );
       if (o && ps >= 50) {
         const rank = abilityRank(data.owned[def.id]?.shards ?? 0);
         stat(ctx, 'star', `Ability rank ${rank}`, sx, sy + 38, UI.gold);
       }
+      if (hs && base && ps >= 72) {
+        stat(
+          ctx,
+          'helmet',
+          `Armor ${hs.armor}  Regen ${Number(hs.regen.toFixed(1))}/s`,
+          sx,
+          sy + 50,
+          col(hs.armor + hs.regen, base.armor + base.regen, UI.soft),
+        );
+        stat(
+          ctx,
+          'clock',
+          `Cooldowns ${formatMult(hs.cd)}`,
+          sx,
+          sy + 62,
+          col(base.cd, hs.cd, UI.soft),
+        );
+      }
+      if (hs) statsRect = { x: sx, y: slot.y, w: r.x + r.w - pad4 - sx, h: ps };
     } else if (o) {
       stat(ctx, 'star', `Level ${o.level}/${MAX_COMPANION_LEVEL}`, sx, sy, UI.gold);
       const max = o.level >= MAX_COMPANION_LEVEL;
@@ -435,6 +519,9 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
       drawText(ctx, label, chip.x + cw / 2, chip.y + 8, i === idx ? UI.gold : UI.soft, 'center');
       cx += cw + 3;
     });
+    const focusedChip = chipRects[idx];
+    if (zone === 'chips' && buttons.keyboardActive && focusedChip)
+      drawFocusRing(ctx, focusedChip, t);
     const s = secs[idx];
     if (s) {
       const top = bodyTop + 13;
@@ -500,6 +587,7 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
         const hov = inRect(r, mx, my);
         if (hov) hoverDef = def;
         drawCard(ctx, data, def, r, i === index, hov, L.named);
+        if (i === index && zone === 'grid' && buttons.keyboardActive) drawFocusRing(ctx, r, t);
       });
 
       const sel0 = list[index] ?? (list[0] as CompanionDef);
@@ -551,7 +639,36 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
       buttons.add({ x: width - 6 - bw, y: by, w: bw, h: 16 }, 'Back', onBack, false, {
         key: 'back',
       });
+      // The button under the ring can switch off (Equip on the equipped hero): keep the ring on the footer.
+      if (zone === 'footer' && buttons.keyboardActive && !buttons.hasFocus) focusFooter();
       buttons.draw(view);
+
+      // Hovering the hero figures lists all of them (armor, regeneration and cooldowns do not fit inline).
+      if (statsRect && sel0.kind === 'hero' && inRect(statsRect, mx, my) && !buttons.over(mx, my)) {
+        const hs = heroStats(
+          sel0.id,
+          data.upgrades[sel0.id] ?? {},
+          data.owned[sel0.id]?.shards ?? 0,
+        );
+        drawTooltip(
+          ctx,
+          [
+            `Max HP ${hs.hp}`,
+            `Damage ${formatMult(hs.dmg)}`,
+            `Speed ${formatMult(hs.speed)}`,
+            `Armor ${hs.armor}`,
+            `Regen ${Number(hs.regen.toFixed(1))} HP/s`,
+            `Cooldowns ${formatMult(hs.cd)}`,
+            hs.upgraded ? 'Upgrades applied' : 'No upgrades yet',
+          ],
+          mx,
+          my,
+          width,
+          height,
+          null,
+          'Hero stats',
+        );
+      }
 
       // Tooltip for the card under the pointer.
       const hd = hoverDef as CompanionDef | null;
@@ -578,6 +695,7 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
       }
     },
     onMove(x, y) {
+      if (x !== mx || y !== my) zone = 'grid';
       mx = x;
       my = y;
       buttons.move(x, y);
@@ -585,6 +703,7 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
     onClick(x, y) {
       mx = x;
       my = y;
+      zone = 'grid';
       if (buttons.click(x, y)) return;
       const tabHit = tabRects.findIndex((r) => inRect(r, x, y));
       if (tabHit >= 0) {
@@ -603,11 +722,10 @@ export function collectionScreen(app: App, onBack: () => void): Screen {
     onKey(code) {
       if (code === 'PageUp') select((pageOf(sel[tabIdx] ?? 0, perPage) - 1) * perPage);
       else if (code === 'PageDown') select((pageOf(sel[tabIdx] ?? 0, perPage) + 1) * perPage);
-      else if (code === 'Digit1' || code === 'Digit2' || code === 'Digit3')
-        section = Number(code.slice(5)) - 1;
-      else {
+      else if (code === 'Digit1' || code === 'Digit2' || code === 'Digit3') {
+        section = Math.min(Number(code.slice(5)) - 1, Math.max(0, chipRects.length - 1));
+      } else {
         const ev = keyToNav(code);
-        if (ev === 'ok' && buttons.keyboardActive && buttons.activate()) return;
         if (ev) nav(ev, lastCols);
       }
     },

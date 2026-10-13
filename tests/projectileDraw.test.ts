@@ -44,7 +44,7 @@ describe('projectile sprites', () => {
     const hi = draw(proj('arrow', 200, 0), 2);
     const len = (r: { xs: number[] }): number => Math.max(...r.xs) - Math.min(...r.xs) + 1;
     expect(len(lo)).toBeGreaterThanOrEqual(14);
-    expect(len(lo)).toBeLessThanOrEqual(15);
+    expect(len(lo)).toBeLessThanOrEqual(16); // 14 px plus the 1 px outline
     expect(hi.rects.length).toBeGreaterThan(lo.rects.length);
     expect(draw(proj('arrow', 200, 0), 1).rects.length).toBeLessThan(hi.rects.length);
   });
@@ -57,6 +57,32 @@ describe('projectile sprites', () => {
     const h = Math.max(...d.ys) - Math.min(...d.ys);
     expect(Math.abs(w - h)).toBeLessThanOrEqual(3);
     expect(w).toBeGreaterThan(8);
+  });
+
+  it('BUG-18: arrows, tridents and snowballs carry a dark outline painted before the colours', () => {
+    for (const style of ['arrow', 'trident', 'snowball', 'potion_harm'] as const) {
+      const colors: string[] = [];
+      const st: Record<string, unknown> = { globalAlpha: 1, fillStyle: '' };
+      const ctx = new Proxy(st, {
+        get(t, k) {
+          if (k in t) return t[k as string];
+          if (k === 'fillRect') return () => colors.push(String(st.fillStyle));
+          return () => undefined;
+        },
+        set(t, k, v) {
+          t[k as string] = v;
+          return true;
+        },
+      }) as unknown as CanvasRenderingContext2D;
+      drawProjectile(ctx, proj(style, 200, 0), 0, 0, 0, 0, 0);
+      const first = colors.findIndex((c) => c === '#1b1528');
+      const lastDark = colors.lastIndexOf('#1b1528');
+      expect(first).toBeGreaterThanOrEqual(0);
+      // Every outline rect comes before the first coloured sprite pixel (the faint ground shadow aside).
+      const body = colors.findIndex((c) => c !== '#1b1528' && c !== 'rgba(0,0,0,0.2)');
+      expect(body).toBeGreaterThan(first);
+      if (style === 'arrow' || style === 'trident') expect(lastDark).toBeLessThan(body);
+    }
   });
 
   it('spins a thrown trident (boomerang) at 720 degrees per second', () => {

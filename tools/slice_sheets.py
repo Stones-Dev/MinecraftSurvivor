@@ -43,6 +43,13 @@ SHEETS = ["steve", "alex", "rana", "enemies", "allies", "animals", "villagers"]
 
 MIN_SECTION_AREA = 64
 SEP_FRACTION = 0.9
+# Hero sheets only: WALKING blocks (4 facing rows x 4 walk frames) whose rows do not share column dividers
+# (front/back cells are 20 px wide, side cells 18 px) collapse to one column with the global divider test,
+# so their columns are measured per row instead (see `row_col_spans`). Everything else is sliced as before.
+HERO_SHEETS = {"steve", "alex", "rana"}
+WALK_MIN_AREA = 1000
+WALK_ROWS = 4  # facing rows (front, left, right, back)
+WALK_COLS = 4  # walk frames per facing
 PAGE_W = 2400
 PAGE_H = 3200
 
@@ -136,6 +143,23 @@ def split_cells(sec: np.ndarray) -> tuple[list[tuple[int, int]], list[tuple[int,
     return cols, rows
 
 
+def row_col_spans(sec: np.ndarray, rows: list[tuple[int, int]]) -> list[list[tuple[int, int]]] | None:
+    """Per-row column spans for a block whose rows have their own dividers (hero WALKING blocks).
+
+    Boots and hair cross the 1 px dividers of the full block, so the usual whole-block test finds none; inside one
+    row band the dividers are intact (every pixel of the divider column is separator colour). Returns None unless
+    every row has exactly WALK_COLS cells (other multi-row blocks, e.g. TALKING, keep their old slicing).
+    """
+    sep = color_mask(sec, SEP)
+    out = []
+    for ry0, ry1 in rows:
+        spans = [(int(s), int(e)) for s, e in runs(~(sep[ry0:ry1].mean(axis=0) >= SEP_FRACTION))]
+        if len(spans) != WALK_COLS:
+            return None
+        out.append(spans)
+    return out
+
+
 def slice_sheet(name: str) -> None:
     img = Image.open(SRC / f"{name}.png").convert("RGBA")
     a = np.array(img)
@@ -164,15 +188,20 @@ def slice_sheet(name: str) -> None:
             xs = np.flatnonzero((~color_mask(sec[hy0:hy1], SEP)).any(axis=0))
             if len(xs):
                 label = (x0 + int(xs.min()), y0 + hy0, x0 + int(xs.max()) + 1, y0 + hy1)
+        per_row = None
+        if name in HERO_SHEETS and len(cols) <= 1 and len(rows) == WALK_ROWS and (x1 - x0) * (y1 - y0) >= WALK_MIN_AREA:
+            per_row = row_col_spans(sec, rows)
         sdir = out_dir / "sections" / f"{n:03d}"
         sdir.mkdir(parents=True, exist_ok=True)
+        for old in sdir.glob("frame_*.png"):
+            old.unlink()
         if label:
             lx0, ly0, lx1, ly1 = padded_label(label, a.shape)
             Image.fromarray(a[ly0:ly1, lx0:lx1]).save(sdir / "label.png")
         frames = []
         k = 0
         for r, (ry0, ry1) in enumerate(rows):
-            for c, (cx0, cx1) in enumerate(cols):
+            for c, (cx0, cx1) in enumerate(per_row[r] if per_row else cols):
                 cell = sec[ry0:ry1, cx0:cx1]
                 sprite = ~(color_mask(cell, CELL_BG) | color_mask(cell, SEP) | color_mask(cell, SHEET_BG))
                 ys, xs = np.nonzero(sprite)
@@ -196,9 +225,10 @@ def slice_sheet(name: str) -> None:
             "label": list(label) if label else None,
             "header_rows": [list(h) for h in header_rows],
             "col_spans": [list(c) for c in cols],
-            "cols": len(cols), "rows": len(rows),
-            "cell_w": (cols[0][1] - cols[0][0]) if cols else 0,
+            "cols": max(len(r) for r in per_row) if per_row else len(cols), "rows": len(rows),
+            "cell_w": (per_row[0][0][1] - per_row[0][0][0]) if per_row else ((cols[0][1] - cols[0][0]) if cols else 0),
             "cell_h": (rows[0][1] - rows[0][0]) if rows else 0,
+            **({"row_col_spans": [[list(c) for c in r] for r in per_row]} if per_row else {}),
             "frames": frames,
         })
     (out_dir / "sections.json").write_text(json.dumps({"sheet": name, "size": list(img.size), "titles": [list(t) for t in titles], "sections": sections}))

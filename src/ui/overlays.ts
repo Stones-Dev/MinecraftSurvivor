@@ -15,11 +15,13 @@ import {
 import { cb } from '../core/accessibility';
 import { drawIcon } from './icons';
 import { formatClock, shortNumber } from './metaWidgets';
+import { pauseLayout } from './pauseLayout';
+import { settingsScreen } from './settingsScreen';
 import { drawBar, drawPanel, drawText, fitText, inRect, type Rect, UI, wrap } from './panel';
 import { resultsScreen } from './resultsScreen';
 import type { Screen } from './router';
-import { Buttons, PadNav } from './widgets';
-import type { NavEvent } from './hubModel';
+import { Buttons, PadNav, drawVolumeBar } from './widgets';
+import { clampVolume, keyToNav, stepVolume, volumeFromFrac, type NavEvent } from './hubModel';
 
 const CARD_BORDER = { common: '#101014', rare: '#3b78d8', epic: '#a24ad8', legendary: '#e8b923' };
 
@@ -71,6 +73,13 @@ export function levelupScreen(app: App, run: RunState): Screen {
     else buttons.handleNav(ev);
   };
   return {
+    // While a modal is up the touch stick and buttons are off: a finger on a card must not steer the hero.
+    enter() {
+      app.touch.suspend();
+    },
+    exit() {
+      app.touch.resume();
+    },
     update(dt) {
       for (const ev of pad.poll(dt)) navigate(ev);
     },
@@ -150,6 +159,12 @@ export function itemChoiceScreen(app: App, run: RunState): Screen {
     app.router.pop();
   };
   return {
+    enter() {
+      app.touch.suspend();
+    },
+    exit() {
+      app.touch.resume();
+    },
     update(dt) {
       for (const ev of pad.poll(dt)) {
         if (ev === 'prev') buttons.nav('left');
@@ -235,6 +250,12 @@ export function victoryScreen(app: App, run: RunState, persist = true): Screen {
     else carryOn();
   };
   return {
+    enter() {
+      app.touch.suspend();
+    },
+    exit() {
+      app.touch.resume();
+    },
     update(dt) {
       for (const ev of pad.poll(dt)) {
         if (ev === 'ok') return ok();
@@ -283,41 +304,47 @@ export function victoryScreen(app: App, run: RunState, persist = true): Screen {
 
 /**
  * Pause menu. With the live `run` it also shows the run so far and how today's missions would stand if
- * the run ended now (the sim is frozen, so this is computed once).
+ * the run ended now (the sim is frozen, so this is computed once). Music and SFX volume bars and a Settings
+ * button live here too, so a player does not have to quit the run to turn the sound down.
  */
 export function pauseScreen(app: App, onQuit: () => void, run?: RunState): Screen {
-  // Keyboard and pad: Up / Down (d-pad) move between Resume and Quit, Enter / A press the focused one,
-  // Esc, P, B and Start resume. The ring appears on the first arrow or Enter press.
+  // Keyboard and pad: arrows / d-pad move the ring (Resume, Settings, Quit, and the two volume bars above
+  // them: Left / Right change a focused bar), Enter / A press the focused one, Esc, P, B and Start resume.
+  // The ring appears on the first arrow or Enter press.
   const buttons = new Buttons();
   const pad = new PadNav();
   let closed = false;
+  /** X of the click being dispatched (a bar button turns it into a volume; keyboard presses leave it null). */
+  let clickX: number | null = null;
   const info = run ? run.stats.snapshot(run) : null;
   const missions = info
-    ? missionPreview(app.data(), info)
-        .sort((x, y) => y.projected - y.progress - (x.projected - x.progress))
-        .slice(0, 5)
+    ? missionPreview(app.data(), info).sort(
+        (x, y) => y.projected - y.progress - (x.projected - x.progress),
+      )
     : [];
-  const rowsFor = (view: View): number => Math.min(missions.length, view.height < 220 ? 3 : 5);
-  const layout = (view: View): { panel: Rect; btns: Rect[] } => {
-    const w = Math.min(view.width - 12, 230);
-    const cx = Math.floor(view.width / 2);
-    const rows = rowsFor(view);
-    const bodyH = (info ? 12 : 0) + (rows > 0 ? 11 + rows * 12 : 0);
-    const h = 18 + bodyH + 2 * 18 + 6 + 8 + 12;
-    const panel = {
-      x: cx - Math.floor(w / 2),
-      y: Math.max(2, Math.floor((view.height - h) / 2)),
-      w,
-      h,
-    };
-    const by = panel.y + h - 12 - 2 * 18 - 6;
-    return {
-      panel,
-      btns: [
-        { x: cx - 50, y: by, w: 100, h: 16 },
-        { x: cx - 50, y: by + 20, w: 100, h: 16 },
-      ],
-    };
+  const VOLUMES = [
+    { id: 'vol-music', key: 'musicVolume' },
+    { id: 'vol-sfx', key: 'sfxVolume' },
+  ] as const;
+  const setVolume = (key: (typeof VOLUMES)[number]['key'], v: number): void => {
+    const settings = app.data().settings;
+    const next = clampVolume(v);
+    if (next === settings[key]) return;
+    settings[key] = next;
+    // The same path as Settings > Audio: save, then push the values to the audio engine.
+    app.store.save(app.data());
+    app.applySettings();
+    app.audio.play('click');
+  };
+  /** Left / Right on a focused volume bar change the value (the event is consumed); anything else is not. */
+  const adjustVolume = (ev: NavEvent): boolean => {
+    if (ev !== 'left' && ev !== 'right') return false;
+    for (const v of VOLUMES) {
+      if (!buttons.focusedIs(v.id)) continue;
+      setVolume(v.key, stepVolume(app.data().settings[v.key], ev === 'left' ? -1 : 1));
+      return true;
+    }
+    return false;
   };
   const resume = (): void => {
     if (closed) return;
@@ -329,23 +356,32 @@ export function pauseScreen(app: App, onQuit: () => void, run?: RunState): Scree
     closed = true;
     onQuit();
   };
+  const openSettings = (): void => {
+    app.router.push(settingsScreen(app, () => app.router.pop()));
+  };
   return {
+    enter() {
+      app.touch.suspend();
+    },
+    exit() {
+      app.touch.resume();
+    },
     update(dt) {
       // Start was consumed by the run screen to open this menu; a fresh press resumes.
       if (app.input.pausePressed()) return resume();
       for (const ev of pad.poll(dt)) {
         if (ev === 'back') return resume();
-        buttons.handleNav(ev);
+        if (!adjustVolume(ev)) buttons.handleNav(ev);
       }
     },
     render(view) {
       dim(view, 0.62);
       const { ctx } = view;
-      const { panel, btns } = layout(view);
+      const L = pauseLayout(view.width, view.height, info !== null, missions.length);
+      const { panel } = L;
       drawPanel(ctx, panel);
-      drawText(ctx, 'PAUSED', view.width / 2, panel.y + 13, '#fff', 'center');
-      let y = panel.y + 26;
-      if (info && run) {
+      drawText(ctx, 'PAUSED', view.width / 2, L.titleY, '#fff', 'center');
+      if (info && run && L.infoY !== null) {
         drawText(
           ctx,
           fitText(
@@ -353,18 +389,15 @@ export function pauseScreen(app: App, onQuit: () => void, run?: RunState): Scree
             panel.w - 12,
           ),
           view.width / 2,
-          y,
+          L.infoY,
           UI.soft,
           'center',
         );
-        y += 12;
       }
-      const rows = rowsFor(view);
-      if (rows > 0) {
-        drawText(ctx, "TODAY'S MISSIONS", panel.x + 8, y + 3, UI.gold);
-        y += 11;
-        missions.slice(0, rows).forEach((m, i) => {
-          const ry = y + i * 12;
+      if (L.missionsY !== null) {
+        drawText(ctx, "TODAY'S MISSIONS", panel.x + 8, L.missionsY, UI.gold);
+        missions.slice(0, L.missionRows).forEach((m, i) => {
+          const ry = L.missionsTop + i * 12;
           const shown = m.projected;
           const doneNow = shown >= m.def.target;
           const num = `${shortNumber(shown)}/${shortNumber(m.def.target)}`;
@@ -384,24 +417,52 @@ export function pauseScreen(app: App, onQuit: () => void, run?: RunState): Scree
           );
         });
       }
-      const [a, b] = btns;
       buttons.begin();
-      if (a && b) {
-        buttons.add(a, 'Resume (Esc)', resume, false, { variant: 'primary', key: 'resume' });
-        buttons.add(b, 'Quit to menu', quit, false, { key: 'quit' });
-        drawText(ctx, 'Quitting forfeits this run', view.width / 2, b.y + 28, UI.faint, 'center');
+      buttons.add(L.resume, 'Resume (Esc)', resume, false, { variant: 'primary', key: 'resume' });
+      buttons.add(L.settings, 'Settings', openSettings, false, { key: 'settings' });
+      buttons.add(L.quit, 'Quit to menu', quit, false, { key: 'quit' });
+      if (L.hintY !== null) {
+        drawText(ctx, 'Quitting forfeits this run', view.width / 2, L.hintY, UI.faint, 'center');
       }
+      const settings = app.data().settings;
+      VOLUMES.forEach((vol, i) => {
+        const row = L.volume[i];
+        if (!row) return;
+        const v = settings[vol.key];
+        drawText(ctx, row.label, row.labelX, row.y + 9, UI.soft);
+        drawText(ctx, `${Math.round(v * 100)}%`, row.pctRight, row.y + 9, UI.soft, 'right');
+        buttons.add(
+          row.bar,
+          row.label,
+          () => {
+            if (clickX === null) return;
+            setVolume(vol.key, volumeFromFrac((clickX - (row.bar.x + 1)) / (row.bar.w - 2)));
+          },
+          false,
+          {
+            key: vol.id,
+            custom: (c, r) => drawVolumeBar(c, { x: r.x, y: r.y + 1, w: r.w, h: r.h - 2 }, v),
+          },
+        );
+      });
       buttons.draw(view);
     },
     onMove(x, y) {
       buttons.move(x, y);
     },
     onClick(x, y) {
+      clickX = x;
       buttons.click(x, y);
+      clickX = null;
     },
     onKey(code) {
-      if (code === 'Escape' || code === 'KeyP' || app.input.pausePressed()) resume();
-      else buttons.handleKey(code);
+      if (code === 'Escape' || code === 'KeyP' || app.input.pausePressed()) {
+        resume();
+        return;
+      }
+      const ev = keyToNav(code);
+      if (ev && adjustVolume(ev)) return;
+      buttons.handleKey(code);
     },
   };
 }

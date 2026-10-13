@@ -45,6 +45,10 @@ ANIM_SYN = {"walking": "walk", "running": "walk", "swimming": "swim", "bite": "a
             "swing": "attack", "peck": "attack", "talking": "talk"}
 FPS = {"idle": 6, "walk": 8, "swim": 8, "attack": 10, "hurt": 10, "death": 8, "talk": 6, "punch": 10, "swing": 12}
 LOOPING = {"idle", "walk", "swim", "talk"}
+# Hero WALKING blocks: 4 facing rows (front, left profile, right profile, back) x 4 walk frames. Shipped as
+# `hero.<name>.<armor>.none.walk_<dir>` (unarmed; the weapon is drawn over it at run time).
+WALK_DIRS = ("down", "left", "right", "up")
+WALK_FRAMES = 4
 
 
 def slug(text: str) -> str:
@@ -58,8 +62,9 @@ def anim_name(raw: str) -> str:
 
 def entry(eid: str, sheet: str, section: int, frames: list[int], tags: list[str]) -> dict:
     anim = next((t[5:] for t in tags if t.startswith("anim:")), "idle")
+    base = anim.split("_")[0] if anim.startswith("walk_") else anim
     return {"id": eid, "sheet": sheet, "section": section, "frames": frames,
-            "fps": FPS.get(anim, 8), "loop": anim in LOOPING, "tags": tags}
+            "fps": FPS.get(base, 8), "loop": base in LOOPING, "tags": tags}
 
 
 def real_frames(sec: dict, cols: range | None = None) -> list[int]:
@@ -80,6 +85,13 @@ def hero_entries(sheet: str, catalog: list[dict]) -> list[dict]:
         frames = real_frames(sec)
         if not frames:
             continue
+        if text == "WALKING" and len(frames) == len(WALK_DIRS) * WALK_FRAMES:
+            for d, name in enumerate(WALK_DIRS):
+                tags = ["hero", sheet, f"armor:{armor}", "weapon:none", f"anim:walk_{name}"]
+                e = entry(f"hero.{sheet}.{armor}.none.walk_{name}", sheet, sec["n"],
+                          frames[d * WALK_FRAMES:(d + 1) * WALK_FRAMES], tags)
+                e["ship"] = True
+                out.append(e)
         if m:
             head, tier = m.group(1), (m.group(2) or "").lower()
             anim = {"IDLE TALKING": "talk", "IDLE": "idle", "PUNCH": "punch", "SWORD SWING": "swing"}[head]

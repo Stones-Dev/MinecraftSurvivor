@@ -4,7 +4,7 @@
  * Coordinates are art pixels.
  */
 import { coarsePointer, textScale, touchEnabled } from './accessibility';
-import type { InputSource } from './input';
+import { noteInputDevice, type InputSource } from './input';
 
 export interface TouchButton {
   id: 'ability' | 'item' | 'pause';
@@ -41,6 +41,8 @@ export class TouchInput implements InputSource {
   private curY = 0;
   private readonly held = new Map<number, TouchButton['id']>();
   private readonly pressed = new Set<TouchButton['id']>();
+  /** How many modal screens (level-up cards, pause, ...) cover the run; the stick and buttons are off while > 0. */
+  private modals = 0;
   private width = 426;
   private height = 240;
   /** Canvas zoom (CSS px per art px), learnt from the view; sizes the buttons to a finger. */
@@ -81,6 +83,27 @@ export class TouchInput implements InputSource {
     return touchEnabled(this.mode, this.coarse, this.active);
   }
 
+  /** Is a modal screen covering the run (the stick and the buttons ignore touches)? */
+  get suspended(): boolean {
+    return this.modals > 0;
+  }
+
+  /**
+   * A modal screen opened over the run (call from its `enter`). Drops a running drag and any held button, so a
+   * finger resting on a card cannot steer the hero, and ignores new touches on the stick and buttons until
+   * every `suspend` has been matched by a `resume` (its `exit`).
+   */
+  suspend(): void {
+    this.modals++;
+    this.stickId = null;
+    this.held.clear();
+  }
+
+  /** The matching modal screen closed. */
+  resume(): void {
+    this.modals = Math.max(0, this.modals - 1);
+  }
+
   /** Apply the Settings > Accessibility choice ('auto' = coarse pointer or first touch). */
   setMode(mode: 'auto' | 'on' | 'off', coarse = coarsePointer()): void {
     this.mode = mode;
@@ -101,6 +124,9 @@ export class TouchInput implements InputSource {
     this.zoom = zoom;
     if (this.mode === 'off') return false;
     this.active = true;
+    noteInputDevice('touch');
+    // Under a modal the touch belongs to the modal's own buttons (main.ts routes it to the screen on top).
+    if (this.modals > 0) return false;
     for (const b of this.buttons(width, height)) {
       if (Math.hypot(x - b.x, y - b.y) <= b.hit) {
         this.held.set(id, b.id);

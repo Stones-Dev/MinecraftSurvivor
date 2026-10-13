@@ -1,5 +1,5 @@
 import type { AnimDef } from './animator';
-import { columnBottoms, findFeet, type Feet } from './feet';
+import type { Feet } from './feet';
 
 interface FrameInfo {
   page: number;
@@ -9,6 +9,10 @@ interface FrameInfo {
   h: number;
   ox: number;
   oy: number;
+  /** Layered hero frames only, measured at build time (`tools/build_atlas.py`): see `Feet` in `core/feet.ts`. */
+  fx?: number;
+  fy?: number;
+  bx?: number;
 }
 
 interface AtlasJson {
@@ -141,27 +145,11 @@ export class Atlas {
     ctx.restore();
   }
 
-  private readonly feetCache = new Map<string, Feet | null>();
-
-  /** Where the feet are in a frame (see `core/feet.ts`), read from its pixels once; null without a canvas. */
+  /** Where the feet are in a hero frame (measured at build time and stored in atlas.json); null for other frames. */
   feetOf(key: string): Feet | null {
-    const hit = this.feetCache.get(key);
-    if (hit !== undefined) return hit;
-    let feet: Feet | null = null;
     const f = this.data.frames[key];
-    const page = f ? this.pages[f.page] : undefined;
-    if (f && page && typeof document !== 'undefined') {
-      const c = document.createElement('canvas');
-      c.width = f.w;
-      c.height = f.h;
-      const g = c.getContext('2d', { willReadFrequently: true });
-      if (g) {
-        g.drawImage(page, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
-        feet = findFeet(columnBottoms(g.getImageData(0, 0, f.w, f.h).data, f.w, f.h), f.ox, f.oy);
-      }
-    }
-    this.feetCache.set(key, feet);
-    return feet;
+    if (!f || f.fx === undefined || f.fy === undefined || f.bx === undefined) return null;
+    return { x: f.fx, lift: f.fy, cx: f.bx };
   }
 
   /**

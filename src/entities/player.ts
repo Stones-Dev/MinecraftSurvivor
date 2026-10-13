@@ -1,3 +1,4 @@
+import { pickWalkDir, type WalkDir } from '../core/heroAnim';
 import type { InputSource } from '../core/input';
 import type { BiomeId } from '../world/biomes';
 import { SOUL_SLOW, WATER_SLOW, type World } from '../world/world';
@@ -43,6 +44,8 @@ export class Player {
   /** Last non-zero move direction (unit vector; starts facing down): 4-direction sprite heroes read it. */
   moveDX = 0;
   moveDY = 1;
+  /** Facing row of the layered heroes' 4-direction walk cycle (hysteresis on diagonals, see `pickWalkDir`). */
+  walkDir: WalkDir = 'down';
   speed = 72; // art px per second (4.5 tiles/s)
   speedMult = 1;
   /** Environmental speed factor set each step (snowfall, cobwebs). */
@@ -99,6 +102,7 @@ export class Player {
       const len = Math.hypot(v.x, v.y);
       this.moveDX = v.x / len;
       this.moveDY = v.y / len;
+      this.walkDir = pickWalkDir(this.walkDir, this.moveDX, this.moveDY);
     }
     const ice = surface === 'ice';
     const speedScale = Math.max(1, sp / this.speed);

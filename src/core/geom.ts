@@ -91,6 +91,14 @@ export function bodyTop(spriteHeight: number): number {
   return Math.max(BODY_LOW, Math.min(BODY_CAP, spriteHeight * 0.8));
 }
 
+/**
+ * The hero's hurtbox for hostile projectiles: a vertical capsule from just above the ankles up to the shoulders
+ * (a bit under the 28-32 px sprite, so the head is not a free hit). It was a single ankle circle at y-6 until the
+ * v1.3 pass; hostile ranged pressure was lowered to pay for the taller box (docs/BALANCE.md).
+ */
+export const HERO_BODY_LOW = 4;
+export const HERO_BODY_TOP = 22;
+
 /** The parts of an enemy definition that give its drawn height. */
 interface BodyDef {
   height?: number;

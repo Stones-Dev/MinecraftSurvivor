@@ -136,6 +136,8 @@ describe('duplicates and collection', () => {
 
   it('spends tickets and refuses when short', () => {
     const s = defaultSave(1);
+    expect(s.currencies.spawnEggs).toBe(5); // starter eggs of a new save
+    s.currencies.spawnEggs = 0;
     expect(spendAndPull(s, OVERWORLD_BANNER, 1)).toBeNull();
     s.currencies.spawnEggs = 1;
     s.currencies.rareSpawnEggs = 1;

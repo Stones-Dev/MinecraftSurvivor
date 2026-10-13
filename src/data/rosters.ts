@@ -27,35 +27,47 @@ export interface BiomeRoster {
 }
 
 export const ROSTERS: Readonly<Partial<Record<BiomeId, BiomeRoster>>> = {
-  // Early variety for the starting meadow (about 15% of the spawns from minute 0, growing to about 25%
-  // by minute 3): low-weight cousins of the zombie that are no tougher than it, then wolves, biters
-  // and an earlier silverfish swarm. The generic pool (zombie, skeleton, spider, creeper, slime) is untouched.
+  // Early variety for the starting meadow. The first version (about 16% from minute 0) still left minute 0 at
+  // 84% plain zombies (BUG-20), so the extras now carry about a third of the first minute: the jungle zombie
+  // (a zombie reskin) and three slime skins (plain, pink, tropical: 12 HP, 3-4 damage, they split into weaker
+  // halves) from the first second, the swamp rabbit from 0:30, then the quick biters (killer bunny, plains chomper)
+  // at 1:00, so the opening stays gentle while the controls are learnt. Wolves, frozen zombies and mossy skeletons
+  // follow at minute 2 and an earlier silverfish pack at minute 3. The frozen zombie must not come earlier: its
+  // touch slows the hero for 2.5 s, which a first-minute player cannot yet handle (a balance run with it at minute 0
+  // had three smart-bot deaths before 1:40, the plain roster none). The generic pool (zombie, skeleton, spider,
+  // creeper, slime) is untouched. `from` takes fractional minutes.
   plains: {
     add: {
-      zombie_rabbit: 0.7,
-      slime_medium: 0.6,
-      jungle_zombie: 0.6,
-      chomper_plains: 1.3,
+      jungle_zombie: 2.4,
+      slime_medium: 1.2,
+      pink_slime_medium: 0.8,
+      tropical_slime_medium: 0.8,
+      zombie_rabbit: 1.0,
       killer_bunny: 1.0,
+      chomper_plains: 1.3,
       angry_brown_wolf: 1.4,
       frozen_zombie: 1.0,
       mossy_skeleton: 1.0,
     },
     from: {
-      zombie_rabbit: 0,
-      slime_medium: 0,
       jungle_zombie: 0,
-      chomper_plains: 1,
+      slime_medium: 0,
+      pink_slime_medium: 0,
+      tropical_slime_medium: 0,
+      zombie_rabbit: 0.5,
       killer_bunny: 1,
+      chomper_plains: 1,
       angry_brown_wolf: 2,
       frozen_zombie: 2,
       mossy_skeleton: 2,
       silverfish: 3,
     },
   },
+  // Forest and Dark Forest were 77% / 70% zombies at minute 0 (BUG-20): a slow slime and a jungle cousin join at once.
   forest: {
     mult: { spider: 1.3, witch: 0.5 },
-    from: { chomper_forest: 0, angry_brown_wolf: 1 },
+    add: { slime_medium: 1.6, jungle_zombie: 1.2 },
+    from: { chomper_forest: 0, angry_brown_wolf: 1, slime_medium: 0, jungle_zombie: 0 },
   },
   dark_forest: {
     mult: {
@@ -68,7 +80,16 @@ export const ROSTERS: Readonly<Partial<Record<BiomeId, BiomeRoster>>> = {
       vindicator: 1.5,
       evoker: 1.5,
     },
-    from: { witch: 3, pillager: 5, vindicator: 5, evoker: 7, chomper_dark_forest: 0 },
+    add: { slime_medium: 1.5, jungle_zombie: 1.2 },
+    from: {
+      witch: 3,
+      pillager: 5,
+      vindicator: 5,
+      evoker: 7,
+      chomper_dark_forest: 0,
+      slime_medium: 0,
+      jungle_zombie: 0,
+    },
   },
   snowy_taiga: {
     mult: {

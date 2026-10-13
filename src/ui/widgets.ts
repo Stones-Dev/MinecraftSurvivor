@@ -176,6 +176,25 @@ export class Buttons {
     this.focusId = (hit ?? this.list.find((b) => !b.disabled))?.id ?? null;
   }
 
+  /**
+   * Keyboard / pad mode with no button focused: the ring leaves the buttons (the screen draws its own cursor,
+   * e.g. on a card grid) but hover stays off, and `activate()` presses nothing until `focusOn` is called.
+   */
+  hideFocus(): void {
+    this.kbd = true;
+    this.focusId = null;
+  }
+
+  /** Is a button focused right now (keyboard mode and the ring on an enabled button)? */
+  get hasFocus(): boolean {
+    return this.focused() !== undefined;
+  }
+
+  /** Is the button with this key / label enabled (false when absent this frame)? */
+  isEnabled(key: string): boolean {
+    return this.list.some((b) => b.id.startsWith(`${key}#`) && !b.disabled);
+  }
+
   /** Move the focus ring in a direction; returns true when it moved (or appeared). */
   nav(dir: 'up' | 'down' | 'left' | 'right'): boolean {
     if (this.list.length === 0) return false;
@@ -318,6 +337,31 @@ export class PadNav {
     this.down = nowDown;
     return out;
   }
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Volume bar (Settings > Audio and the pause menu).
+
+/** A horizontal volume bar with a 1 px frame; `v` is 0..1. */
+export function drawVolumeBar(
+  ctx: CanvasRenderingContext2D,
+  bar: Rect,
+  v: number,
+  focused = false,
+  tick = 0,
+): void {
+  ctx.fillStyle = '#101014';
+  ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
+  ctx.fillStyle = '#3b3b46';
+  ctx.fillRect(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2);
+  ctx.fillStyle = '#7dff9a';
+  ctx.fillRect(
+    bar.x + 1,
+    bar.y + 1,
+    Math.round((bar.w - 2) * Math.max(0, Math.min(1, v))),
+    bar.h - 2,
+  );
+  if (focused) drawFocusRing(ctx, bar, tick);
 }
 
 // ---------------------------------------------------------------------------------------------------

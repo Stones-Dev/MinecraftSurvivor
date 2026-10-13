@@ -1,6 +1,7 @@
 /** Run state and the fixed-step simulation (everything gameplay; rendering lives in ui/ and world/renderer). */
 import type { SfxName } from './core/audio';
 import type { InputSource } from './core/input';
+import { HitStop } from './core/hitstop';
 import { Rng } from './core/rng';
 import { SpatialHash } from './core/spatialhash';
 import { baseMods, PASSIVES, type Mods, type PassiveId } from './data/upgrades';
@@ -223,6 +224,8 @@ export class RunState {
   status: RunStatus = 'playing';
   /** Screen-shake amplitude in px, decays on its own. */
   shake = 0;
+  /** Hit-stop scheduler (core/hitstop.ts). */
+  readonly hitStop = new HitStop();
   /** Seconds since death (the screen shows Results after a beat). */
   deadT = 0;
 
@@ -479,6 +482,8 @@ export class RunState {
     updateItems(this, dt);
     this.petHooks();
     p.update(dt, input, this.world, this.biome(), this.mods.waterImmune);
+    // Attacker recoil: a swing that landed a hit holds its frame for a couple of steps.
+    if (this.hitStop.consumeSwingHold() && p.swingT > 0) p.swingT += dt;
     if (p.dead) {
       if (this.status !== 'dead') this.emit('death');
       this.status = 'dead';

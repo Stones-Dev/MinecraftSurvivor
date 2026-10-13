@@ -1,6 +1,15 @@
 /** Damage, kills, projectiles, mines, pools and orbiters (BRIEF sections 4 and 9). */
-import { aimPointY, BODY_CAP, BODY_LOW, enemyBodyTop, sweepHit, sweepHitCapsule } from '../core/geom';
+import {
+  aimPointY,
+  BODY_CAP,
+  BODY_LOW,
+  enemyBodyTop,
+  HERO_BODY_LOW,
+  HERO_BODY_TOP,
+  sweepHitCapsule,
+} from '../core/geom';
 import type { Enemy } from '../entities/enemy';
+import { hitStunSteps } from '../core/hitstop';
 import { makeFx } from '../entities/fx';
 import { Pickup } from '../entities/pickup';
 import type { Projectile } from '../entities/projectile';
@@ -13,7 +22,8 @@ const SPARK_COLORS = ['#ffffff', '#ffe27a', '#ffb347'];
 
 /**
  * Hurt an enemy: damage (shield first), knockback away from (fromX, fromY), flash, number, sparks.
- * `quiet` suppresses the feedback (used for damage-over-time ticks).
+ * `quiet` suppresses the feedback (used for damage-over-time ticks). `heavy` marks a big hit (an axe crit) that
+ * stuns the victim for as long as a pet crit does.
  */
 /** Per quality tier (low, medium, high): hit sparks per hit and the live-effect cap that gates damage numbers. */
 const QUALITY_SPARKS = [0, 1, 3] as const;
@@ -27,6 +37,7 @@ export function damageEnemy(
   fromY: number,
   knock: number,
   quiet = false,
+  heavy = false,
 ): void {
   if (e.dying || dmg <= 0) return;
   // Pet bonuses: Arctic Fox (chilled targets), Glare (elites and bosses), Bat (night), Ocelot (crits).
@@ -45,6 +56,10 @@ export function damageEnemy(
   run.stats.damageDealt += Math.min(dmg, Math.max(0, e.hp));
   e.hp -= dmg;
   if (!quiet) {
+    // Hit-stun (core/hitstop.ts): at most one per flash window, so a rapid hitter cannot lock a mob in place.
+    // Bosses run scripted patterns and never freeze.
+    if (e.hurtT <= 0 && e.boss === null)
+      e.hitStun = Math.max(e.hitStun, hitStunSteps(crit || heavy));
     e.hurtT = 0.1;
     run.emit('hit');
     run.hitPoints.push(e.x, e.y);
@@ -101,6 +116,7 @@ export function killEnemy(run: RunState, e: Enemy, reward: boolean): void {
     e.def.slime === true || e.def.id.startsWith('slime') || e.def.id.startsWith('magma_cube');
   const slimeXp = slimy ? (1 + m.slimeXp) * (run.kit.slimeXpMult ?? 1) : 1;
   const big = e.elite || e.boss !== null;
+  run.hitStop.kill(big);
   const xp =
     e.def.xp *
     (e.elite ? 1.6 : 1) *
@@ -197,6 +213,7 @@ export function hurtPlayer(run: RunState, raw: number, attacker: Enemy | null = 
   const dealt = run.player.hurt(incoming);
   if (dealt <= 0) return 0;
   run.stats.damageTaken += dealt;
+  run.hitStop.heroHurt(dealt);
   run.emit('hurt');
   run.shake = Math.max(run.shake, 3);
   run.fx.push(
@@ -356,9 +373,20 @@ export function updateProjectiles(run: RunState, dt: number): void {
         if (p.blast > 0) explode(run, p.x, p.y, p.blast, 0, p.dmg, null);
         continue;
       }
-      // The hero keeps the small ankle-height hit circle: the audit asked for a taller body only where it
-      // applies, and a taller hero hurtbox cost the balance bot about 1-2 minutes against ranged mobs.
-      if (sweepHit(p.px, p.py, p.x, p.y, p.radius, pl.x, pl.y - 6, pl.radius)) {
+      // The hero is a vertical capsule (ankles up to the shoulders), like every other body.
+      if (
+        sweepHitCapsule(
+          p.px,
+          p.py,
+          p.x,
+          p.y,
+          p.radius,
+          pl.x,
+          pl.y - HERO_BODY_LOW,
+          pl.y - HERO_BODY_TOP,
+          pl.radius,
+        )
+      ) {
         if (run.shield.has && run.shield.ready && run.shield.reflect) {
           // Spiked Shield: block and send the projectile back.
           run.shield.ready = false;

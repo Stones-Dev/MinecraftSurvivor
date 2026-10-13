@@ -136,6 +136,13 @@ export const MAX_SECONDS = 1e9;
  */
 export const STARTER_ALLY = 'wolf';
 
+/**
+ * Spawn Eggs every NEW save starts with (one x1 pull each). Emeralds cannot be turned into eggs by the Spawner, so
+ * without these a new player would face an unusable Spawner until the first mission or boss pays out. Migrated and
+ * existing saves are never given them, and `summarizeSave().progress` ignores them (currencies are not progress).
+ */
+export const STARTER_EGGS = 5;
+
 export function defaultSave(now = Date.now()): SaveData {
   const gachaSeed = (now ^ 0x5bd1e995) >>> 0;
   return {
@@ -145,7 +152,7 @@ export function defaultSave(now = Date.now()): SaveData {
     gachaSeed,
     pullCount: 0,
     pity: {},
-    currencies: { emeralds: 500, spawnEggs: 0, rareSpawnEggs: 0 },
+    currencies: { emeralds: 500, spawnEggs: STARTER_EGGS, rareSpawnEggs: 0 },
     owned: {
       steve: { level: 1, shards: 0, obtainedAt: now },
       [STARTER_ALLY]: { level: 1, shards: 0, obtainedAt: now },
@@ -206,8 +213,10 @@ export const migrations: Record<number, Migration> = {
       // The prototype save predates the starter companion: it keeps its Steve-only collection.
       owned: { steve: { level: 1, shards: 0, obtainedAt: d.createdAt } },
       loadout: { hero: 'steve', pet: null, allies: [] },
+      // ... and the starter eggs: a prototype save keeps the 0 eggs it always had.
       currencies: {
         ...d.currencies,
+        spawnEggs: 0,
         emeralds: typeof old.emeralds === 'number' ? old.emeralds : 500,
       },
       records: {
@@ -515,7 +524,10 @@ export interface SaveSummary {
   pullCount: number;
   lastPlayed: number;
   name: string;
-  /** runs + pulls + owned companions beyond Steve and the (unpulled) starter ally: 0 means a fresh, untouched save. */
+  /**
+   * runs + pulls + owned companions beyond Steve and the (unpulled) starter ally: 0 means a fresh, untouched save.
+   * Currencies are not progress, so the starter eggs and emeralds of a new device never raise a cloud conflict.
+   */
   progress: number;
 }
 

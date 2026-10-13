@@ -99,9 +99,25 @@ export interface EnemyDef {
   mini?: boolean;
 }
 
+/**
+ * The hero's hurtbox became a vertical capsule (ankles to shoulders) in v1.3a, which makes every aimed projectile
+ * easier to land. Hostile projectile shooters (arrows, tridents, bolts, fireballs, skulls, spit) therefore wait
+ * this much longer between shots; lobbed pools and instant beams are unaffected (docs/BALANCE.md).
+ */
+export const HERO_BOX_CD_MULT = 1.2;
+
+function compensate(def: EnemyDef): EnemyDef {
+  const shot = def.shot;
+  if (!shot || shot.speed <= 0 || shot.pool) return def;
+  return {
+    ...def,
+    shot: { ...shot, cd: [shot.cd[0] * HERO_BOX_CD_MULT, shot.cd[1] * HERO_BOX_CD_MULT] },
+  };
+}
+
 const E: Record<string, EnemyDef> = {};
 function add(def: EnemyDef): void {
-  E[def.id] = def;
+  E[def.id] = compensate(def);
 }
 
 const base = { fromMinute: 0, weight: 0, walkAnim: true } as const;

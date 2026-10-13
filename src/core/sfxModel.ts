@@ -255,3 +255,96 @@ export const STEP_TIMBRE: Record<StepMaterial, StepTimbre> = {
     toneType: 'sine',
   },
 };
+
+// ---------- roulette pitch ----------
+
+/** Pitch range of the Spawner's roulette tick, in Hz: it rises from `SPIN_HZ_LOW` to `SPIN_HZ_HIGH`. */
+export const SPIN_HZ_LOW = 300;
+export const SPIN_HZ_HIGH = 900;
+
+/**
+ * Base pitch of the roulette tick at spin `progress` (0 = just started, 1 = finished): a smooth exponential
+ * climb so the ticks speed up in feel as well as in rate. Out-of-range progress is clamped. (The old tone
+ * read the in-run XP streak, which never changes in menus, so every tick sounded the same.)
+ */
+export function spinPitchHz(progress: number): number {
+  const p = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
+  return SPIN_HZ_LOW * (SPIN_HZ_HIGH / SPIN_HZ_LOW) ** p;
+}
+
+// ---------- kill streak ----------
+
+/** Kills closer together than this (seconds) belong to the same streak. */
+export const STREAK_WINDOW = 0.6;
+/** Pitch gained per kill of a streak (3%), compounding, and the ceiling (one octave). */
+export const STREAK_STEP = 0.03;
+export const STREAK_MAX_PITCH = 2;
+
+export interface StreakState {
+  /** Kills in the running streak (0 = none yet). */
+  count: number;
+  /** Time (seconds, audio clock) of the latest kill. */
+  lastAt: number;
+}
+
+export const NO_STREAK: StreakState = { count: 0, lastAt: -Infinity };
+
+/** The streak after `kills` kills at time `now`: it continues inside the window, else starts again at `kills`. */
+export function streakAfter(prev: StreakState, now: number, kills: number): StreakState {
+  const n = Math.max(0, Math.floor(kills));
+  if (n === 0) return prev;
+  const alive = now - prev.lastAt <= STREAK_WINDOW;
+  return { count: (alive ? prev.count : 0) + n, lastAt: now };
+}
+
+/**
+ * Pitch multiplier for the streak at time `now`: 1 for the first kill, +3% for each further kill inside the
+ * 0.6 s window (compounding), capped at one octave; back to 1 once the window has passed without a kill.
+ */
+export function streakPitch(s: StreakState, now: number): number {
+  if (s.count <= 1 || now - s.lastAt > STREAK_WINDOW) return 1;
+  return Math.min(STREAK_MAX_PITCH, (1 + STREAK_STEP) ** (s.count - 1));
+}
+
+// ---------- weapon-family signatures ----------
+
+/**
+ * Synth recipes of the weapon families (no audio files; `AudioEngine` turns them into voices). Levels are
+ * conservative: every recipe sums to well under the limiter threshold on its own.
+ *  - blade (sword, axe): a 4.5 kHz noise swish plus a fast square sweep, 420 -> 140 Hz.
+ *  - arrow (bow, crossbow): a resonant 1.8 kHz band-pass pluck (Q 4) plus a triangle click.
+ *  - heavy (anvil, TNT blast): a sine sub drop, 70 -> 35 Hz, over a 350 Hz low-passed rumble.
+ */
+export const SIGNATURE = {
+  blade: {
+    noiseHz: 4500,
+    noiseQ: 1.2,
+    noiseDur: 0.025,
+    noiseVol: 0.13,
+    toneFrom: 420,
+    toneTo: 140,
+    toneDur: 0.04,
+    toneVol: 0.06,
+    toneType: 'square' as OscillatorType,
+  },
+  arrow: {
+    bandHz: 1800,
+    bandQ: 4,
+    bandDur: 0.02,
+    bandVol: 0.2,
+    clickFrom: 1500,
+    clickTo: 900,
+    clickDur: 0.018,
+    clickVol: 0.09,
+    clickType: 'triangle' as OscillatorType,
+  },
+  heavy: {
+    subFrom: 70,
+    subTo: 35,
+    subDur: 0.09,
+    subVol: 0.34,
+    rumbleHz: 350,
+    rumbleDur: 0.32,
+    rumbleVol: 0.3,
+  },
+};

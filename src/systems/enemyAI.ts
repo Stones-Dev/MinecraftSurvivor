@@ -284,6 +284,11 @@ const TOOLS = { step, chase, contact, lineStrike };
 export function updateEnemies(run: RunState, dt: number): void {
   const p = run.player;
   for (const e of run.enemies) {
+    if (e.hitStun > 0 && !e.dying) {
+      // Hit-stun (core/hitstop.ts): stand still, animation included. The flash and the knockback keep their values.
+      e.hitStun--;
+      continue;
+    }
     e.animT += dt;
     e.hurtT = Math.max(0, e.hurtT - dt);
     e.angry = Math.max(0, e.angry - dt);

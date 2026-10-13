@@ -47,6 +47,7 @@ export const axe: WeaponDef = {
     const critChance = (w.evolved ? 0.6 : 0.25) + run.mods.luck;
     const critMult = w.evolved ? 2.5 : 2;
     enemiesInCircle(run, p.x, p.y, area, hits);
+    let landed = false;
     for (const e of hits) {
       let diff = Math.abs(Math.atan2(e.y - p.y, e.x - p.x) - angle);
       if (diff > Math.PI) diff = Math.PI * 2 - diff;
@@ -60,9 +61,11 @@ export const axe: WeaponDef = {
           makeFx('text', e.x, e.y - 22, 0.6, { text: 'CRIT!', vy: -20, color: '#ffe27a' }),
         );
       }
-      damageEnemy(run, e, dmg, p.x, p.y, KNOCK);
+      damageEnemy(run, e, dmg, p.x, p.y, KNOCK, false, dmg > baseDmg);
       onHitMods(run, e, 'melee', dmg);
+      landed = true;
     }
+    if (landed) run.hitStop.holdSwing();
     run.fx.push(
       makeFx('arc', p.x, p.y - 8, 0.3, {
         a0: angle - HALF_ARC,

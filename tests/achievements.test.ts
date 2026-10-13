@@ -99,9 +99,10 @@ describe('evaluateAchievements', () => {
 
   it('grants egg rewards to the wallet', () => {
     const s = defaultSave(NOW);
+    const eggs = s.currencies.spawnEggs; // the 5 starter eggs of a new save
     s.stats.kills = 10000;
     evaluateAchievements(s, NOW);
-    expect(s.currencies.spawnEggs).toBe(1); // Exterminator
+    expect(s.currencies.spawnEggs).toBe(eggs + 1); // Exterminator
   });
 
   it('reads best time, wins and counters', () => {

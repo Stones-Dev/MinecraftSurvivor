@@ -298,6 +298,14 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
     }
   };
 
+  /** How far the whole animation is (0..1): the x10 reveal climbs across all ten spins, not once per spin. */
+  const spinProgress = (): number => {
+    const own = 1 - spinT / (tenMode ? SPIN_TEN : SPIN_ONE);
+    if (!tenMode) return own;
+    const total = shown.length + 1 + queue.length;
+    return (shown.length + own) / total;
+  };
+
   const busy = (): boolean => phase === 'spin' || phase === 'reveal';
 
   /** One navigation event from the keyboard or a pad. */
@@ -324,7 +332,7 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
       t += dt;
       for (const ev of pad.poll(dt)) navigate(ev);
       if (phase === 'spin') {
-        if (Math.floor(t * 14) !== Math.floor((t - dt) * 14)) app.audio.play('spin');
+        if (Math.floor(t * 14) !== Math.floor((t - dt) * 14)) app.audio.playSpin(spinProgress());
         spinT -= dt;
         if (spinT <= 0) finishSpin();
       }
@@ -593,7 +601,9 @@ export function spawnerScreen(app: App, onBack: () => void): Screen {
       buttons.move(x, y);
     },
     onClick(x, y) {
-      if (buttons.click(x, y) || buttons.over(x, y)) return;
+      // Only a click that pressed an ENABLED button is swallowed: while a spin runs the pull buttons are
+      // disabled, and a cursor resting on one used to eat the click meant to skip the animation.
+      if (buttons.click(x, y)) return;
       if (showRates && inRect(ratesRect, x, y)) return;
       skip();
     },

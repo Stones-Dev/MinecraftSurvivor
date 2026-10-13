@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { App } from '../src/app';
 import type { View } from '../src/core/canvas';
+import { defaultSave, type SaveData } from '../src/core/save';
 import { RunState } from '../src/game';
 import { gainXp } from '../src/systems/levelup';
 import { itemChoiceScreen, levelupScreen, pauseScreen, victoryScreen } from '../src/ui/overlays';
+import { pauseLayout } from '../src/ui/pauseLayout';
 import type { Screen } from '../src/ui/router';
 
 // Drawing needs a DOM (font atlas, icons); the navigation logic does not, so drawing is stubbed out.
@@ -30,6 +32,10 @@ const view: View = {
 interface Harness {
   app: App;
   log: string[];
+  /** The save the screens read and write (volumes live in `data.settings`). */
+  data: SaveData;
+  /** Touch suspend depth (enter / exit of the overlays). */
+  touch: { depth: number };
   /** Set by tests that want `input.pausePressed()` to answer true once. */
   pausePressed: { v: boolean };
 }
@@ -37,16 +43,25 @@ interface Harness {
 function harness(): Harness {
   const log: string[] = [];
   const pausePressed = { v: false };
+  const data = defaultSave(0);
+  const touch = { depth: 0 };
   const app = {
     router: {
       pop: () => log.push('pop'),
       replace: () => log.push('replace'),
+      push: () => log.push('push'),
     },
     input: { pausePressed: () => pausePressed.v },
     audio: { play: () => undefined },
-    data: () => ({}),
+    touch: {
+      suspend: () => touch.depth++,
+      resume: () => touch.depth--,
+    },
+    store: { save: () => log.push('save') },
+    applySettings: () => log.push('apply'),
+    data: () => data,
   } as unknown as App;
-  return { app, log, pausePressed };
+  return { app, log, pausePressed, data, touch };
 }
 
 const frame = (s: Screen, dt = 1 / 60): void => {
@@ -162,16 +177,131 @@ describe('pause menu', () => {
     let quit = 0;
     const s = pauseScreen(app, () => quit++);
     frame(s);
-    // Layout without a run: panel 18 + 2 * 18 + 6 + 8 + 12 = 80 high, centred in 180; buttons start 70 px in.
-    const top = Math.floor((180 - 80) / 2);
-    s.onClick?.(160, top + 80 - 12 - 36 - 6 + 20 + 8);
+    const L = pauseLayout(view.width, view.height, false, 0);
+    s.onClick?.(L.quit.x + L.quit.w / 2, L.quit.y + L.quit.h / 2);
     expect(quit).toBe(1);
     const r = harness();
     const s2 = pauseScreen(r.app, () => undefined);
     frame(s2);
-    s2.onClick?.(160, top + 80 - 12 - 36 - 6 + 8);
+    s2.onClick?.(L.resume.x + 4, L.resume.y + 4);
     expect(r.log).toEqual(['pop']);
     expect(log).toEqual([]);
+  });
+
+  it('Settings opens the settings screen on top (Resume and Quit stay as they were)', () => {
+    const { app, log } = harness();
+    const s = pauseScreen(app, () => undefined);
+    frame(s);
+    press(s, 'ArrowRight'); // ring on Resume
+    press(s, 'ArrowRight'); // Settings sits right of Resume
+    press(s, 'Enter');
+    expect(log).toEqual(['push']);
+  });
+
+  it('has Music and SFX bars: a click sets the volume, saves and applies it', () => {
+    const { app, log, data } = harness();
+    const s = pauseScreen(app, () => undefined);
+    frame(s);
+    const L = pauseLayout(view.width, view.height, false, 0);
+    const music = L.volume[0]?.bar;
+    const sfx = L.volume[1]?.bar;
+    if (!music || !sfx) throw new Error('no volume rows');
+    s.onClick?.(music.x + 1 + (music.w - 2) * 0.2, music.y + 4);
+    expect(data.settings.musicVolume).toBe(0.2);
+    expect(log).toEqual(['save', 'apply']);
+    s.onClick?.(sfx.x + sfx.w - 1, sfx.y + 4); // the far end is full volume
+    expect(data.settings.sfxVolume).toBe(1);
+    expect(log).toEqual(['save', 'apply', 'save', 'apply']);
+  });
+
+  it('keyboard: Up from Resume reaches the SFX bar, Left / Right change it, Up again reaches Music', () => {
+    const { app, data } = harness();
+    data.settings.sfxVolume = 0.5;
+    data.settings.musicVolume = 0.5;
+    const s = pauseScreen(app, () => undefined);
+    frame(s);
+    press(s, 'ArrowDown'); // ring on Resume
+    press(s, 'ArrowUp'); // SFX bar
+    press(s, 'ArrowLeft', 'ArrowLeft');
+    expect(data.settings.sfxVolume).toBe(0.3);
+    press(s, 'ArrowRight');
+    expect(data.settings.sfxVolume).toBe(0.4);
+    press(s, 'ArrowUp'); // Music bar
+    press(s, 'KeyD');
+    expect(data.settings.musicVolume).toBe(0.6);
+    expect(data.settings.sfxVolume).toBe(0.4);
+    press(s, 'ArrowDown', 'ArrowDown'); // back to Resume, then Quit
+  });
+
+  it('gamepad: the d-pad reaches a volume bar and left / right change it; Back still resumes', () => {
+    installPad();
+    const { app, log, data } = harness();
+    data.settings.musicVolume = 0.5;
+    const s = pauseScreen(app, () => undefined);
+    frame(s);
+    tap(s, 13); // ring on Resume
+    tap(s, 12); // SFX
+    tap(s, 12); // Music
+    tap(s, 15);
+    expect(data.settings.musicVolume).toBe(0.6);
+    tap(s, 14);
+    tap(s, 14);
+    expect(data.settings.musicVolume).toBe(0.4);
+    expect(log.filter((l) => l === 'pop')).toEqual([]);
+    tap(s, 1); // B
+    expect(log).toContain('pop');
+  });
+
+  it('touch is switched off while the pause menu is on top and back on after', () => {
+    const { app, touch } = harness();
+    const s = pauseScreen(app, () => undefined);
+    s.enter?.();
+    expect(touch.depth).toBe(1);
+    s.exit?.();
+    expect(touch.depth).toBe(0);
+  });
+});
+
+describe('pause layout', () => {
+  const sizes: [number, number][] = [
+    [213, 120],
+    [320, 180],
+    [426, 240],
+    [640, 360],
+    [960, 540],
+  ];
+  const inside = (
+    r: { x: number; y: number; w: number; h: number },
+    p: { x: number; y: number; w: number; h: number },
+  ): boolean => r.x >= p.x && r.y >= p.y && r.x + r.w <= p.x + p.w && r.y + r.h <= p.y + p.h;
+  const overlaps = (
+    a: { x: number; y: number; w: number; h: number },
+    b: { x: number; y: number; w: number; h: number },
+  ): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  it.each(sizes)('%i x %i: everything fits the view and nothing overlaps', (w, h) => {
+    for (const missions of [0, 1, 3, 8]) {
+      const L = pauseLayout(w, h, true, missions);
+      expect(L.panel.y).toBeGreaterThanOrEqual(0);
+      expect(L.panel.y + L.panel.h).toBeLessThanOrEqual(h);
+      expect(L.panel.x).toBeGreaterThanOrEqual(0);
+      expect(L.panel.x + L.panel.w).toBeLessThanOrEqual(w);
+      const boxes = [L.resume, L.settings, L.quit, ...L.volume.map((v) => v.bar)];
+      for (const b of boxes) expect(inside(b, L.panel)).toBe(true);
+      for (let i = 0; i < boxes.length; i++)
+        for (let j = i + 1; j < boxes.length; j++) {
+          expect(overlaps(boxes[i]!, boxes[j]!)).toBe(false);
+        }
+      expect(L.missionRows).toBeLessThanOrEqual(missions);
+      // Missions give way first; the controls are always there.
+      if (h >= 180) expect(L.volume).toHaveLength(2);
+    }
+  });
+
+  it('keeps some missions at 320 x 180 and shows five on tall views', () => {
+    expect(pauseLayout(320, 180, true, 8).missionRows).toBe(3);
+    expect(pauseLayout(640, 360, true, 8).missionRows).toBe(5);
+    expect(pauseLayout(640, 360, true, 2).missionRows).toBe(2);
   });
 });
 

@@ -100,29 +100,68 @@ describe('roster selection', () => {
     }
   });
 
-  it('plains has about 15% variety from minute 0, growing over the first three minutes', () => {
-    const share = (minute: number): number => {
+  // BUG-20: the first variety pass (about 16%) still left minute 0 at 84% plain zombies. The extras are now about a
+  // third of the first minute: zombie and slime reskins (slow, no status effects) from the first second, the swamp
+  // rabbit from 0:30, the quick biters at 1:00 and the frozen zombie (its touch slows the hero) not before minute 2.
+  it('plains is at most two thirds zombies from the first second and varied by minute 3', () => {
+    const zombieShare = (minute: number): number => {
       const pool = spawnPool('plains', minute, false, false);
       const total = pool.reduce((a, e) => a + e.weight, 0);
-      const legacy = new Set(legacyPool('plains', minute, false, false).map(([id]) => id));
-      return pool.filter((e) => !legacy.has(e.def.id)).reduce((a, e) => a + e.weight, 0) / total;
+      return (pool.find((e) => e.def.id === 'zombie')?.weight ?? 0) / total;
     };
-    expect(share(0)).toBeGreaterThan(0.12);
-    expect(share(0)).toBeLessThan(0.2);
-    expect(share(3.1)).toBeGreaterThan(share(0));
-    expect(share(3.1)).toBeLessThan(0.35);
-    // Minute 0 now has several different mobs and none of them hits harder than a zombie.
-    const ids = spawnPool('plains', 0, false, false).map((e) => e.def.id);
-    expect(ids.length).toBeGreaterThanOrEqual(4);
-    // Minutes 0-3 draw on at least eight different mob types.
-    expect(spawnPool('plains', 3.1, false, false).length).toBeGreaterThanOrEqual(12);
+    expect(zombieShare(0)).toBeLessThanOrEqual(0.7);
+    expect(zombieShare(0.49)).toBeLessThanOrEqual(0.7);
+    expect(zombieShare(0.5)).toBeLessThanOrEqual(0.65);
+    expect(zombieShare(1)).toBeLessThanOrEqual(0.4);
+    expect(zombieShare(3.1)).toBeLessThan(zombieShare(1));
+    // Five mob types in the first 30 s, six by 0:30, ten at minute 1, fifteen by minute 3.
+    expect(spawnPool('plains', 0, false, false).length).toBeGreaterThanOrEqual(5);
+    expect(spawnPool('plains', 0.5, false, false).length).toBeGreaterThanOrEqual(6);
+    expect(spawnPool('plains', 1, false, false).length).toBeGreaterThanOrEqual(10);
+    expect(spawnPool('plains', 3.1, false, false).length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('the hero-slowing frozen zombie stays out of the opening minutes everywhere but the taiga', () => {
+    const frozen = ENEMIES['frozen_zombie'];
+    if (!frozen) throw new Error('missing def');
+    expect(frozen.contactStatus?.kind).toBe('slow');
+    for (const b of OVERWORLD_BIOMES) {
+      if (b === 'snowy_taiga') continue;
+      expect(spawnWeight(frozen, b, 1.9, false, false), b).toBe(0);
+    }
+  });
+
+  it('the first 30 seconds stay gentle: only zombie-speed melee mobs, nothing ranged or quick', () => {
+    for (const b of OVERWORLD_BIOMES) {
+      for (const e of spawnPool(b, 0.49, false, false)) {
+        if (b === 'plains' || b === 'forest' || b === 'dark_forest') {
+          // The three meadow-like starts: no mob faster than the zombie's pace plus a little (chomper aside).
+          if (!e.def.id.startsWith('chomper_')) {
+            expect(e.def.speed, `${b}: ${e.def.id}`).toBeLessThanOrEqual(34);
+          }
+          expect(e.def.archetype, `${b}: ${e.def.id}`).toBe('chaser');
+        }
+      }
+    }
+  });
+
+  it('no overworld biome opens with more than 70% plain zombies', () => {
+    for (const b of OVERWORLD_BIOMES) {
+      for (const minute of [0, 0.25, 0.5, 1, 2, 3]) {
+        const pool = spawnPool(b, minute, false, false);
+        const total = pool.reduce((a, e) => a + e.weight, 0);
+        const zombies = pool.find((e) => e.def.id === 'zombie')?.weight ?? 0;
+        expect(zombies / total, `${b} @${minute}`).toBeLessThanOrEqual(0.7);
+      }
+    }
   });
 
   it('a roster `add` admits a biome-filtered mob and still honours its start minute', () => {
     const rabbit = ENEMIES['zombie_rabbit'];
     const wolf = ENEMIES['angry_brown_wolf'];
     if (!rabbit || !wolf) throw new Error('missing defs');
-    expect(spawnWeight(rabbit, 'plains', 0, false, false)).toBeGreaterThan(0);
+    expect(spawnWeight(rabbit, 'plains', 0, false, false)).toBe(0); // quick mobs wait for 0:30
+    expect(spawnWeight(rabbit, 'plains', 0.5, false, false)).toBeGreaterThan(0);
     expect(spawnWeight(wolf, 'plains', 1, false, false)).toBe(0);
     expect(spawnWeight(wolf, 'plains', 2, false, false)).toBeGreaterThan(0);
     // Not added to a biome that has no entry for it.
@@ -134,9 +173,9 @@ describe('roster selection', () => {
       const ids = spawnPool(b, 12, true, true).map((e) => e.def.id);
       expect(ids.includes('stray'), `stray in ${b}`).toBe(b === 'snowy_taiga');
       expect(ids.includes('husk'), `husk in ${b}`).toBe(b === 'desert' || b === 'badlands');
-      // The plains admits the jungle zombie as an early variant (ROSTERS.plains.add).
+      // The plains, forest and dark forest admit the jungle zombie as an early variant (ROSTERS.*.add).
       expect(ids.includes('jungle_zombie'), `jungle zombie in ${b}`).toBe(
-        b === 'jungle' || b === 'plains',
+        b === 'jungle' || b === 'plains' || b === 'forest' || b === 'dark_forest',
       );
     }
   });

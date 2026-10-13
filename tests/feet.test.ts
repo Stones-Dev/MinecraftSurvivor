@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { columnBottoms, feetShift, findFeet } from '../src/core/feet';
+import { feetShift } from '../src/core/feet';
+import { columnBottoms, findFeet } from './helpers/feet';
 
 /** Per-column lowest opaque rows of real hero frames (read from public/atlas, with their anchors). */
 const FRAMES = {
@@ -59,7 +60,7 @@ describe('feet anchoring maths', () => {
   });
 
   it('reads the idle feet as standing on the anchor and the swing feet as lifted', () => {
-    expect(feet('steve.24.0')).toEqual({ x: -12, lift: 0 }); // shoes at columns 1..6
+    expect(feet('steve.24.0')).toMatchObject({ x: -12, lift: 0 }); // shoes at columns 1..6
     expect(feet('steve.136.0')?.lift).toBe(6);
     expect(feet('rana.38.0')?.lift).toBe(0);
     expect(feet('rana.143.2')?.lift).toBe(2);
@@ -68,7 +69,7 @@ describe('feet anchoring maths', () => {
   it('prefers the first foot run over a weapon that reaches lower to the right', () => {
     // steve.136.2: the sword tip is the lowest thing (row 40) but the feet are the first flat run (row 34).
     expect(feet('steve.136.2')?.lift).toBe(6);
-    expect(findFeet([5, 5, 5, 5], 0, 6)).toEqual({ x: 2, lift: 0 }); // 4 equal columns qualify
+    expect(findFeet([5, 5, 5, 5], 0, 6)).toMatchObject({ x: 2, lift: 0 }); // 4 equal columns qualify
     expect(findFeet([5, 5, 5, 6, 6], 0, 6)).toBeNull(); // no run of four
     expect(findFeet([-1, -1, -1, -1], 0, 6)).toBeNull(); // empty columns are no feet
   });

@@ -5,11 +5,17 @@ import { Rng } from './rng';
 import {
   burstPlan,
   detune,
+  NO_STREAK,
   RateLimiter,
+  SIGNATURE,
   SOFT_VOICE_CAP,
+  spinPitchHz,
   STEP_TIMBRE,
+  streakAfter,
+  streakPitch,
   type SfxName,
   type StepMaterial,
+  type StreakState,
 } from './sfxModel';
 
 export type { SfxName } from './sfxModel';
@@ -32,6 +38,8 @@ export class AudioEngine {
   private voices = 0;
   private xpStreak = 0;
   private xpAt = 0;
+  private streak: StreakState = NO_STREAK;
+  private killTotal = 0;
 
   /** Browsers need a user gesture before audio can start (the title screen click). */
   unlock(): void {
@@ -138,6 +146,61 @@ export class AudioEngine {
     };
   }
 
+  /** A short resonant band-pass noise burst (the arrow pluck, the blade swish). */
+  private band(freq: number, q: number, dur: number, vol: number, delay = 0): void {
+    const ctx = this.ctx;
+    const bus = this.sfxBus;
+    if (!ctx || !bus || !this.noiseBuf || this.voices >= MAX_VOICES) return;
+    const t0 = ctx.currentTime + delay;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(freq, t0);
+    filter.Q.setValueAtTime(q, t0);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filter).connect(g).connect(bus);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+    this.voices++;
+    src.onended = () => {
+      this.voices--;
+    };
+  }
+
+  /** Seconds on the audio clock (0 before the context exists). */
+  private clock(): number {
+    return this.ctx?.currentTime ?? 0;
+  }
+
+  /**
+   * Tell the engine how many enemies died in the step just simulated. Kills closer than 0.6 s together form
+   * a streak; each one after the first raises the base pitch of the hit sounds by 3% (up to an octave).
+   */
+  noteKills(kills: number): void {
+    this.streak = streakAfter(this.streak, this.clock(), kills);
+  }
+
+  /** `noteKills` from the run's running kill total (the engine keeps the difference; a smaller total = a new run). */
+  noteKillTotal(total: number): void {
+    if (total < this.killTotal) this.streak = NO_STREAK;
+    else this.noteKills(total - this.killTotal);
+    this.killTotal = total;
+  }
+
+  /** The Spawner's roulette tick; `progress` (0..1) of the spin raises its pitch. */
+  playSpin(progress: number): void {
+    const ctx = this.ctx;
+    const bus = this.sfxBus;
+    if (!ctx || !bus || this.muted || ctx.state !== 'running') return;
+    if (!this.limiter.allow('spin', ctx.currentTime)) return;
+    bus.gain.value = this.sfxVolume;
+    const f = spinPitchHz(progress);
+    this.tone(f, 0.05, 'square', 0.05, f * 1.6);
+  }
+
   /** A pitch factor near 1 for variation between repeated effects (`amount` 0.05 = +-5%). */
   private pitch(amount: number): number {
     return detune(this.rng.float(), amount);
@@ -181,7 +244,8 @@ export class AudioEngine {
     plan.forEach((v, i) => {
       // Extra voices only while the engine is not already busy; the first voice always plays.
       if (i > 0 && this.voices >= SOFT_VOICE_CAP) return;
-      const k = this.pitch(0.05 + 0.04 * v.spread);
+      const streak = name === 'hit' ? streakPitch(this.streak, this.clock()) : 1;
+      const k = this.pitch(0.05 + 0.04 * v.spread) * streak;
       const g = v.gain;
       const d = v.delay;
       switch (name) {
@@ -195,14 +259,20 @@ export class AudioEngine {
           this.tone(160 * k, 0.22, 'sawtooth', 0.22, 60 * k);
           this.noise(0.12, 0.18, 1800);
           break;
-        case 'swing':
-          this.noise(0.14, 0.14 * g, 5000, d);
-          this.tone(480 * k, 0.1, 'triangle', 0.08 * g, 220 * k, d);
+        case 'swing': {
+          // Blade family (sword, axe): a short 4.5 kHz swish and a fast falling square sweep.
+          const b = SIGNATURE.blade;
+          this.band(b.noiseHz * k, b.noiseQ, b.noiseDur, b.noiseVol * g, d);
+          this.tone(b.toneFrom * k, b.toneDur, b.toneType, b.toneVol * g, b.toneTo * k, d);
           break;
-        case 'bow':
-          this.tone(700 * k, 0.09, 'triangle', 0.12 * g, 260 * k, d);
-          this.noise(0.05, 0.08 * g, 6000, d);
+        }
+        case 'bow': {
+          // Arrow family (bow, crossbow): a resonant pluck and a triangle click.
+          const a = SIGNATURE.arrow;
+          this.band(a.bandHz * k, a.bandQ, a.bandDur, a.bandVol * g, d);
+          this.tone(a.clickFrom * k, a.clickDur, a.clickType, a.clickVol * g, a.clickTo * k, d);
           break;
+        }
       }
     });
   }
@@ -210,10 +280,13 @@ export class AudioEngine {
   private playOnce(name: SfxName): void {
     const now = this.ctx?.currentTime ?? 0;
     switch (name) {
-      case 'explode':
-        this.noise(0.45, 0.4, 1600);
-        this.tone(90, 0.4, 'square', 0.25, 30);
+      case 'explode': {
+        // Heavy family (anvil, TNT): a sub drop under a low-passed rumble.
+        const h = SIGNATURE.heavy;
+        this.tone(h.subFrom, h.subDur, 'sine', h.subVol, h.subTo);
+        this.noise(h.rumbleDur, h.rumbleVol, h.rumbleHz);
         break;
+      }
       case 'tnt':
         this.tone(900, 0.06, 'square', 0.1, 900);
         break;
@@ -286,7 +359,8 @@ export class AudioEngine {
         this.tone(1320, 0.12, 'triangle', 0.1, 1760, 0.14);
         break;
       case 'spin':
-        this.tone(300 + this.xpStreak * 20, 0.05, 'square', 0.05, 500);
+        // Callers that know the spin progress use `playSpin`; this is the mid-spin tick.
+        this.tone(spinPitchHz(0.5), 0.05, 'square', 0.05, spinPitchHz(0.5) * 1.6);
         break;
       case 'gameover':
         [392, 349, 311, 261, 196].forEach((f, i) =>

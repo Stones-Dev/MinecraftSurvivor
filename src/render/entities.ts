@@ -2,7 +2,16 @@
 import { cb, reduceFlash } from '../core/accessibility';
 import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
-import { feetShift } from '../core/feet';
+import { centerShift, feetShift } from '../core/feet';
+import {
+  handPlace,
+  heldAnimId,
+  locomotionState,
+  walkAnimId,
+  walkArmorFor,
+  walkFrameIndex,
+  type HandPlace,
+} from '../core/heroAnim';
 import { heroById, type HeroDef } from '../data/companions';
 import { ARMOR_IDS, SWORD_IDS } from '../data/tiers';
 import type { Ally, PetState } from '../entities/ally';
@@ -406,8 +415,36 @@ export function drawHero(
   }
 }
 
-/** Steve / Alex / Rana: the layered hero sheets, swapped by armor and sword tier. */
-function drawLayeredHero(
+/** Scratch canvas for a translucent layered hero: body and held sword are composed opaque, then faded together. */
+let heroGroup: HTMLCanvasElement | null = null;
+const GROUP_W = 112;
+const GROUP_H = 88;
+const GROUP_AX = 56;
+const GROUP_AY = 70;
+
+/** Animation of a layered hero for an armour / sword tier: exact tier, else unarmoured with that sword, else wood. */
+function layeredAnim(
+  atlas: Atlas,
+  name: string,
+  armor: string,
+  sword: string,
+  anim: 'idle' | 'swing',
+): { id: string; armor: string } {
+  const exact = `hero.${name}.${armor}.sword_${sword}.${anim}`;
+  if (atlas.hasAnim(exact)) return { id: exact, armor };
+  const bare = `hero.${name}.none.sword_${sword}.${anim}`;
+  if (atlas.hasAnim(bare)) return { id: bare, armor: 'none' };
+  return { id: `hero.${name}.none.sword_wood.${anim}`, armor: 'none' };
+}
+
+/**
+ * Steve / Alex / Rana: the layered hero sheets, swapped by armor and sword tier. Locomotion state machine (see
+ * `core/heroAnim.ts`): SWING (the sword swing, absolute priority) > RUN (the sheet's own 4-direction walk cycle plus
+ * the sword drawn over the hand) > IDLE (sword guard). Every pose is placed on the same feet: swing frames are
+ * shifted onto the idle feet and the body centre of each pose sits on the anchor column, so switching pose or
+ * turning never pops. `overlay` = false hides the held sword (screenshots, tests).
+ */
+export function drawLayeredHero(
   ctx: CanvasRenderingContext2D,
   atlas: Atlas,
   run: RunState,
@@ -416,39 +453,80 @@ function drawLayeredHero(
   sword: string,
   x: number,
   y: number,
+  overlay = true,
 ): void {
   const p: Player = run.player;
-  const swinging = p.swingT > 0 && !p.dead;
-  const id = `hero.${name}.${armor}.sword_${sword}.${swinging ? 'swing' : 'idle'}`;
-  const walking = p.moving && !p.dead;
-  // The walk bob and leg shuffle keep going during a swing; the swing clock is the swing's own.
-  const t = swinging ? SWING_TIME - p.swingT : run.time * (walking ? 1.5 : 1);
-  const idleAnim = atlas.anim(`hero.${name}.none.sword_wood.idle`);
-  const anim = atlas.hasAnim(id) ? atlas.anim(id) : idleAnim;
-  let key = frameAt(anim, t);
-  // The swing frames are anchored differently from the idle ones (feet 2-6 px higher, a little sideways):
-  // shift them so the feet stay where the idle feet are.
-  let offX = 0;
+  const idle = layeredAnim(atlas, name, armor, sword, 'idle');
+  const idleAnim = atlas.anim(idle.id);
+  const idleFeet = atlas.feetOf(idleAnim.frames[0] ?? '');
+  const walkId = walkAnimId(name, walkArmorFor(idle.armor === armor, armor), p.walkDir);
+  let state = locomotionState(p.swingT > 0, p.moving, p.dead);
+  if (state === 'run' && !atlas.hasAnim(walkId)) state = 'idle';
+  let key: string | undefined;
+  let offX = centerShift(idleFeet);
   let offY = 0;
-  if (swinging) {
-    const idleId = `hero.${name}.${armor}.sword_${sword}.idle`;
-    const ref = atlas.hasAnim(idleId) ? atlas.anim(idleId).frames[0] : idleAnim.frames[0];
-    const shift = feetShift(ref ? atlas.feetOf(ref) : null, atlas.feetOf(key));
-    offX = shift.dx;
+  let flip = p.facing < 0;
+  let heldKey: string | null = null;
+  let place: HandPlace | null = null;
+  if (state === 'swing') {
+    const anim = atlas.anim(layeredAnim(atlas, name, armor, sword, 'swing').id);
+    key = frameAt(anim, SWING_TIME - p.swingT);
+    // The swing frames are anchored differently from the idle ones (feet 2-6 px higher, a little sideways).
+    const shift = feetShift(idleFeet, atlas.feetOf(key));
+    offX += shift.dx;
     offY = shift.dy;
+    flip = p.attackFacing < 0;
+  } else if (state === 'run') {
+    const frames = atlas.anim(walkId).frames;
+    key = frames[walkFrameIndex(p.walkPhase)] ?? frames[0];
+    offX = centerShift(atlas.feetOf(frames[0] ?? ''));
+    flip = false; // the left and right rows are real sprites, never mirrored
+    const heldId = heldAnimId(name, sword);
+    if (overlay && atlas.hasAnim(heldId)) {
+      heldKey = atlas.anim(heldId).frames[0] ?? null;
+      place = handPlace(name, p.walkDir);
+    }
+  } else key = frameAt(idleAnim, run.time);
+  if (key === undefined) return;
+  const flash = p.hurtT > 0 && !reduceFlash();
+  const lift = state === 'run' ? Math.max(0, atlas.feetOf(key)?.lift ?? 0) : 0;
+  const bodyKey = flash ? `${key}@flash` : key;
+  const paint = (g: CanvasRenderingContext2D, px: number, py: number): void => {
+    const held = (): void => {
+      if (heldKey && place)
+        atlas.draw(
+          g,
+          flash ? `${heldKey}@flash` : heldKey,
+          px + place.x,
+          py - place.y - lift,
+          place.flip,
+        );
+    };
+    if (place?.behind) held();
+    atlas.draw(g, bodyKey, px, py, flip, 1, offX, offY);
+    if (!place?.behind) held();
+  };
+  const alpha = p.dead
+    ? 0.5
+    : p.iframes > 0 && (reduceFlash() || Math.floor(run.time * 20) % 2 === 0)
+      ? 0.65
+      : 1;
+  if (alpha === 1) {
+    paint(ctx, x, y);
+    return;
   }
-  if (p.hurtT > 0 && !reduceFlash()) key += '@flash';
-  if (p.dead) ctx.globalAlpha = 0.5;
-  else if (p.iframes > 0 && (reduceFlash() || Math.floor(run.time * 20) % 2 === 0))
-    ctx.globalAlpha = 0.65;
-  // A swing faces the attack, the rest of the body follows the movement.
-  const flip = (swinging ? p.attackFacing : p.facing) < 0;
-  if (walking) {
-    // Distance-driven walk cycle: the legs shuffle +1, 0, -1, 0 px and the body rises on the passing step.
-    const stage = Math.floor(p.walkPhase) & 3;
-    const legDx = stage === 1 ? 1 : stage === 3 ? -1 : 0;
-    atlas.drawWalk(ctx, key, x, y, flip, legDx, stage & 1, undefined, offX, offY);
-  } else atlas.draw(ctx, key, x, y, flip, 1, offX, offY);
+  if (typeof document === 'undefined') return;
+  if (!heroGroup) {
+    heroGroup = document.createElement('canvas');
+    heroGroup.width = GROUP_W;
+    heroGroup.height = GROUP_H;
+  }
+  const g = heroGroup.getContext('2d');
+  if (!g) return;
+  g.clearRect(0, 0, GROUP_W, GROUP_H);
+  paint(g, GROUP_AX, GROUP_AY);
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(heroGroup, Math.round(x) - GROUP_AX, Math.round(y) - GROUP_AY);
   ctx.globalAlpha = 1;
 }
 
@@ -538,6 +616,15 @@ function projTrail(
   ctx.globalAlpha = 1;
 }
 
+/** Dark outline drawn under projectile line art so pale shafts and heads read on snow and sand as well as on grass. */
+const PROJ_OUTLINE = '#1b1528';
+
+/** A 3x3 dark square centred on a pixel: painted under every pixel of a sprite it makes a 1 px outline. */
+function outlinePx(ctx: CanvasRenderingContext2D, x: number, y: number, size = 1): void {
+  ctx.fillStyle = PROJ_OUTLINE;
+  ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, size + 2, size + 2);
+}
+
 /** Arrow / bolt: head (bright tip, barbs), wooden shaft, feathers; `len` px from the tip back. */
 function drawShaft(
   ctx: CanvasRenderingContext2D,
@@ -555,6 +642,19 @@ function drawShaft(
   const nx = -dy;
   const ny = dx;
   const featherAt = len - 3;
+  // Outline pass: the whole arrow, barbs and feathers included (they sit within 2 px of the axis).
+  for (let i = 0; i < len; i++) {
+    const bx = x - dx * i;
+    const by = y - dy * i;
+    outlinePx(ctx, bx, by, thick);
+    if (i === 2) {
+      outlinePx(ctx, bx + nx, by + ny);
+      outlinePx(ctx, bx - nx, by - ny);
+    } else if (i >= featherAt) {
+      outlinePx(ctx, bx + nx * 1.5, by + ny * 1.5);
+      outlinePx(ctx, bx - nx * 1.5, by - ny * 1.5);
+    }
+  }
   for (let i = 0; i < len; i++) {
     const bx = x - dx * i;
     const by = y - dy * i;
@@ -586,24 +686,21 @@ function drawTridentSprite(
   // Centre the sprite on the projectile position so a spinning trident turns around its middle.
   const hx = x + c * (len / 2);
   const hy = y + s * (len / 2);
-  for (let i = 0; i < len; i++)
-    px(ctx, hx - c * i, hy - s * i, 1, 1, i < 6 ? '#e8ffff' : '#8a6a3a');
-  // Prongs: two outer tines and a longer middle one, with a cross-guard behind them.
-  for (const o of [-2, 2]) {
-    for (let k = 0; k < 4; k++)
-      px(
-        ctx,
-        hx - c * (1 - k) - s * o,
-        hy - s * (1 - k) + c * o,
-        1,
-        1,
-        k === 3 ? '#ffffff' : '#7ff0f0',
-      );
+  // Pass 0 paints the dark outline under every pixel, pass 1 the colours.
+  for (let pass = 0; pass < 2; pass++) {
+    const put = (ox: number, oy: number, col: string): void => {
+      if (pass === 0) outlinePx(ctx, ox, oy);
+      else px(ctx, ox, oy, 1, 1, col);
+    };
+    for (let i = 0; i < len; i++) put(hx - c * i, hy - s * i, i < 6 ? '#e8ffff' : '#8a6a3a');
+    // Prongs: two outer tines and a longer middle one, with a cross-guard behind them.
+    for (const o of [-2, 2]) {
+      for (let k = 0; k < 4; k++)
+        put(hx - c * (1 - k) - s * o, hy - s * (1 - k) + c * o, k === 3 ? '#ffffff' : '#7ff0f0');
+    }
+    for (let k = 0; k < 3; k++) put(hx + c * k, hy + s * k, k === 2 ? '#ffffff' : '#9ff8f8');
+    for (const o of [-2, -1, 0, 1, 2]) put(hx - c * 4 - s * o, hy - s * 4 + c * o, '#5fc8c8');
   }
-  for (let k = 0; k < 3; k++)
-    px(ctx, hx + c * k, hy + s * k, 1, 1, k === 2 ? '#ffffff' : '#9ff8f8');
-  for (const o of [-2, -1, 0, 1, 2])
-    px(ctx, hx - c * 4 - s * o, hy - s * 4 + c * o, 1, 1, '#5fc8c8');
 }
 
 /** Projectiles are drawn lifted off the ground with a small shadow; lobbed ones follow an arc. */
@@ -662,6 +759,8 @@ export function drawProjectile(
       break;
     }
     case 'snowball':
+      px(ctx, x - 3, y - 2, 7, 5, PROJ_OUTLINE);
+      px(ctx, x - 2, y - 3, 5, 7, PROJ_OUTLINE);
       px(ctx, x - 2, y - 1, 5, 3, '#e8f4ff');
       px(ctx, x - 1, y - 2, 3, 5, '#e8f4ff');
       px(ctx, x - 1, y - 1, 1, 1, '#ffffff');
@@ -670,6 +769,8 @@ export function drawProjectile(
     case 'potion_harm':
     case 'potion_poison': {
       const c = pr.style === 'potion_harm' ? '#e0457b' : '#5fc24a';
+      px(ctx, x - 3, y - 4, 7, 7, PROJ_OUTLINE);
+      px(ctx, x - 2, y - 6, 5, 3, PROJ_OUTLINE);
       px(ctx, x - 2, y - 3, 5, 5, c);
       px(ctx, x - 1, y - 5, 3, 2, '#d8d8e0');
       px(ctx, x - 1, y - 2, 1, 1, '#ffffff');
@@ -933,8 +1034,8 @@ export function drawFxTexts(
   ctx.globalAlpha = 1;
 }
 
-/** Width in px of a line telegraph's strip. */
-export const TELEGRAPH_STRIP = 6;
+/** Width in px of a line telegraph's strip (v1.3a: 6 -> 9; the arrow's own width is 1-2 px). */
+export const TELEGRAPH_STRIP = 9;
 
 /**
  * Steady alpha for a telegraph: a slow pulse (under 1 Hz, +-15%) unless flashing is reduced, which keeps it flat.
@@ -945,7 +1046,7 @@ export function telegraphPulse(age: number, reduced: boolean): number {
 }
 
 /**
- * Attack telegraphs: a line is a 6 px wide translucent strip with a brighter edge, a circle a translucent disc whose
+ * Attack telegraphs: a line is a 9 px wide translucent strip with a brighter edge, a circle a translucent disc whose
  * fill grows toward the edge as the charge timer runs out. Hostile ones are red, an ally's blue; both go through
  * the colour-blind remap. The pulse is slow and absent with "reduce flashing" (never a strobe).
  */
@@ -981,7 +1082,7 @@ export function drawTelegraph(
     ctx.lineTo(x1 - nx, y1 - ny);
     ctx.lineTo(x0 - nx, y0 - ny);
     ctx.closePath();
-    ctx.globalAlpha = Math.min(0.5, (0.25 + 0.1 * k) * pulse);
+    ctx.globalAlpha = Math.min(0.5, (0.3 + 0.1 * k) * pulse);
     ctx.fill();
     // Brighter edges.
     ctx.globalAlpha = Math.min(0.9, (0.55 + 0.25 * k) * pulse);
@@ -995,12 +1096,12 @@ export function drawTelegraph(
   } else {
     const cx = t.x - camX;
     const cy = t.y - camY;
-    ctx.globalAlpha = 0.12 * pulse;
+    ctx.globalAlpha = 0.35 * pulse;
     ctx.beginPath();
     ctx.arc(cx, cy, t.r, 0, Math.PI * 2);
     ctx.fill();
     // The charge: a brighter disc that grows to the edge as the timer runs out.
-    ctx.globalAlpha = Math.min(0.5, (0.2 + 0.2 * k) * pulse);
+    ctx.globalAlpha = Math.min(0.5, (0.15 + 0.2 * k) * pulse);
     ctx.beginPath();
     ctx.arc(cx, cy, Math.max(0.5, t.r * k), 0, Math.PI * 2);
     ctx.fill();

@@ -4,14 +4,26 @@
  */
 import type { App } from '../app';
 import type { View } from '../core/canvas';
-import { ACTIONS, DEFAULT_BINDINGS, type Action } from '../core/input';
+import { PadButtonCapture } from '../core/gamepad';
+import {
+  ACTIONS,
+  DEFAULT_BINDINGS,
+  PAD_ACTIONS,
+  encodePadButton,
+  inputState,
+  padControlKey,
+  parsePadBindings,
+  type Action,
+  type PadAction,
+} from '../core/input';
 import type { ColorblindMode, SaveData, TouchControlsMode } from '../core/save';
 import { accountBadge, syncLine } from './accountInfo';
 import { drawButton, drawPanel, drawText, fitText, inRect, type Rect } from './panel';
 import { profileScreen } from './profileScreen';
 import type { Screen } from './router';
-import { keyToNav, type NavEvent } from './hubModel';
-import { Buttons, PadNav, drawTitle } from './widgets';
+import { clampVolume, keyToNav, volumeFromFrac, type NavEvent } from './hubModel';
+import { keyLabel, padButtonLabel } from './inputLabels';
+import { Buttons, PadNav, drawTitle, drawVolumeBar } from './widgets';
 
 type Tab = 'audio' | 'graphics' | 'controls' | 'access' | 'account' | 'data';
 type Quality = SaveData['settings']['quality'];
@@ -55,13 +67,19 @@ const RESET_ARM = 3;
 /** Seconds a chosen import file stays armed for the confirming click. */
 const IMPORT_ARM = 10;
 
-const keyName = (code: string): string => code.replace(/^(Key|Digit)/, '');
+/** Seconds a "press a key" prompt waits before it gives up, so a player on a pad alone is never stuck in it. */
+const CAPTURE_TIMEOUT = 8;
+
+const isPadAction = (a: Action): a is PadAction => (PAD_ACTIONS as readonly string[]).includes(a);
 
 export function settingsScreen(app: App, onBack: () => void): Screen {
   const buttons = new Buttons();
   const pad = new PadNav();
   let tab: Tab = 'audio';
   let capture: Action | null = null;
+  /** Watches the pad while a binding is being captured; `captureAge` is the time spent waiting. */
+  let padCapture: PadButtonCapture | null = null;
+  let captureAge = 0;
   let clock = 0;
   let resetUntil = 0;
   /** A chosen save file waiting for the second click (importing replaces the current save). */
@@ -79,16 +97,27 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
     message = text;
     messageOk = ok;
   };
+  const endCapture = (): void => {
+    capture = null;
+    padCapture = null;
+  };
+  const startCapture = (a: Action): void => {
+    capture = a;
+    padCapture = new PadButtonCapture();
+    captureAge = 0;
+    message = '';
+  };
   const setTab = (t: Tab): void => {
     tab = t;
-    capture = null;
+    endCapture();
     message = '';
   };
   /** One navigation event from the keyboard or a pad: arrows move the focus ring, Q / E switch the tab. */
   const navigate = (ev: NavEvent): void => {
     if (capture) {
-      // Waiting for a key: only Back (Esc / B) cancels; the next key press is handled in onKey.
-      if (ev === 'back') capture = null;
+      // Waiting for a key or a pad button: Back (Esc / B) cancels, the time-out below too; the next key press
+      // is handled in onKey and the next pad button in update.
+      if (ev === 'back') endCapture();
       return;
     }
     if (ev === 'back') return onBack();
@@ -109,7 +138,28 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
     if (buttons.handleNav(ev) && ev === 'ok') app.audio.play('click');
   };
   const setVolume = (key: 'musicVolume' | 'sfxVolume', v: number): void => {
-    app.data().settings[key] = Math.round(Math.max(0, Math.min(1, v)) * 10) / 10;
+    app.data().settings[key] = clampVolume(v);
+    commit();
+  };
+  /** Bind a pad button to a pad action; the button is taken from the others (they swap or fall back). */
+  const assignPad = (action: Action, button: number): void => {
+    endCapture();
+    if (!isPadAction(action)) {
+      say('Movement uses the stick and the d-pad', false);
+      return;
+    }
+    const controls = app.data().settings.controls as Record<string, string[] | undefined>;
+    const now = parsePadBindings(controls);
+    const old = now[action];
+    for (const other of PAD_ACTIONS) {
+      if (other === action) continue;
+      let keep = now[other].filter((b) => b !== button);
+      if (keep.length === 0) keep = old.filter((b) => b !== button);
+      if (keep.length === 0) keep = parsePadBindings({})[other].filter((b) => b !== button);
+      controls[padControlKey(other)] = keep.map(encodePadButton);
+    }
+    controls[padControlKey(action)] = [encodePadButton(button)];
+    say(`${ACTION_LABEL[action]}: ${padButtonLabel(button, inputState.padStyle)}`);
     commit();
   };
 
@@ -178,6 +228,15 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
     update(dt) {
       clock += dt;
       for (const ev of pad.poll(dt)) navigate(ev);
+      if (capture) {
+        captureAge += dt;
+        const pressed = padCapture?.poll() ?? null;
+        if (pressed !== null) assignPad(capture, pressed);
+        else if (captureAge >= CAPTURE_TIMEOUT) {
+          endCapture();
+          say('Cancelled', false);
+        }
+      }
     },
     render(view: View) {
       const { ctx, width, height } = view;
@@ -241,12 +300,7 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
         const minus = { x: bar.x - 4 - 14, y: plus.y, w: 14, h: ctlH };
         buttons.add(minus, '-', () => setVolume(key, v - 0.1), v <= 0);
         buttons.add(plus, '+', () => setVolume(key, v + 0.1), v >= 1);
-        ctx.fillStyle = '#101014';
-        ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
-        ctx.fillStyle = '#3b3b46';
-        ctx.fillRect(bar.x + 1, bar.y + 1, bar.w - 2, bar.h - 2);
-        ctx.fillStyle = '#7dff9a';
-        ctx.fillRect(bar.x + 1, bar.y + 1, Math.round((bar.w - 2) * v), bar.h - 2);
+        drawVolumeBar(ctx, bar, v);
         drawText(ctx, `${Math.round(v * 100)}%`, minus.x - 4, base(i), '#cfcfd8', 'right');
         bars.push({
           hit: { x: bar.x - 2, y: plus.y, w: bar.w + 4, h: ctlH },
@@ -285,12 +339,18 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
             h: 16,
           };
           const keys = (s.controls[a]?.length ? s.controls[a] : DEFAULT_BINDINGS[a]) ?? [];
+          // Pad buttons are shown once a pad has been seen; movement is always the stick and d-pad.
+          const padNames = isPadAction(a)
+            ? parsePadBindings(s.controls)[a].map((b) => padButtonLabel(b, inputState.padStyle))
+            : [];
+          const padPart =
+            padNames.length > 0 && inputState.padConnected ? `  ${padNames.join('/')}` : '';
           const text =
             capture === a
               ? `${ACTION_LABEL[a]}  press a key...`
-              : `${ACTION_LABEL[a]}  ${keys.map(keyName).join(' / ')}`;
-          buttons.add(r, fitText(text, colW - 6), () => {
-            capture = a;
+              : `${ACTION_LABEL[a]}  ${keys.map(keyLabel).join('/')}${padPart}`;
+          buttons.add(r, fitText(text, colW - 6), () => startCapture(a), false, {
+            key: `bind:${a}`,
           });
         });
         buttons.add(
@@ -298,18 +358,19 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
           'Reset controls',
           () => {
             s.controls = {};
-            capture = null;
+            endCapture();
             commit();
           },
         );
+        const hint = capture
+          ? `Press a key${isPadAction(capture) ? ' or pad button' : ''} for "${ACTION_LABEL[capture]}"  (Esc / B cancels)`
+          : message || 'Click an action, then press its new key or pad button.';
         drawText(
           ctx,
-          capture
-            ? `Press a key for "${ACTION_LABEL[capture]}"  (Esc cancels)`
-            : 'Click an action, then press its new key.',
+          fitText(hint, width - 8),
           width / 2,
           top + 100,
-          capture ? '#ffd84a' : '#9a9aa8',
+          capture ? '#ffd84a' : message ? (messageOk ? '#7dff9a' : '#ff8a8a') : '#9a9aa8',
           'center',
         );
       } else if (tab === 'access') {
@@ -403,10 +464,10 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
       buttons.move(x, y);
     },
     onClick(x, y) {
-      capture = null;
+      endCapture();
       const bar = bars.find((b) => inRect(b.hit, x, y));
       if (bar) {
-        bar.set((x - (bar.hit.x + 2)) / (bar.hit.w - 4));
+        bar.set(volumeFromFrac((x - (bar.hit.x + 2)) / (bar.hit.w - 4)));
         return;
       }
       if (buttons.click(x, y)) app.audio.play('click');
@@ -425,7 +486,7 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
           controls[capture] = [code];
           commit();
         }
-        capture = null;
+        endCapture();
       } else {
         const ev = keyToNav(code);
         if (ev) navigate(ev);
