@@ -1,5 +1,7 @@
 import type { App } from '../app';
-import { cameraLead, reduceFlash, textScale } from '../core/accessibility';
+import { cameraLead, cb, reduceFlash, textScale } from '../core/accessibility';
+import { AimResolver, aimModeOf, reticleDistance, type ManualAim } from '../core/aim';
+import { inputState } from '../core/input';
 import { aggregateEvents, stepMaterial, type StepMaterial } from '../core/sfxModel';
 import { Camera } from '../core/camera';
 import { Shake } from '../core/shake';
@@ -42,6 +44,7 @@ import { AmbientField } from '../render/ambient';
 import { drawDebug, FrameStats } from './debug';
 import { drawHud } from './hud';
 import { Minimap } from './minimap';
+import { aimHint } from './inputLabels';
 import { drawPanel, drawText } from './panel';
 import {
   itemChoiceScreen,
@@ -139,10 +142,16 @@ function stepMaterialUnder(run: RunState): StepMaterial {
 }
 
 /** The 20-second first-run hints (BRIEF section 5). */
-function drawTutorial(ctx: CanvasRenderingContext2D, w: number, h: number, t: number): void {
+function drawTutorial(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  t: number,
+  aimLine: string | null = null,
+): void {
   const steps = [
     'Move with WASD or the arrow keys',
-    'Your weapons fire on their own',
+    aimLine ?? 'Your weapons fire on their own',
     'Collect the green gems for XP',
     'Level up to pick a new card',
   ];
@@ -153,6 +162,38 @@ function drawTutorial(ctx: CanvasRenderingContext2D, w: number, h: number, t: nu
   drawPanel(ctx, { x: Math.floor(w / 2) - 100, y: h - 56, w: 200, h: 20 });
   drawText(ctx, text, w / 2, h - 43, '#ffd84a', 'center');
   ctx.globalAlpha = 1;
+}
+
+/**
+ * Manual aim reticle: three dots from the hero toward the aim and a small cross at the end (dark outline, light
+ * fill in the colour-blind-safe palette). Static, so reduced flashing needs no special case.
+ */
+function drawReticle(
+  ctx: CanvasRenderingContext2D,
+  a: ManualAim,
+  heroX: number,
+  heroY: number,
+): void {
+  const tip = reticleDistance(a);
+  const dot = (d: number, size: number, color: string): void => {
+    const x = Math.round(heroX + a.x * d);
+    const y = Math.round(heroY + a.y * d);
+    ctx.fillStyle = '#1b1528';
+    ctx.fillRect(x - size, y - size, size * 2 + 1, size * 2 + 1);
+    ctx.fillStyle = color;
+    ctx.fillRect(x - size + 1, y - size + 1, size * 2 - 1, size * 2 - 1);
+  };
+  const color = cb('#ffe27a');
+  for (const k of [0.4, 0.62]) dot(tip * k, 1, color);
+  // Cross at the tip: a plus of 1 px arms around a centre dot.
+  const x = Math.round(heroX + a.x * tip);
+  const y = Math.round(heroY + a.y * tip);
+  ctx.fillStyle = '#1b1528';
+  ctx.fillRect(x - 4, y - 1, 9, 3);
+  ctx.fillRect(x - 1, y - 4, 3, 9);
+  ctx.fillStyle = color;
+  ctx.fillRect(x - 3, y, 7, 1);
+  ctx.fillRect(x, y - 3, 1, 7);
 }
 
 export function runScreen(app: App, opts: RunOptions): Screen {
@@ -208,6 +249,9 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   let propsVisible = 0;
   let lastCamX = 0;
   let lastCamY = 0;
+  // Manual aim (Settings > Controls > Aim): which source points the weapons; null in auto mode.
+  const aimResolver = new AimResolver();
+  let aimManual = false;
 
   let deathSting = false;
   let runStarted = false;
@@ -242,6 +286,25 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       slowFrames = Math.max(0, slowFrames - 1);
     }
     run.quality = autoTier;
+  };
+
+  /** Resolve the manual aim for this step and hand it to the hero (weapons read `player.manualAim`). */
+  const updateManualAim = (dt: number): void => {
+    const p = run.player;
+    if (!aimManual) {
+      p.manualAim = null;
+      return;
+    }
+    p.manualAim = aimResolver.step({
+      dt,
+      stick: input.aimVector?.() ?? null,
+      pointer: app.pointer,
+      mouse: { x: run.targetX - p.x, y: run.targetY - (p.y - 8) },
+      device: inputState.device,
+    });
+    // A standing hero turns to face the aim even while no weapon is firing (a walking one keeps its body facing).
+    const m = p.manualAim;
+    if (m && Math.abs(m.x) > 0.25) p.aim(m.x > 0 ? 1 : -1);
   };
 
   const onKey = (e: KeyboardEvent): void => {
@@ -293,6 +356,9 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       }
       run.targetX = lastCamX + app.pointer.x;
       run.targetY = lastCamY + app.pointer.y;
+      aimManual = aimModeOf(app.data().settings) === 'manual';
+      app.touch.aimEnabled = aimManual;
+      updateManualAim(dt);
       if (input.activePressed()) {
         const v = input.moveVector();
         const itemBefore = run.item;
@@ -418,6 +484,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       for (const o of run.orbiters) drawOrbiter(ctx, o, camX, camY, run.time);
       for (const pr of run.projectiles) drawProjectile(ctx, pr, camX, camY, p.rx, p.ry);
       for (const f of run.fx) drawFx(ctx, f, camX, camY);
+      if (aimManual && p.manualAim && !p.dead)
+        drawReticle(ctx, p.manualAim, p.rx - camX, p.ry - camY - 8);
 
       drawNight(
         ctx,
@@ -453,7 +521,8 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         run.time,
       );
       app.touch.draw(ctx, width, height, view.zoom);
-      if (tutorial && run.time < 22) drawTutorial(ctx, width, height, run.time);
+      if (tutorial && run.time < 22)
+        drawTutorial(ctx, width, height, run.time, aimManual ? aimHint(inputState.device) : null);
 
       if (showDebug) {
         drawDebug(

@@ -71,9 +71,54 @@ export function onHitMods(
     applyStatus(e, 'poison', 3 * run.mods.duration, Math.max(2, baseDmg * 0.25));
 }
 
-/** Make the hero face a world point (sprites only face left or right). */
+/** Make the hero face a world point (sprites only face left or right); in manual aim, the aimed side. */
 export function faceToward(run: RunState, x: number): void {
-  run.player.aim(x >= run.player.x ? 1 : -1);
+  const m = run.player.manualAim;
+  run.player.aim((m ? m.x >= 0 : x >= run.player.x) ? 1 : -1);
+}
+
+/** The direction of a shot or swing: the manual aim when the player aims by hand, else the auto-aim angle. */
+export function aimedAngle(run: RunState, auto: number): number {
+  const m = run.player.manualAim;
+  return m ? Math.atan2(m.y, m.x) : auto;
+}
+
+/** How close (art px) an enemy must be to the aimed point for a manually aimed potion to land on it. */
+const SNAP = 36;
+
+/**
+ * Manual aim only: where `count` lobbed potions land. The first goes to the mouse point (or, for a stick, 65% of
+ * `range` out), snapped onto the nearest living enemy within SNAP of it; further potions take the next nearest
+ * enemies to that point and, with none left, fan out sideways. Returns feet coordinates, like `Enemy.x/y`.
+ */
+export function aimedLandPoints(
+  run: RunState,
+  range: number,
+  count: number,
+): { x: number; y: number }[] {
+  const p = run.player;
+  const m = p.manualAim;
+  if (!m) return [];
+  const d = Math.min(range, m.dist > 0 ? m.dist : range * 0.65);
+  const ax = p.x + m.x * d;
+  const ay = p.y - 8 + m.y * d;
+  run.hash.query(ax, ay, SNAP, near);
+  const cands = near
+    .filter((e) => !e.dying && Math.hypot(e.x - p.x, e.y - p.y) <= range)
+    .map((e) => ({ e, d: Math.hypot(e.x - ax, e.y - 8 - ay) }))
+    .filter((c) => c.d <= SNAP)
+    .sort((a, b) => a.d - b.d);
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const c = cands[i];
+    if (c) out.push({ x: c.e.x, y: c.e.y });
+    else {
+      const k = i - cands.length;
+      const side = k === 0 ? 0 : (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * 18;
+      out.push({ x: ax - m.y * side, y: ay + 4 + m.x * side });
+    }
+  }
+  return out;
 }
 
 /** Keep exactly `count` orbiters for `owner`, evenly spaced, with the given stats. */

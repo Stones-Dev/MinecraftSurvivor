@@ -7,6 +7,7 @@ import { LIQUID, LIQUID_FRAMES, liquidSet, TEX, TEX_AREA } from './blocks';
 import { BIOMES, type BiomeId, type BiomeState } from './biomes';
 import { propSprite, shadowSprite } from './propSprites';
 import type { Prop } from './props';
+import { applyOverlay } from './structures';
 import { CHUNK_PX, CHUNK_TILES, genChunkBiomes, genTerrain, TILE_PX } from './terrain';
 import { animTiles, LAVA_SHEET, paintChunk } from './tilePaint';
 import type { World } from './world';
@@ -84,7 +85,9 @@ export class WorldRenderer {
     const t0 = performance.now();
     const terrain = genTerrain(cx, cy, this.world.seed, this.world.arena);
     const biomes = genChunkBiomes(cx, cy, this.biomeIndexAt);
-    const canvas = paintChunk(cx, cy, terrain, biomes, this.world.seed).toCanvas();
+    const overlay = this.world.structureOverlay(cx, cy);
+    if (overlay) applyOverlay(terrain, overlay);
+    const canvas = paintChunk(cx, cy, terrain, biomes, this.world.seed, overlay).toCanvas();
     const anim = animTiles(cx, cy, terrain, biomes, this.world.seed);
     this.lastBakeMs = performance.now() - t0;
     this.maxBakeMs = Math.max(this.maxBakeMs, this.lastBakeMs);

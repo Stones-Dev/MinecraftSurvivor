@@ -1,3 +1,4 @@
+import type { AimMode } from './aim';
 import { COMPANION_BY_ID } from '../data/companions';
 import { META_BY_ID } from '../data/metaUpgrades';
 
@@ -86,6 +87,11 @@ export interface SaveData {
     quality: 'auto' | 'high' | 'medium' | 'low';
     /** Camera leads slightly in the movement direction (default on; the game always did this before the setting existed). */
     cameraLead: boolean;
+    /**
+     * Aim mode (Settings > Controls): 'auto' (default, weapons pick their own target) or 'manual' (mouse or right
+     * stick). Optional and additive: a save without it plays as 'auto'.
+     */
+    aim?: AimMode;
     accessibility: {
       colorblind: ColorblindMode;
       textScale: 1 | 2;
@@ -466,6 +472,9 @@ function sanitize(data: Record<string, unknown>, d: SaveData): SaveData {
       showFps: bool(set.showFps, false),
       quality: quality === 'high' || quality === 'medium' || quality === 'low' ? quality : 'auto',
       cameraLead: bool(set.cameraLead, d.settings.cameraLead),
+      ...(set.aim === undefined
+        ? {}
+        : { aim: oneOf(set.aim, ['auto', 'manual'] as const, 'auto') }),
       accessibility: {
         colorblind: oneOf(
           acc.colorblind,

@@ -1,6 +1,6 @@
 import { aimPointY } from '../core/geom';
 import { Projectile } from '../entities/projectile';
-import { areaOf, countOf, damageOf, faceToward, nearestEnemy } from './helpers';
+import { aimedAngle, areaOf, countOf, damageOf, faceToward, nearestEnemy } from './helpers';
 import type { WeaponDef } from './types';
 
 export const bow: WeaponDef = {
@@ -26,7 +26,7 @@ export const bow: WeaponDef = {
     const target = nearestEnemy(run, 230);
     if (!target) return false;
     const p = run.player;
-    const base = Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x);
+    const base = aimedAngle(run, Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x));
     faceToward(run, target.x);
     run.emit('bow');
     const count = countOf(run, s);

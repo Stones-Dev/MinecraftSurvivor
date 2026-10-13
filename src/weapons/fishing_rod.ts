@@ -17,6 +17,8 @@ const HARPOON_HOOKS = 3;
 const HARPOON_STUN = 1;
 /** Homing turn rate of the hook, in rad/s. */
 const HOOK_TURN = 6;
+/** Manual aim: angle between neighbouring hooks of one throw, radians. */
+const MANUAL_FAN = 0.2;
 
 const found: Enemy[] = [];
 
@@ -81,8 +83,13 @@ export const fishing_rod: WeaponDef = {
     const speed = HOOK_SPEED * run.mods.projSpeed;
     const dmg = damageOf(run, s, true);
     const pierce = s.pierce + run.mods.pierce;
+    const manual = p.manualAim;
+    let hookNo = 0;
     for (const target of targets) {
-      const a = Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x);
+      // Manual aim: the hooks fly straight along the aim (a small fan for two or three), no homing.
+      const a = manual
+        ? Math.atan2(manual.y, manual.x) + (hookNo++ - (targets.length - 1) / 2) * MANUAL_FAN
+        : Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x);
       const hook = new Projectile(
         p.x,
         p.y - 8,
@@ -96,9 +103,11 @@ export const fishing_rod: WeaponDef = {
       );
       hook.style = 'hook';
       hook.knock = 0; // the line reels the enemy in; it is not pushed away
-      hook.homing = true;
-      hook.turn = HOOK_TURN;
-      hook.target = target;
+      if (!manual) {
+        hook.homing = true;
+        hook.turn = HOOK_TURN;
+        hook.target = target;
+      }
       hook.onHit = (r, _hook, e) => {
         onHitMods(r, e, 'projectile', dmg);
         const hero = r.player;

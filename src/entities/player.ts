@@ -1,4 +1,5 @@
 import { pickWalkDir, type WalkDir } from '../core/heroAnim';
+import type { ManualAim } from '../core/aim';
 import type { InputSource } from '../core/input';
 import type { BiomeId } from '../world/biomes';
 import { SOUL_SLOW, WATER_SLOW, type World } from '../world/world';
@@ -36,6 +37,11 @@ export class Player {
   /** Direction of the last attack (weapons aim at a target; `aim()`) and seconds it stays relevant. */
   aimT = 0;
   aimFacing: 1 | -1 = 1;
+  /**
+   * Manual aim (Settings > Controls > Aim = Manual): the direction the player points with the mouse or the right
+   * stick, set each step by the run screen. null = the weapons pick their own target (auto aim, the default).
+   */
+  manualAim: ManualAim | null = null;
   /** Distance-driven walk cycle phase in half-strides (integer part flips the foot) and a footfall flag. */
   walkPhase = 0;
   footfall = false;

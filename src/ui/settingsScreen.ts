@@ -3,6 +3,7 @@
  * Every change saves and calls applySettings(), so it takes effect immediately.
  */
 import type { App } from '../app';
+import { aimModeOf } from '../core/aim';
 import type { View } from '../core/canvas';
 import { PadButtonCapture } from '../core/gamepad';
 import {
@@ -22,7 +23,7 @@ import { drawButton, drawPanel, drawText, fitText, inRect, type Rect } from './p
 import { profileScreen } from './profileScreen';
 import type { Screen } from './router';
 import { clampVolume, keyToNav, volumeFromFrac, type NavEvent } from './hubModel';
-import { keyLabel, padButtonLabel } from './inputLabels';
+import { aimModeLabel, keyLabel, padButtonLabel } from './inputLabels';
 import { Buttons, PadNav, drawTitle, drawVolumeBar } from './widgets';
 
 type Tab = 'audio' | 'graphics' | 'controls' | 'access' | 'account' | 'data';
@@ -353,6 +354,23 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
             key: `bind:${a}`,
           });
         });
+        // The eighth slot (last row, right column) is the aim mode; Auto is the default and plays as before.
+        const aimNow = aimModeOf(s);
+        buttons.add(
+          {
+            x: x0 + colW + gap,
+            y: top + Math.floor(ACTIONS.length / 2) * 18,
+            w: colW,
+            h: 16,
+          },
+          fitText(`Aim  ${aimModeLabel(aimNow)}`, colW - 6),
+          () => {
+            s.aim = aimNow === 'manual' ? 'auto' : 'manual';
+            commit();
+          },
+          false,
+          { key: 'aim' },
+        );
         buttons.add(
           { x: Math.floor((width - 110) / 2), y: top + 76, w: 110, h: 16 },
           'Reset controls',
@@ -364,7 +382,10 @@ export function settingsScreen(app: App, onBack: () => void): Screen {
         );
         const hint = capture
           ? `Press a key${isPadAction(capture) ? ' or pad button' : ''} for "${ACTION_LABEL[capture]}"  (Esc / B cancels)`
-          : message || 'Click an action, then press its new key or pad button.';
+          : message ||
+            (aimNow === 'manual'
+              ? 'Manual aim: mouse, right stick, or drag on the right (auto after 1.5 s idle).'
+              : 'Click an action, then press its new key or pad button.');
         drawText(
           ctx,
           fitText(hint, width - 8),

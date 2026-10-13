@@ -2,6 +2,7 @@
 import { biomeAtTile, biomeIndexAtTile, findBiome } from './biomeMap';
 import { BIOME_INDEX, BIOMES, type BiomeId } from './biomes';
 import { genProps, type Prop } from './props';
+import { OV_SOLID, StructureIndex } from './structures';
 import { type Arena, CHUNK_PX, TILE, TILE_PX, tileAt } from './terrain';
 
 const MAX_PROP_CHUNKS = 220;
@@ -15,8 +16,17 @@ function chunkKey(cx: number, cy: number): number {
   return (cx + 32768) * 65536 + (cy + 32768);
 }
 
+/** A solid disc that is not a prop (the End's obsidian pillars): see `World.solids`. */
+export interface SolidDisc {
+  x: number;
+  y: number;
+  r: number;
+}
+
 export class World {
   private readonly propCache = new Map<number, Prop[]>();
+  /** Extra solid discs (End pillars): the hero, companions and ground foes collide with them. */
+  solids: SolidDisc[] = [];
   /** Bumped whenever a prop is removed, invalidating the per-prop `gone` cache. */
   private removedVer = 1;
 
@@ -28,14 +38,30 @@ export class World {
     readonly seed: number,
     readonly arena?: Arena,
     readonly fixedBiome?: BiomeId,
-  ) {}
+  ) {
+    // Villages, temples... (world/structures.ts): overworld only, and not with a debug-fixed biome.
+    this.structures = arena || fixedBiome !== undefined ? null : new StructureIndex(seed);
+  }
 
+  /** Placed structures of this world (null in arenas and gallery worlds). */
+  readonly structures: StructureIndex | null;
+
+  /** Terrain code of a tile; solid structure tiles read as TILE.WALL, structure floors as TILE.GRASS. */
   tileAt(tx: number, ty: number): number {
+    if (this.structures) {
+      const ov = this.structures.overlayAt(tx, ty);
+      if (ov !== 0) return (ov & OV_SOLID) !== 0 ? TILE.WALL : TILE.GRASS;
+    }
     return tileAt(tx, ty, this.seed, this.arena);
   }
 
   tileAtPx(x: number, y: number): number {
-    return tileAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), this.seed, this.arena);
+    return this.tileAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX));
+  }
+
+  /** Structure overlay of a chunk with a 1-tile border (renderer / painter), or null. */
+  structureOverlay(cx: number, cy: number): Uint8Array | null {
+    return this.structures?.chunk(cx, cy)?.overlay ?? null;
   }
 
   /** Biome of a tile (spatial biome map; Nether in the rift arena). */
@@ -94,6 +120,13 @@ export class World {
     this.solidCache.clear();
   }
 
+  /** Bring a removed prop back (regrowing crops). */
+  restoreProp(p: Prop): void {
+    if (!this.removed.delete(`${p.id}|${p.kind}`)) return;
+    this.removedVer++;
+    this.solidCache.clear();
+  }
+
   /**
    * Props of a chunk, each grown for the biome of its own cell. The trailing biome parameter of this and
    * the other prop/collision queries is legacy and ignored: props are a property of the world.
@@ -103,7 +136,15 @@ export class World {
     const key = chunkKey(cx, cy);
     let props = this.propCache.get(key);
     if (!props) {
-      props = genProps(cx, cy, this.seed, this.fixedBiome, this.arena);
+      // The End grows nothing: its pillars are `solids`, drawn by the End renderer.
+      props =
+        this.arena?.kind === 'end' ? [] : genProps(cx, cy, this.seed, this.fixedBiome, this.arena);
+      const cs = this.structures?.chunk(cx, cy);
+      if (cs) {
+        // Structures clear the natural props around them and bring their own (chests, furniture, crops).
+        const idx = this.structures;
+        props = props.filter((p) => !idx?.isCleared(cs, p.x, p.y)).concat(cs.props);
+      }
       this.propCache.set(key, props);
       if (this.propCache.size > MAX_PROP_CHUNKS) {
         const oldest = this.propCache.keys().next().value;
@@ -147,6 +188,13 @@ export class World {
   /** Does a circle overlap any solid prop? (used for cover against enemy projectiles) */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy biome argument, ignored
   overlapsSolid(x: number, y: number, r: number, _biome?: BiomeId): boolean {
+    if (this.structures?.overlapsSolid(x, y, r)) return true;
+    for (const d of this.solids) {
+      const dx = x - d.x;
+      const dy = y - d.y;
+      const min = r + d.r;
+      if (dx * dx + dy * dy < min * min) return true;
+    }
     const reach = r + 8;
     for (
       let cy = Math.floor((y - reach) / CHUNK_PX);
@@ -184,7 +232,27 @@ export class World {
     let px = x;
     let py = y;
     if (this.arena) ({ x: px, y: py } = this.clampArena(px, py, r));
+    if (this.structures) {
+      // Walls first (tile collision); props then settle the result as before.
+      const w = this.structures.collide(px, py, r);
+      px = w.x;
+      py = w.y;
+    }
     for (let pass = 0; pass < 2; pass++) {
+      for (const d of this.solids) {
+        const dx = px - d.x;
+        const dy = py - d.y;
+        const min = r + d.r;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= min * min) continue;
+        const dd = Math.sqrt(d2);
+        if (dd < 1e-6) {
+          px += min;
+        } else {
+          px = d.x + (dx / dd) * min;
+          py = d.y + (dy / dd) * min;
+        }
+      }
       for (
         let cy = Math.floor((py - reach) / CHUNK_PX);
         cy <= Math.floor((py + reach) / CHUNK_PX);
@@ -211,6 +279,11 @@ export class World {
           }
         }
       }
+    }
+    if (this.structures) {
+      // A prop next to a wall must not push the circle back into it.
+      const w = this.structures.collide(px, py, r);
+      return { x: w.x, y: w.y };
     }
     return { x: px, y: py };
   }

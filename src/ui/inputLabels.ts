@@ -103,3 +103,18 @@ export function actionPrompt(
   if (device === 'pad') return padButtonLabel(src.pad[action][0] ?? -1, src.padStyle);
   return keyLabel(src.keys[action][0] ?? '');
 }
+
+/** Settings > Controls label of an aim mode. */
+export function aimModeLabel(mode: 'auto' | 'manual'): string {
+  return mode === 'manual' ? 'Manual' : 'Auto';
+}
+
+/**
+ * Short hint on how to aim in manual mode for the device used last (tutorial line, Settings hint): the mouse, the
+ * right stick of a pad, or a drag on the right of the screen.
+ */
+export function aimHint(device: InputDevice = inputState.device): string {
+  if (device === 'touch') return 'Drag on the right to aim';
+  if (device === 'pad') return 'Aim with the right stick';
+  return 'Aim with the mouse';
+}

@@ -4,6 +4,7 @@
  * Coordinates are art pixels.
  */
 import { coarsePointer, textScale, touchEnabled } from './accessibility';
+import { stickAim } from './aim';
 import { noteInputDevice, type InputSource } from './input';
 
 export interface TouchButton {
@@ -26,6 +27,10 @@ const DEFAULT_ZOOM = 2;
 
 const STICK_RADIUS = 30;
 const DEADZONE = 0.18;
+/** Where the aim stick (manual aim) takes over: the right 40% of the view, the left 60% belongs to the move stick. */
+export const AIM_ZONE = 0.6;
+/** Drag distance (art px) before the aim stick gives a direction. */
+const AIM_DRAG_MIN = 10;
 
 export class TouchInput implements InputSource {
   /** Whether touch controls are being used (set on the first touch, or forced by the setting). */
@@ -35,6 +40,13 @@ export class TouchInput implements InputSource {
   /** The device's primary pointer is coarse (a phone or tablet): 'auto' shows the controls right away. */
   coarse = false;
   private stickId: number | null = null;
+  /** Manual aim is on (set each step by the run screen): a touch in the right part of the view drags an aim stick. */
+  aimEnabled = false;
+  private aimId: number | null = null;
+  private aimOX = 0;
+  private aimOY = 0;
+  private aimCX = 0;
+  private aimCY = 0;
   private originX = 0;
   private originY = 0;
   private curX = 0;
@@ -96,6 +108,7 @@ export class TouchInput implements InputSource {
   suspend(): void {
     this.modals++;
     this.stickId = null;
+    this.aimId = null;
     this.held.clear();
   }
 
@@ -140,10 +153,31 @@ export class TouchInput implements InputSource {
       this.originY = this.curY = y;
       return true;
     }
+    // Manual aim: a touch on the right side (clear of every button, which are checked above) is the aim stick.
+    if (this.aimEnabled && this.aimId === null && x >= width * AIM_ZONE) {
+      this.aimId = id;
+      this.aimOX = this.aimCX = x;
+      this.aimOY = this.aimCY = y;
+      return true;
+    }
     return false;
   }
 
   pointerMove(id: number, x: number, y: number): void {
+    if (id === this.aimId) {
+      this.aimCX = x;
+      this.aimCY = y;
+      // Like the move stick, the origin follows a long drag so reversing the aim is instant.
+      const dx = x - this.aimOX;
+      const dy = y - this.aimOY;
+      const d = Math.hypot(dx, dy);
+      if (d > STICK_RADIUS * 1.6) {
+        const k = (d - STICK_RADIUS * 1.6) / d;
+        this.aimOX += dx * k;
+        this.aimOY += dy * k;
+      }
+      return;
+    }
     if (id !== this.stickId) return;
     this.curX = x;
     this.curY = y;
@@ -160,6 +194,7 @@ export class TouchInput implements InputSource {
 
   pointerUp(id: number): void {
     if (id === this.stickId) this.stickId = null;
+    if (id === this.aimId) this.aimId = null;
     this.held.delete(id);
   }
 
@@ -172,6 +207,14 @@ export class TouchInput implements InputSource {
     if (m < DEADZONE) return { x: 0, y: 0 };
     const scale = (m - DEADZONE) / (1 - DEADZONE) / d;
     return { x: dx * scale, y: dy * scale };
+  }
+
+  /** Unit aim direction of the aim stick while it is dragged past AIM_DRAG_MIN, else null. */
+  aimVector(): { x: number; y: number } | null {
+    if (this.aimId === null) return null;
+    const dx = this.aimCX - this.aimOX;
+    const dy = this.aimCY - this.aimOY;
+    return Math.hypot(dx, dy) < AIM_DRAG_MIN ? null : stickAim(dx, dy, 0);
   }
 
   /** Stick origin and thumb position for drawing, or null when idle. */
@@ -257,6 +300,18 @@ export class TouchInput implements InputSource {
       ctx.globalAlpha = 0.14;
       ctx.fillStyle = '#ffffff';
       ring(ctx, 54, height - 54, STICK_RADIUS);
+    }
+    if (this.aimId !== null) {
+      // The aim stick is orange so it reads as a second stick next to the white move stick.
+      const dx = this.aimCX - this.aimOX;
+      const dy = this.aimCY - this.aimOY;
+      const d = Math.hypot(dx, dy) || 1;
+      const k = Math.min(1, STICK_RADIUS / d);
+      ctx.fillStyle = '#ffb061';
+      ctx.globalAlpha = 0.2;
+      ring(ctx, this.aimOX, this.aimOY, STICK_RADIUS);
+      ctx.globalAlpha = 0.55;
+      disc(ctx, this.aimOX + dx * k, this.aimOY + dy * k, 9);
     }
     for (const b of this.buttons(width, height)) {
       ctx.globalAlpha = this.isHeld(b.id) ? 0.8 : 0.38;

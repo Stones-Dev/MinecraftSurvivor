@@ -8,6 +8,11 @@ export interface InputSource {
   activePressed(): boolean;
   /** Cast the hero ability (Q / Shift). Optional so simple test inputs need not implement it. */
   abilityPressed?(): boolean;
+  /**
+   * Manual aim stick (gamepad right stick, touch aim stick): a unit direction while deflected past its dead zone,
+   * null otherwise. Optional; only read when Settings > Controls > Aim is Manual.
+   */
+  aimVector?(): { x: number; y: number } | null;
   /** Clear one-shot presses; call once per simulation step. */
   endStep(): void;
 }
@@ -190,6 +195,14 @@ export class MergedInput implements InputSource {
   }
   abilityPressed(): boolean {
     return this.sources.some((s) => s.abilityPressed?.() === true);
+  }
+  /** The first source with a deflected aim stick (touch and pad are rarely used together). */
+  aimVector(): { x: number; y: number } | null {
+    for (const s of this.sources) {
+      const v = s.aimVector?.();
+      if (v) return v;
+    }
+    return null;
   }
   endStep(): void {
     for (const s of this.sources) s.endStep();

@@ -1,6 +1,14 @@
 import { aimPointY } from '../core/geom';
 import { Projectile } from '../entities/projectile';
-import { areaOf, countOf, damageOf, faceToward, nearestEnemy, onHitMods } from './helpers';
+import {
+  aimedAngle,
+  areaOf,
+  countOf,
+  damageOf,
+  faceToward,
+  nearestEnemy,
+  onHitMods,
+} from './helpers';
 import type { WeaponDef } from './types';
 
 /** Enemies further than this (px) from the hero are not targeted. */
@@ -53,7 +61,7 @@ export const trident: WeaponDef = {
     const reach = areaOf(run, s);
     const speed = SPEED * run.mods.projSpeed;
     const count = countOf(run, s);
-    const base = Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x);
+    const base = aimedAngle(run, Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x));
     const dmg = damageOf(run, s, true) * (evolved ? RIPTIDE_BONUS : 1);
     // Hits are counted over both passes: the budget covers the outbound and the return trip.
     const pierce = 3 + s.pierce + run.mods.pierce;
@@ -86,7 +94,9 @@ export const trident: WeaponDef = {
       const len = Math.hypot(dx, dy);
       if (len > 1) {
         const dashT = Math.min(RIPTIDE_DASH_TIME, Math.min(RIPTIDE_DASH, len) / DASH_SPEED);
-        run.dash = { dx: dx / len, dy: dy / len, t: dashT };
+        // Manual aim lunges along the aimed direction instead of toward the nearest enemy.
+        const m = p.manualAim;
+        run.dash = { dx: m ? m.x : dx / len, dy: m ? m.y : dy / len, t: dashT };
       }
       p.iframes = Math.max(p.iframes, RIPTIDE_IFRAMES);
     }

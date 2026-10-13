@@ -94,7 +94,7 @@ export interface EnemyDef {
   /** Draw scale (bosses and mini-bosses are bigger). */
   scale?: number;
   /** Scripted boss pattern (systems/bossAI.ts). */
-  boss?: 'captain' | 'wither' | 'warden';
+  boss?: 'captain' | 'wither' | 'warden' | 'dragon';
   /** Mini-boss: scheduled by the director, never spawned by the trickle. */
   mini?: boolean;
 }

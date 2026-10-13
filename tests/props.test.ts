@@ -24,6 +24,16 @@ const KINDS = Object.keys({
   cobweb: 1,
   magma: 1,
   bamboo: 1,
+  chest_village: 1,
+  chest_pyramid: 1,
+  crop: 1,
+  well: 1,
+  pressure_plate: 1,
+  workbench: 1,
+  bookshelf: 1,
+  bed: 1,
+  lantern: 1,
+  hay_bale: 1,
 } satisfies Record<PropKind, 1>) as PropKind[];
 
 const OVERWORLD = BIOME_IDS.filter((b) => b !== 'nether');

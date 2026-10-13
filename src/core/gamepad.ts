@@ -1,7 +1,8 @@
 /**
- * Gamepad input (standard mapping): left stick or d-pad moves; by default A item, X / right bumper ability and
+ * Gamepad input (standard mapping): left stick or d-pad moves, the right stick aims in manual aim mode; by default A item, X / right bumper ability and
  * Start pause (rebindable in Settings > Controls, see `inputState.pad`). Menus keep A / Start = ok, B = back.
  */
+import { stickAim } from './aim';
 import { inputState, noteInputDevice, type InputSource } from './input';
 
 const DEADZONE = 0.22;
@@ -31,6 +32,11 @@ export function padMove(pad: PadLike): { x: number; y: number } {
   if (b(13)) y += 1;
   const len = Math.hypot(x, y);
   return len > 1 ? { x: x / len, y: y / len } : { x, y };
+}
+
+/** Pure mapping of the right stick (standard axes 2 and 3) to a unit aim direction, null inside the dead zone. */
+export function padAim(pad: PadLike): { x: number; y: number } | null {
+  return stickAim(pad.axes[2] ?? 0, pad.axes[3] ?? 0);
 }
 
 /** The first connected gamepad, if any. */
@@ -100,6 +106,7 @@ export class GamepadInput implements InputSource {
       ? 'playstation'
       : 'xbox';
     if (Math.hypot(pad.axes[0] ?? 0, pad.axes[1] ?? 0) > 0.5) noteInputDevice('pad');
+    if (Math.hypot(pad.axes[2] ?? 0, pad.axes[3] ?? 0) > 0.5) noteInputDevice('pad');
     pad.buttons.forEach((btn, i) => {
       if (btn.pressed && !this.prev.has(i)) {
         this.pressed.add(i);
@@ -113,6 +120,10 @@ export class GamepadInput implements InputSource {
   moveVector(): { x: number; y: number } {
     const pad = this.pad();
     return pad ? padMove(pad) : { x: 0, y: 0 };
+  }
+  aimVector(): { x: number; y: number } | null {
+    const pad = this.pad();
+    return pad ? padAim(pad) : null;
   }
   private any(buttons: readonly number[]): boolean {
     return buttons.some((i) => this.pressed.has(i));

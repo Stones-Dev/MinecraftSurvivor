@@ -6,6 +6,7 @@ import {
   cooldownOf,
   damageOf,
   enemiesInCircle,
+  aimedAngle,
   faceToward,
   nearestEnemy,
   onHitMods,
@@ -38,7 +39,7 @@ export const sword: WeaponDef = {
     const target = nearestEnemy(run, area + 14);
     if (!target) return false;
     const p = run.player;
-    const angle = Math.atan2(target.y - p.y, target.x - p.x);
+    const angle = aimedAngle(run, Math.atan2(target.y - p.y, target.x - p.x));
     faceToward(run, target.x);
     p.swingT = 0.33;
     run.emit('swing');

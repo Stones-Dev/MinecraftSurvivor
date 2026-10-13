@@ -8,6 +8,7 @@ import {
   countOf,
   damageOf,
   enemiesInCircle,
+  aimedLandPoints,
   faceToward,
   nearestEnemy,
   onHitMods,
@@ -50,7 +51,7 @@ function nextTarget(run: RunState, taken: Enemy[]): Enemy | null {
 /** Lob a potion from the hero to the target; `onLand` runs where it shatters. */
 function throwAt(
   run: RunState,
-  target: Enemy,
+  target: { x: number; y: number },
   onLand: (run: RunState, x: number, y: number) => void,
 ): void {
   const p = run.player;
@@ -127,12 +128,20 @@ export const harming: WeaponDef = {
     const first = nearestEnemy(run, RANGE);
     if (!first) return false;
     faceToward(run, first.x);
-    const targets: Enemy[] = [first];
+    const targets: { x: number; y: number }[] = [first];
     const want = countOf(run, s);
-    while (targets.length < want) {
-      const next = nextTarget(run, targets);
-      if (!next) break;
-      targets.push(next);
+    if (run.player.manualAim) {
+      // Manual aim: the potions land where the player points (snapped onto enemies there), not on the nearest.
+      targets.length = 0;
+      targets.push(...aimedLandPoints(run, RANGE, want));
+    } else {
+      const taken: Enemy[] = [first];
+      while (taken.length < want) {
+        const next = nextTarget(run, taken);
+        if (!next) break;
+        taken.push(next);
+        targets.push(next);
+      }
     }
     const dmg = damageOf(run, s, true);
     const radius = areaOf(run, s) * run.mods.potionArea;

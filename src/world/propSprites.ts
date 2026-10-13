@@ -1493,6 +1493,212 @@ function pinkPetals(c: Ctx): Pix {
 // ---------------------------------------------------------------------------------------------------
 // Style table
 
+// ---------------------------------------------------------------------------------------------------
+// Structure props (village and desert temple, v1.4)
+
+const OAK_LIGHT: Pal = ramp([200, 164, 100], [222, 188, 124], [156, 120, 68]);
+const SPRUCE_DARK: Pal = ramp([112, 82, 48], [134, 100, 60], [80, 58, 34]);
+const IRON: RGB = [168, 170, 180];
+const IRON_D: RGB = [110, 112, 124];
+const GOLD: RGB = [244, 196, 50];
+const GOLD_D: RGB = [196, 146, 30];
+
+/** Village chest: light oak with two iron straps and an iron clasp. */
+function chestVillage(c: Ctx): Pix {
+  const buf = new PixBuffer(16, 15);
+  const pal = c.biome === 'snowy_taiga' ? SPRUCE_DARK : OAK_LIGHT;
+  drawBox(buf, 1, 1, 14, 5, 8, plankMat(pal, 41), 41);
+  fill(buf, 1, 8, 14, 8, [86, 58, 28]); // lid seam
+  fill(buf, 1, 1, 14, 1, pal[1]);
+  for (const x of [3, 12]) {
+    fill(buf, x, 1, x, 13, IRON);
+    put(buf, x, 6, IRON_D);
+    put(buf, x, 13, IRON_D);
+  }
+  fill(buf, 6, 7, 9, 10, IRON); // clasp
+  fill(buf, 9, 7, 9, 10, IRON_D);
+  fill(buf, 7, 5, 8, 6, IRON_D);
+  put(buf, 7, 9, [50, 52, 60]);
+  return finish({ buf, ox: 8, oy: 13 });
+}
+
+/** Pyramid chest: lapis body, gold straps and a gold lock. */
+function chestPyramid(): Pix {
+  const buf = new PixBuffer(16, 15);
+  const lapis: Pal = ramp([44, 76, 176], [70, 108, 214], [28, 48, 120]);
+  const m: Mat = {
+    pal: lapis,
+    tex: (u, v, top) => (hash2(u, v, 51) < (top ? 0.18 : 0.12) ? 1 : 0),
+    over: (u, v) => (hash2(u, v, 52) < 0.05 ? [150, 190, 255] : undefined),
+  };
+  drawBox(buf, 1, 1, 14, 5, 8, m, 51);
+  fill(buf, 1, 8, 14, 8, [22, 34, 92]);
+  fill(buf, 1, 1, 14, 1, [96, 132, 232]);
+  for (const x of [2, 13]) {
+    fill(buf, x, 1, x, 13, GOLD);
+    fill(buf, x + (x < 8 ? 1 : -1), 2, x + (x < 8 ? 1 : -1), 13, GOLD_D);
+  }
+  fill(buf, 1, 7, 14, 7, GOLD); // gold band over the seam
+  fill(buf, 6, 6, 9, 11, GOLD);
+  fill(buf, 9, 6, 9, 11, GOLD_D);
+  fill(buf, 7, 8, 8, 9, [60, 40, 10]);
+  put(buf, 6, 6, [255, 236, 140]);
+  return finish({ buf, ox: 8, oy: 13 });
+}
+
+const CROP_KEY: Record<string, RGB> = {
+  g: [74, 138, 44],
+  G: [108, 172, 58],
+  d: [52, 100, 34],
+  y: [222, 186, 72],
+  Y: [246, 214, 104],
+  b: [166, 126, 46],
+  o: [232, 130, 30],
+  O: [196, 96, 18],
+  w: [238, 240, 214],
+  p: [160, 30, 70],
+};
+const CROP_ROWS: readonly (readonly string[])[] = [
+  // Wheat
+  [
+    '..Y..Y..Y..',
+    '..y..y..y..',
+    '.Yy.Yy.Yy..',
+    '.yb.yb.yb..',
+    '..g..g..g..',
+    '.gG.gG.gG..',
+    '.g..g..g...',
+    '.d..d..d...',
+  ],
+  // Carrots
+  ['..G..G..G..', '.GgG.GgG.G.', '.gdg.gdg.g.', '..o..o..o..', '..O..O..O..', '...........'],
+  // Potatoes
+  ['.G..G..G...', 'GgGGgGGgG..', 'gdgdgdgdg..', '.w..w..w...', '.g..g..g...'],
+  // Beetroots
+  ['.G.G.G.G...', 'GgGgGgGgG..', '.p.p.p.p...', '.d.d.d.d...'],
+];
+
+function crop(c: Ctx): Pix {
+  const rows = CROP_ROWS[c.type % CROP_ROWS.length] ?? CROP_ROWS[0] ?? [];
+  const buf = pixmap(rows, CROP_KEY, 1);
+  return { buf, ox: Math.floor(buf.w / 2), oy: buf.h - 1 };
+}
+
+function well(): Pix {
+  const buf = new PixBuffer(22, 30);
+  const wood = plankMat(SPRUCE_DARK, 61);
+  // Posts and the little roof.
+  drawBox(buf, 2, 8, 3, 2, 14, wood, 61);
+  drawBox(buf, 17, 8, 3, 2, 14, wood, 62);
+  drawBox(buf, 1, 4, 20, 5, 3, wood, 63);
+  fill(buf, 3, 3, 18, 3, SPRUCE_DARK[1]);
+  // Cobble basin with water.
+  drawBox(buf, 3, 16, 16, 6, 6, stoneMat(64), 64);
+  fill(buf, 6, 17, 15, 20, [62, 120, 214]);
+  fill(buf, 6, 17, 15, 17, [48, 92, 176]);
+  fill(buf, 8, 19, 11, 19, [150, 196, 250]);
+  // Rope and bucket.
+  fill(buf, 10, 8, 10, 15, [198, 170, 120]);
+  fill(buf, 9, 14, 12, 16, [132, 100, 60]);
+  return finish({ buf, ox: 11, oy: 26 });
+}
+
+function pressurePlate(): Pix {
+  const buf = new PixBuffer(16, 11);
+  // A stone slab sunk a little into the floor: lit rim, darker body, an amber rune hinting at the trap.
+  fill(buf, 1, 2, 14, 8, [118, 118, 124]);
+  fill(buf, 2, 3, 13, 7, [150, 150, 156]);
+  fill(buf, 1, 2, 14, 2, [188, 188, 194]);
+  fill(buf, 1, 8, 14, 8, [80, 80, 86]);
+  fill(buf, 14, 3, 14, 8, [96, 96, 102]);
+  fill(buf, 6, 4, 9, 6, [226, 150, 40]);
+  fill(buf, 7, 5, 8, 5, [255, 214, 120]);
+  put(buf, 5, 5, [196, 120, 30]);
+  put(buf, 10, 5, [196, 120, 30]);
+  return finish({ buf, ox: 8, oy: 7 });
+}
+
+function workbench(): Pix {
+  const buf = new PixBuffer(16, 17);
+  const top: Mat = {
+    pal: OAK_LIGHT,
+    tex: (u, v, isTop) => (isTop ? (u % 4 === 0 || v % 4 === 0 ? 1 : 0) : v % 4 === 3 ? 1 : 0),
+  };
+  drawBox(buf, 1, 2, 14, 5, 8, top, 71);
+  fill(buf, 1, 9, 14, 12, [92, 62, 34]); // dark front
+  fill(buf, 3, 10, 5, 11, IRON); // saw
+  fill(buf, 8, 10, 12, 10, [196, 160, 98]);
+  fill(buf, 9, 11, 11, 11, [150, 110, 60]);
+  return finish({ buf, ox: 8, oy: 13 });
+}
+
+const BOOK_COLORS: RGB[] = [
+  [150, 48, 44],
+  [54, 96, 160],
+  [70, 130, 70],
+  [196, 150, 60],
+  [110, 70, 130],
+];
+
+function bookshelf(): Pix {
+  const buf = new PixBuffer(16, 17);
+  drawBox(buf, 1, 2, 14, 4, 9, plankMat(OAK_LIGHT, 81), 81);
+  for (const row of [0, 1]) {
+    const y0 = 7 + row * 4;
+    fill(buf, 2, y0, 13, y0 + 2, [60, 40, 22]);
+    for (let x = 2; x <= 13; x++) {
+      const col = BOOK_COLORS[Math.floor(hash2(x, row, 82) * BOOK_COLORS.length)] ?? BOOK_COLORS[0];
+      if (col && hash2(x, row, 83) < 0.9) fill(buf, x, y0, x, y0 + 2 - (x % 3 === 0 ? 1 : 0), col);
+    }
+  }
+  return finish({ buf, ox: 8, oy: 13 });
+}
+
+function bed(c: Ctx): Pix {
+  const buf = new PixBuffer(14, 26);
+  const blankets: Pal[] = [
+    ramp([196, 44, 44], [226, 72, 68], [140, 28, 32]),
+    ramp([54, 90, 190], [84, 122, 224], [36, 60, 134]),
+    ramp([60, 150, 70], [90, 182, 98], [40, 104, 50]),
+  ];
+  const wool = blankets[c.type % blankets.length] ?? OAK_LIGHT;
+  drawBox(buf, 1, 1, 12, 16, 6, plankMat(OAK_LIGHT, 91), 91);
+  fill(buf, 1, 1, 12, 16, [236, 232, 224]); // sheets
+  fill(buf, 2, 2, 11, 6, [250, 248, 244]); // pillow
+  fill(buf, 2, 6, 11, 6, [214, 210, 202]);
+  fill(buf, 1, 8, 12, 16, wool[2]);
+  fill(buf, 1, 8, 12, 8, wool[0]);
+  fill(buf, 12, 8, 12, 16, wool[3]);
+  fill(buf, 1, 17, 12, 22, [96, 66, 36]); // frame front
+  fill(buf, 1, 17, 12, 17, [150, 112, 64]);
+  return finish({ buf, ox: 7, oy: 23 });
+}
+
+function lantern(): Pix {
+  const buf = new PixBuffer(9, 22);
+  fill(buf, 3, 4, 4, 19, [92, 64, 36]); // post
+  fill(buf, 3, 4, 3, 19, [118, 84, 48]);
+  fill(buf, 3, 2, 8, 2, [92, 64, 36]); // arm
+  fill(buf, 6, 3, 6, 4, IRON_D);
+  fill(buf, 5, 5, 7, 8, [255, 206, 90]); // lantern
+  fill(buf, 6, 6, 6, 7, [255, 246, 190]);
+  fill(buf, 5, 5, 7, 5, IRON_D);
+  fill(buf, 5, 9, 7, 9, IRON_D);
+  return finish({ buf, ox: 4, oy: 19 });
+}
+
+function hayBale(): Pix {
+  const buf = new PixBuffer(16, 16);
+  const straw: Mat = {
+    pal: ramp([214, 178, 66], [238, 204, 94], [168, 130, 38]),
+    tex: (u, v, top) =>
+      top ? (hash2(u, v, 95) < 0.3 ? 1 : 0) : hash2(u >> 1, v, 96) < 0.3 ? 1 : 0,
+    over: (_u, v, top) => (!top && (v % 7 === 0 || v % 7 === 1) ? [158, 52, 40] : undefined),
+  };
+  drawBox(buf, 1, 1, 14, 6, 7, straw, 94);
+  return finish({ buf, ox: 8, oy: 12 });
+}
+
 type Painter = (c: Ctx, style: PropStyle) => Pix;
 
 const flowerPainter: Painter = (c, style) => flowerSprite(c, style);
@@ -1544,6 +1750,16 @@ const PAINTERS: Record<PropStyle, Painter> = {
   cobweb,
   magma,
   bamboo,
+  chest_village: chestVillage,
+  chest_pyramid: chestPyramid,
+  crop,
+  well,
+  pressure_plate: pressurePlate,
+  workbench,
+  bookshelf,
+  bed,
+  lantern,
+  hay_bale: hayBale,
 };
 
 /** Every style the painters handle (tests check propStyleFor never leaves this set). */
@@ -1636,6 +1852,22 @@ export const PROP_GALLERY: [PropKind, number][][] = [
     ['anvil', 0],
     ['enchant_table', 0],
     ['tnt_trap', 0],
+  ],
+  [
+    ['chest_village', 0],
+    ['chest_pyramid', 0],
+    ['crop', 0],
+    ['crop', 1],
+    ['crop', 2],
+    ['crop', 3],
+    ['well', 0],
+    ['pressure_plate', 0],
+    ['workbench', 0],
+    ['bookshelf', 0],
+    ['bed', 0],
+    ['bed', 1],
+    ['lantern', 0],
+    ['hay_bale', 0],
   ],
 ];
 

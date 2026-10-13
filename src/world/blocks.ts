@@ -44,9 +44,20 @@ export const MAT = {
   SOUL_SAND: 18,
   BLACKSTONE_BRICKS: 19,
   PETALS: 20,
+  // Structure materials (v1.4): village and desert temple.
+  OAK_PLANKS: 21,
+  SPRUCE_PLANKS: 22,
+  CUT_SANDSTONE: 23,
+  ORANGE_TERRACOTTA: 24,
+  BLUE_TERRACOTTA: 25,
+  DIRT_PATH: 26,
+  FARMLAND: 27,
+  ROOF_SHINGLES: 28,
+  SNOWY_ROOF: 29,
+  SMOOTH_SANDSTONE: 30,
 } as const;
 export type MaterialId = (typeof MAT)[keyof typeof MAT];
-export const MATERIAL_COUNT = 21;
+export const MATERIAL_COUNT = 31;
 
 /** Liquids: per-biome water (tinted) and lava, each 16 shore masks x LIQUID_FRAMES frames. */
 export const LIQUID = { WATER: 0, LAVA: 1 } as const;
@@ -353,6 +364,135 @@ function cobbleTones(seed: number): Uint8Array {
     }
   }
   return out;
+}
+
+// Structure materials: palettes and the two layouts shared by planks and roofs.
+
+const OAK_PAL: readonly RGB[] = [
+  [150, 118, 70],
+  [163, 129, 78],
+  [176, 141, 86],
+  [188, 153, 95],
+  [102, 76, 42],
+  [202, 168, 110],
+];
+const SPRUCE_PAL: readonly RGB[] = [
+  [92, 66, 38],
+  [104, 76, 44],
+  [115, 86, 50],
+  [128, 97, 58],
+  [58, 41, 22],
+  [144, 111, 72],
+];
+const SANDSTONE_CUT_PAL: readonly RGB[] = [
+  [214, 200, 151],
+  [221, 208, 161],
+  [228, 216, 171],
+  [236, 226, 184],
+  [244, 236, 200],
+  [176, 160, 111],
+];
+const SMOOTH_SANDSTONE_PAL: readonly RGB[] = [
+  [222, 208, 160],
+  [229, 216, 169],
+  [236, 224, 180],
+  [242, 232, 192],
+  [208, 192, 144],
+];
+const ORANGE_TERRACOTTA_PAL: readonly RGB[] = [
+  [150, 76, 34],
+  [161, 83, 37],
+  [170, 90, 42],
+  [180, 98, 48],
+  [136, 66, 28],
+];
+const BLUE_TERRACOTTA_PAL: readonly RGB[] = [
+  [64, 50, 80],
+  [74, 59, 91],
+  [84, 68, 102],
+  [94, 78, 114],
+  [52, 40, 66],
+];
+const PATH_PAL: readonly RGB[] = [
+  [118, 92, 52],
+  [130, 102, 58],
+  [142, 113, 64],
+  [154, 124, 72],
+  [166, 136, 82],
+  [188, 172, 142],
+];
+const FARMLAND_PAL: readonly RGB[] = [
+  [96, 66, 42],
+  [108, 76, 48],
+  [120, 86, 56],
+  [64, 44, 28],
+  [76, 52, 34],
+  [138, 102, 70],
+];
+const SHINGLE_PAL: readonly RGB[] = [
+  [116, 62, 46],
+  [132, 72, 52],
+  [148, 84, 60],
+  [164, 96, 68],
+  [78, 40, 30],
+  [184, 116, 84],
+];
+const SNOW_ROOF_PAL: readonly RGB[] = [
+  [196, 210, 226],
+  [210, 222, 236],
+  [224, 234, 244],
+  [238, 246, 252],
+  [138, 158, 184],
+  [255, 255, 255],
+];
+
+/** Horizontal boards 4 px tall: dark seam under each, staggered end joints, a few lit grain pixels. */
+function boardTones(seed: number): Uint8Array {
+  const t = rankTones(
+    field(
+      seed,
+      [
+        [8, 0.3],
+        [2, 0.35],
+      ],
+      0.5,
+    ),
+    [0.2, 0.36, 0.3, 0.14],
+  );
+  speckles(t, stream(seed + 3), 4, 0, 2);
+  for (let y = 0; y < TEX; y++) {
+    const row = y >> 2;
+    const joint = (row * 7 + (seed % 5) * 3 + 2) & 15;
+    for (let x = 0; x < TEX; x++) {
+      if ((y & 3) === 3 || x === joint) put(t, x, y, 4);
+      else if ((y & 3) === 0 && hash2(x, y, seed + 9) < 0.55) put(t, x, y, 5);
+    }
+  }
+  return t;
+}
+
+/** Roof shingles: 4 px courses of 8 px shingles (every other course shifted), a dark lower edge, a lit top row. */
+function shingleTones(seed: number): Uint8Array {
+  const t = rankTones(
+    field(
+      seed,
+      [
+        [8, 0.25],
+        [2, 0.3],
+      ],
+      0.6,
+    ),
+    [0.2, 0.34, 0.3, 0.16],
+  );
+  for (let y = 0; y < TEX; y++) {
+    const row = y >> 2;
+    for (let x = 0; x < TEX; x++) {
+      const xx = row & 1 ? (x + 4) & 15 : x;
+      if ((y & 3) === 3 || (xx & 7) === 7) put(t, x, y, 4);
+      else if ((y & 3) === 0) put(t, x, y, 5);
+    }
+  }
+  return t;
 }
 
 const RECIPES: readonly Recipe[] = [
@@ -935,6 +1075,182 @@ const RECIPES: readonly Recipe[] = [
         ).map(opaque),
       ];
       return { tones: t, palette: pal };
+    },
+  },
+  // ---- Structure materials (village and desert temple, v1.4): appended, ids follow MAT. ----
+  {
+    name: 'oak planks',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => ({ tones: boardTones(22000 + v), palette: OAK_PAL.map(opaque) }),
+  },
+  {
+    name: 'spruce planks',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => ({ tones: boardTones(23000 + v), palette: SPRUCE_PAL.map(opaque) }),
+  },
+  {
+    name: 'cut sandstone',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => {
+      const s = 24000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.4],
+            [2, 0.2],
+          ],
+          0.3,
+        ),
+        [0.16, 0.34, 0.34, 0.16],
+      );
+      // 8x8 blocks, the lower row of blocks shifted by half a block: dark seam right and below, lit rim
+      // left and above.
+      for (let y = 0; y < TEX; y++) {
+        const half = y >> 3;
+        for (let x = 0; x < TEX; x++) {
+          const xx = half === 0 ? x : (x + 4) & 15;
+          if ((y & 7) === 7 || (xx & 7) === 7) put(t, x, y, 5);
+          else if ((y & 7) === 0 || (xx & 7) === 0) put(t, x, y, 4);
+        }
+      }
+      if (v % 2 === 1) speckles(t, stream(s), 3, 0, 2);
+      return { tones: t, palette: SANDSTONE_CUT_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'orange terracotta',
+    variants: 8,
+    orient: 8,
+    framed: false,
+    build: (v) => {
+      const s = 25000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.3],
+            [2, 0.3],
+          ],
+          0.6,
+        ),
+        [0.1, 0.34, 0.38, 0.18],
+      );
+      speckles(t, stream(s), 4, 4, 2);
+      return { tones: t, palette: ORANGE_TERRACOTTA_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'blue terracotta',
+    variants: 8,
+    orient: 8,
+    framed: false,
+    build: (v) => {
+      const s = 26000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.3],
+            [2, 0.3],
+          ],
+          0.6,
+        ),
+        [0.1, 0.34, 0.38, 0.18],
+      );
+      speckles(t, stream(s), 4, 4, 2);
+      return { tones: t, palette: BLUE_TERRACOTTA_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'dirt path',
+    variants: 8,
+    orient: 8,
+    framed: false,
+    build: (v) => {
+      const s = 27000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.4],
+            [2, 0.3],
+          ],
+          0.5,
+        ),
+        [0.1, 0.24, 0.34, 0.22, 0.1],
+      );
+      speckles(t, stream(s), 4, 5, 1);
+      return { tones: t, palette: PATH_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'farmland',
+    variants: 8,
+    orient: 4,
+    framed: false,
+    build: (v) => {
+      const s = 28000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.3],
+            [2, 0.3],
+          ],
+          0.5,
+        ),
+        [0.3, 0.4, 0.3],
+      );
+      // Furrows: every other pair of rows is the dark, wet trough (period 4 divides 16: seamless).
+      for (let y = 0; y < TEX; y++) {
+        if ((y & 3) < 2) continue;
+        for (let x = 0; x < TEX; x++) put(t, x, y, get(t, x, y) === 0 ? 3 : 4);
+      }
+      speckles(t, stream(s), 3, 5, 1);
+      return { tones: t, palette: FARMLAND_PAL.map(opaque) };
+    },
+  },
+  {
+    name: 'roof shingles',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => ({ tones: shingleTones(29000 + v), palette: SHINGLE_PAL.map(opaque) }),
+  },
+  {
+    name: 'snowy roof',
+    variants: 6,
+    orient: 1,
+    framed: true,
+    build: (v) => ({ tones: shingleTones(30000 + v), palette: SNOW_ROOF_PAL.map(opaque) }),
+  },
+  {
+    name: 'smooth sandstone',
+    variants: 8,
+    orient: 8,
+    framed: false,
+    build: (v) => {
+      const s = 31000 + v;
+      const t = rankTones(
+        field(
+          s,
+          [
+            [4, 0.35],
+            [2, 0.25],
+          ],
+          0.6,
+        ),
+        [0.14, 0.34, 0.36, 0.16],
+      );
+      speckles(t, stream(s), 3, 4, 1);
+      return { tones: t, palette: SMOOTH_SANDSTONE_PAL.map(opaque) };
     },
   },
 ];

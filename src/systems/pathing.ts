@@ -39,6 +39,16 @@ export class Pathing {
       const ty = Math.floor(p.y / TILE_PX) - this.oy;
       if (tx >= 0 && ty >= 0 && tx < SIDE && ty < SIDE) this.blocked[ty * SIDE + tx] = 1;
     }
+    // Structure walls (world/structures.ts) block whole tiles; doorways stay open.
+    world.structures?.forEachSolid(
+      this.ox,
+      this.oy,
+      this.ox + SIDE - 1,
+      this.oy + SIDE - 1,
+      (tx, ty) => {
+        this.blocked[(ty - this.oy) * SIDE + (tx - this.ox)] = 1;
+      },
+    );
     const start = R * SIDE + R;
     this.blocked[start] = 0;
     this.dist[start] = 0;

@@ -1,7 +1,15 @@
 import type { Enemy } from '../entities/enemy';
 import { makeFx } from '../entities/fx';
 import { damageEnemy } from '../systems/combat';
-import { areaOf, damageOf, enemiesInCircle, faceToward, nearestEnemy, onHitMods } from './helpers';
+import {
+  aimedAngle,
+  areaOf,
+  damageOf,
+  enemiesInCircle,
+  faceToward,
+  nearestEnemy,
+  onHitMods,
+} from './helpers';
 import type { WeaponDef } from './types';
 
 const hits: Enemy[] = [];
@@ -39,7 +47,7 @@ export const axe: WeaponDef = {
     const target = nearestEnemy(run, area + 16);
     if (!target) return false;
     const p = run.player;
-    const angle = Math.atan2(target.y - p.y, target.x - p.x);
+    const angle = aimedAngle(run, Math.atan2(target.y - p.y, target.x - p.x));
     faceToward(run, target.x);
     p.swingT = 0.33;
     run.emit('swing');

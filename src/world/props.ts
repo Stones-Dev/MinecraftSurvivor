@@ -22,7 +22,18 @@ export type PropKind =
   | 'tnt_trap'
   | 'cobweb'
   | 'magma'
-  | 'bamboo';
+  | 'bamboo'
+  // Structure props (world/structures.ts stamps them; never grown by genProps).
+  | 'chest_village'
+  | 'chest_pyramid'
+  | 'crop'
+  | 'well'
+  | 'pressure_plate'
+  | 'workbench'
+  | 'bookshelf'
+  | 'bed'
+  | 'lantern'
+  | 'hay_bale';
 
 /** Ore types stored in `variant % 8`. */
 export const ORE_TYPES = ['coal', 'iron', 'gold', 'lapis', 'redstone', 'diamond'] as const;
@@ -82,7 +93,22 @@ const RADIUS: Record<PropKind, number> = {
   cobweb: 0,
   magma: 0,
   bamboo: 3,
+  chest_village: 5,
+  chest_pyramid: 5,
+  crop: 0,
+  well: 7,
+  pressure_plate: 0,
+  workbench: 5,
+  bookshelf: 5,
+  bed: 6,
+  lantern: 0,
+  hay_bale: 5,
 };
+
+/** Collision radius of a prop kind (0 = walk-through decoration). Structure stamps use it too. */
+export function propRadius(kind: PropKind): number {
+  return RADIUS[kind];
+}
 
 export function propType(p: Pick<Prop, 'variant'>): number {
   return p.variant % 8;

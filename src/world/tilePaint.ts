@@ -38,6 +38,8 @@ import {
   tintMean,
 } from './blocks';
 import { BIOME_IDS, BIOME_INDEX, BIOMES, type BiomeId } from './biomes';
+import { isEndTile, paintEndTile } from './endTiles';
+import { OV_MAT_MASK } from './structures/stamp';
 import { BIOME_BORDER, CHUNK_PX, CHUNK_TILES, TILE } from './terrain';
 
 const NB = BIOME_IDS.length;
@@ -254,6 +256,7 @@ export function paintChunk(
   terrain: Uint8Array,
   biomes: Uint8Array | BiomeId,
   seed: number,
+  overlay?: Uint8Array | null,
 ): PixBuffer {
   const buf = new PixBuffer(CHUNK_PX, CHUNK_PX);
   const out = buf.data;
@@ -277,6 +280,8 @@ export function paintChunk(
       const hi = tileHash(Tx, Ty, seed);
       const phase = (hi >>> 20) & (LIQUID_FRAMES - 1);
       const dst = ty * TEX * CHUNK_PX + tx * TEX;
+      // Structure stamp (world/structures.ts): its material replaces the biome ground below.
+      const ov = overlay ? (overlay[(ty + 1) * side + tx + 1] ?? 0) : 0;
       if (t === TILE.LAVA) {
         const mask = shoreMask(terrain, tx, ty, TILE.LAVA);
         copyTile(out, CHUNK_PX, dst, lavaSet, (mask * LIQUID_FRAMES + phase) * TEX_AREA);
@@ -289,6 +294,15 @@ export function paintChunk(
         continue;
       }
 
+      if (isEndTile(t)) {
+        // The End (arena kind 'end'): its own small texture set, see endTiles.ts. Void stays transparent.
+        const en = at(tx, ty - 1);
+        const es = at(tx, ty + 1);
+        const ew = at(tx - 1, ty);
+        const ee = at(tx + 1, ty);
+        paintEndTile(out, CHUNK_PX, dst, t, hi, en, es, ew, ee, Tx, Ty, seed);
+        continue;
+      }
       ROWF.fill(1);
       COLF.fill(1);
       const n = at(tx, ty - 1);
@@ -348,6 +362,8 @@ export function paintChunk(
         if (e === TILE.WALL) shadeEdge(COLF, 15, -1, WALL_SHADE_FAR);
         else if (e === TILE.WATER || e === TILE.LAVA) shadeEdge(COLF, 15, -1, LOW_SHADE);
       }
+
+      if (ov !== 0) mat = ((ov & OV_MAT_MASK) - 1) as MaterialId;
 
       // Per-tile brightness jitter (+-3%, +-1.5% on near-white blocks where it shows more).
       const jf = 1 + ((hi & 255) / 255 - 0.5) * (SOFT_JITTER[mat] === 1 ? 0.03 : 0.06);
