@@ -15,9 +15,9 @@ describe('hostile ranged pressure after the taller hero hurtbox', () => {
     expect(guardian.cd).toEqual([3, 4]); // instant beam (speed 0)
   });
 
-  it('the pressure cut is about a third (rate x damage), not more', () => {
+  it('the pressure cut stays between a sixth and a half (rate x damage), see docs/BALANCE.md', () => {
     const cut = 1 - HERO_BOX_DMG_MULT / HERO_BOX_CD_MULT;
     expect(cut).toBeGreaterThan(0.15);
-    expect(cut).toBeLessThan(0.4);
+    expect(cut).toBeLessThan(0.5);
   });
 });

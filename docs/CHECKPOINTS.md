@@ -143,3 +143,8 @@ Security:
 - The minimap is not drawn on views under 150 px high; the supported minimum view is 320x180.
 - The balance bot is a fresh-Steve baseline (see Balance).
 - GitHub Pages must be enabled for the repository (Settings > Pages > GitHub Actions) and, for cloud features, the `FIREBASE_*` repository variables must be set; `v*` tags cannot be pushed from the build session.
+
+
+### Checkpoint 6b — v1.3 (audit waves 2-3)
+
+Authentic 4-direction walk cycles for Steve, Alex and Rana with a held-weapon overlay; hero capsule hurtbox with hostile-shooter compensation; waist aim and full-height tall bosses; hit-stop, trauma shake, clearer telegraphs; pad navigation in collection, upgrades and pause; pad rebinding; HUD key prompts; touch suspended under modals; spawner fixes; 5 starter eggs and the Wolf replacement rule; more minute-0 variety. Evidence: lint, `tsc` and 951 tests green; browser smoke test over 25 pages with 0 errors and about 60 fps in all 10 biomes at `?crowd=150` (headless, vsync-capped); balance as in `docs/BALANCE.md` (v1.3 final tuning). Not verified: audio by ear, real gamepad, real touch, real Firebase login, human play feel.

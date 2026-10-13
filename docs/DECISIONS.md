@@ -218,3 +218,7 @@ Checked against the code first; all of it applied except where noted.
 - **Also:** the thrown trident now emits the `bow` sound event instead of `swing`.
 - **Balance (24 seeds per cell, same seeds, medians; HEAD f58fd09 -> final):** newbie 3:17 -> 3:24, smart 5:38 -> 5:17, sword starter 4:53 -> 4:38, bow 10:02 -> 8:15, crossbow 7:59 -> 7:29 (+-0:17 to 0:51 each, so crossbow is inside noise of the 8:00 baseline; the 48-seed run of the audit pass read 10:04). Steps (bow / crossbow): friendly capsule and aim only 8:23 / 8:12, plus hero capsule 6:38 / 7:14, plus cd x1.2 and hit-stun 8:18 / 6:49, final 8:15 / 7:29.
 - **Risk:** the hostile projectile cut is large and the bot cannot judge feel; a human dodging by moving vertically now faces a taller box but fewer, softer shots. If the 48-seed run puts crossbow under 8:00 and bow under 8:00, first lower `HERO_BOX_DMG_MULT` toward 0.7; the fallback agreed with the owner (110 base HP) was not needed.
+
+## 2026-10-13 — v1.3 balance close-out
+
+After the hero capsule hurtbox the first compensation (shooters cd x1.2, damage x0.8) left bow and crossbow at 7:46 and 7:34 over 48 seeds (target 8-10), so the damage multiplier went to 0.7: bow 8:16, crossbow 8:25, sword starter 5:25. The newbie policy stays at 2:57 (aim 3:15) and the smart policy at 6:05 (band 4-6); both are inside about 1.5 standard errors and are documented in `docs/BALANCE.md` rather than tuned further. No base HP change. Not verified: human play, audio, real gamepad and touch devices, real Firebase.
