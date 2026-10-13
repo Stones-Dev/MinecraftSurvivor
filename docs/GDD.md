@@ -245,7 +245,7 @@ The biome under the hero (spatial biome map, `RunState.biome()`) reweights the s
 
 Enemy AI archetypes to implement generically: `chaser`, `ranged-kiter`, `charger` (telegraphed), `kamikaze`, `splitter`, `summoner`, `healer`, `shielder`, `teleporter`, `flyer-diver`, `turret`, plus boss patterns. Telegraphs are drawn on the ground (red outline shapes: a 9 px translucent strip for lines, a disc that starts at 35% alpha and fills toward its edge for areas) ≥ 0.6 s before damage.
 
-**Hit volumes (v1.3a):** every body is a vertical capsule from the ankles up to 80% of its drawn sprite height (scale included, at most 56 px), so tall bosses are hit anywhere on the sprite; the hero's capsule for hostile projectiles runs from 4 to 22 px above the feet. Ranged weapons aim at the middle of the target's capsule (`aimPointY`), lobbed potions at its feet. Hostile projectile shooters fire 20% less often to pay for the taller hero hurtbox.
+**Hit volumes (v1.3a):** every body is a vertical capsule from the ankles up to 80% of its drawn sprite height (scale included, at most 56 px), so tall bosses are hit anywhere on the sprite; the hero's capsule for hostile projectiles runs from 4 to 22 px above the feet. Ranged weapons aim at the middle of the target's capsule (`aimPointY`), lobbed potions at its feet. Hostile projectile shooters (arrows, tridents, bolts, fireballs, skulls, spit) fire 20% less often and hit 20% softer to pay for the taller hero hurtbox; pools and beams are unchanged.
 
 Damage model: simple, no type chart. Status effects: burn, poison, wither, slow, freeze, stun, levitate(slow). Armor = flat reduction with diminishing formula `dmg × 100/(100+armor)`.
 
