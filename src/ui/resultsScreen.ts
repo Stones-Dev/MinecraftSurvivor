@@ -49,6 +49,14 @@ const note = (text: string, color: string = UI.soft): Line => ({
   },
 });
 
+/** Seconds after the dragon's death that still count for the time board (egg, exit portal). */
+const END_EXIT_GRACE_SEC = 120;
+
+/** Time that counts for stats and the time board: the clock, capped shortly after the Ender Dragon died. */
+export function scoredTime(time: number, endKilledAt: number): number {
+  return endKilledAt >= 0 ? Math.min(time, endKilledAt + END_EXIT_GRACE_SEC) : time;
+}
+
 export function resultsScreen(
   app: App,
   run: RunState,
@@ -61,7 +69,8 @@ export function resultsScreen(
   const meta = baseMods();
   applyLoadoutMods(run.loadout, meta);
   const summary = {
-    timeSec: run.time,
+    // After the dragon dies nothing hostile remains, so idling in the End must not inflate the time board.
+    timeSec: scoredTime(run.time, run.endKilledAt),
     kills: run.kills,
     bosses: run.bossKills,
     miniBosses: run.miniKills,

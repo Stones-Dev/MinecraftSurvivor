@@ -26,5 +26,5 @@ export const STRUCTURE_BY_ID: Readonly<Record<StructureId, StructureDef>> = {
 };
 
 export function isStructureId(v: string | null | undefined): v is StructureId {
-  return v !== null && v !== undefined && v in STRUCTURE_BY_ID;
+  return v !== null && v !== undefined && Object.hasOwn(STRUCTURE_BY_ID, v);
 }

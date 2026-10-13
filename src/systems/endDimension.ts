@@ -541,6 +541,7 @@ export function onDragonKilled(run: RunState, e: Enemy): void {
   end.deathY = e.y;
   end.brain.mode = 'dying';
   run.endDragonKilled = true;
+  run.endKilledAt = run.time;
   end.orbsLeft = XP_ORBS;
   end.orbValue = xpShowerTotal(run) / XP_ORBS;
   // Whatever crystals still stand die with their master (no blast, no reward).

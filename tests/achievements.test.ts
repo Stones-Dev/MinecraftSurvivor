@@ -49,6 +49,8 @@ describe('achievement catalogue', () => {
   it('has around forty-plus achievements with unique ids, valid icons and every category', () => {
     expect(ACHIEVEMENTS.length).toBeGreaterThanOrEqual(40);
     expect(new Set(ACHIEVEMENTS.map((a) => a.id)).size).toBe(ACHIEVEMENTS.length);
+    // Player-facing names are unique too (the raid buff achievement is 'Village Defender', the escort one 'Hero of the Village').
+    expect(new Set(ACHIEVEMENTS.map((a) => a.name)).size).toBe(ACHIEVEMENTS.length);
     const cats = new Set(ACHIEVEMENTS.map((a) => a.cat));
     for (const c of ACHIEVEMENT_CATEGORIES) expect(cats.has(c.id)).toBe(true);
     for (const a of ACHIEVEMENTS) {

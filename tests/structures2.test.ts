@@ -1216,7 +1216,8 @@ describe('structure achievements, missions and the stats behind them', () => {
       expect(ACHIEVEMENT_BY_ID.get(id), id).toBeTruthy();
     expect(ACHIEVEMENT_BY_ID.get('jungle_raider')?.name).toBe('Jungle Raider');
     expect(ACHIEVEMENT_BY_ID.get('trial_passed')?.name).toBe('Trial Passed');
-    expect(ACHIEVEMENT_BY_ID.get('raid_hero')?.name).toBe('Hero of the Village');
+    expect(ACHIEVEMENT_BY_ID.get('raid_hero')?.name).toBe('Village Defender');
+    expect(ACHIEVEMENT_BY_ID.get('hero_of_the_village')?.name).toBe('Hero of the Village');
     expect(ACHIEVEMENT_BY_ID.get('witchs_brew')?.name).toBe("Witch's Brew");
     const m = MISSION_BY_ID.get('d_struct_chests');
     expect(m?.kind).toBe('daily');

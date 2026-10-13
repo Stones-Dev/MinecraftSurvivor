@@ -140,6 +140,8 @@ export class RunState {
   readonly end = new EndState();
   /** The Ender Dragon has been killed this run, and the hero took its egg. */
   endDragonKilled = false;
+  /** Run clock when the Ender Dragon died (-1 = alive); the leaderboard time stops counting shortly after. */
+  endKilledAt = -1;
   dragonEgg = false;
   /** Per-run statistics for results, missions and achievements (systems/runStats.ts). */
   readonly stats = new RunStats();

@@ -367,6 +367,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       if (!(app.touch.enabled && app.touch.buttonAt(x, y))) minimap.tap(x, y);
     },
     exit() {
+      app.touch.aimEnabled = false;
       window.removeEventListener('keydown', onKey);
     },
     update(dt) {

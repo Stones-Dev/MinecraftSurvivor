@@ -7,11 +7,19 @@
  * few hundred bytes. The window around the hero is painted into a small ImageData only when the hero
  * enters a new cell (the map scrolls in 2 px steps), so the per-frame cost is one drawImage, a panel and
  * a handful of marker rects. Colours are the biome's ground colour (water and lava keep their own).
+ *
+ * Structures (village, temples, trial chamber, outpost, hut) show as small shaped icons, but only where the
+ * hero has explored the cell they stand in (no spoilers through the fog). The list is rebuilt when the
+ * window is repainted (a cell crossing), never per frame.
  */
+import { cb, cbFor, colorblindMode } from '../core/accessibility';
+import type { ColorblindMode } from '../core/save';
 import type { RunState } from '../game';
 import { getMarkers } from '../systems/npcs';
 import { biomeAtTile } from '../world/biomeMap';
 import { BIOMES, type BiomeId } from '../world/biomes';
+import { poiMarkers, type PoiMarker } from '../world/structures';
+import type { StructureId } from '../world/structures/stamp';
 import { TILE } from '../world/terrain';
 import type { World } from '../world/world';
 import type { Rect } from './panel';
@@ -227,6 +235,77 @@ export function slotHit(slot: MapSlot, x: number, y: number, pad = 3): boolean {
   return !!r && x >= r.x - pad && y >= r.y - pad && x < r.x + r.w + pad && y < r.y + r.h + pad;
 }
 
+// --- structure icons ----------------------------------------------------------------------------
+
+/** 3x3 glyph per structure, row-major bits (bit 8 = top-left). Shape carries the identity, colour backs it up. */
+export const POI_GLYPH: Readonly<Record<StructureId, number>> = {
+  village: 0b111_111_111, // solid square
+  desert_temple: 0b010_111_010, // plus
+  jungle_temple: 0b101_010_101, // X
+  trial_chamber: 0b111_101_111, // ring
+  pillager_outpost: 0b111_010_010, // T (banner pole)
+  witch_hut: 0b010_101_111, // little roof over a door
+};
+
+/**
+ * Colour-vision-safe stand-ins for the structure colours (the table in core/accessibility.ts only covers
+ * the combat cues). Chosen so that no two differ by less than a delta E of ~30 for any of the three
+ * deficiencies; `tests/minimap.test.ts` checks it with the same simulator the accessibility tests use.
+ */
+const POI_SAFE: Readonly<Record<string, string>> = {
+  '#ffd84a': '#ffff00', // village: yellow
+  '#e8a040': '#8000ff', // desert temple: violet
+  '#6fcf5a': '#a0ffa0', // jungle temple: pale green
+  '#d05a5a': '#ff3a3a', // pillager outpost: red
+  '#4fd6c0': '#648fff', // trial chamber: blue
+  '#9a5ad0': '#cc79a7', // witch hut: pink
+};
+
+/** Marker colour of a structure for a colour-blind mode (cb() first, then the POI table). */
+export function poiColourFor(mode: ColorblindMode, color: string): string {
+  const mapped = cbFor(mode, color);
+  if (mapped !== color || mode === 'off') return mapped;
+  return POI_SAFE[color.toLowerCase()] ?? color;
+}
+
+/** Marker colour of a structure under the current colour-blind setting. */
+export function poiColour(color: string): string {
+  return poiColourFor(colorblindMode(), color);
+}
+
+/** Search radius for structures: the corner of the window (half the side times the diagonal), in px. */
+const POI_RADIUS = (WINDOW_CELLS / 2) * CELL_PX * 1.5;
+
+/**
+ * Structures worth showing: within the radius of (x, y) and standing in an explored cell. Pure; the minimap
+ * calls it on every repaint and keeps the result.
+ */
+export function discoveredPois(
+  world: World,
+  explored: ExploredSet,
+  x: number,
+  y: number,
+  radius = POI_RADIUS,
+): PoiMarker[] {
+  return poiMarkers(world, x, y, radius).filter((m) => explored.has(cellOf(m.x), cellOf(m.y)));
+}
+
+/** Paint a 3x3 glyph with a one pixel dark rim whose centre pixel is at (cx, cy). */
+function drawGlyph(
+  ctx: CanvasRenderingContext2D,
+  bits: number,
+  cx: number,
+  cy: number,
+  color: string,
+): void {
+  ctx.fillStyle = '#101014';
+  ctx.fillRect(cx - 2, cy - 2, 5, 5);
+  ctx.fillStyle = color;
+  for (let i = 0; i < 9; i++) {
+    if ((bits >> (8 - i)) & 1) ctx.fillRect(cx - 1 + (i % 3), cy - 1 + Math.floor(i / 3), 1, 1);
+  }
+}
+
 const STORE_KEY = 'minesurvive.minimap';
 
 function loadVisible(): boolean {
@@ -259,6 +338,8 @@ export class Minimap {
   private lastCy = Number.NaN;
   private lastWorld: World | null = null;
   private dirty = true;
+  /** Structures in explored cells near the hero, rebuilt with the window. */
+  private pois: PoiMarker[] = [];
   /** Where the map or chip was drawn last frame (for taps). */
   private slot: MapSlot = { map: null, chip: null };
 
@@ -333,6 +414,12 @@ export class Minimap {
         this.buf,
       );
       this.g.putImageData(this.img, 0, 0);
+      this.pois = discoveredPois(
+        run.world,
+        this.explored,
+        (this.lastCx + 0.5) * CELL_PX,
+        (this.lastCy + 0.5) * CELL_PX,
+      );
       this.dirty = false;
     }
     // Frame and map.
@@ -341,15 +428,27 @@ export class Minimap {
     ctx.fillStyle = '#4a4a56';
     ctx.fillRect(x - 1, y - 1, side + 2, side + 2);
     if (this.canvas) ctx.drawImage(this.canvas, x, y);
-    // Markers: portal, trader, villager flag, Charged mobs. Beyond the window they stick to the edge.
     const p = run.player;
+    // Structures the hero has explored, under the live markers. Only those inside the window.
+    for (const m of this.pois) {
+      mapPoint(p.x, p.y, m.x, m.y, pt);
+      if (pt.inside)
+        drawGlyph(
+          ctx,
+          POI_GLYPH[m.id],
+          x + Math.round(pt.x),
+          y + Math.round(pt.y),
+          poiColour(m.color),
+        );
+    }
+    // Markers: portal, trader, villager flag, Charged mobs, the End portal. Beyond the window they stick to the edge.
     for (const m of getMarkers(run)) {
       mapPoint(p.x, p.y, m.x, m.y, pt);
       const blink = pt.inside || Math.floor(time * 3) % 2 === 0;
       if (!blink) continue;
       ctx.fillStyle = '#101014';
       ctx.fillRect(x + Math.round(pt.x) - 2, y + Math.round(pt.y) - 2, 4, 4);
-      ctx.fillStyle = m.color;
+      ctx.fillStyle = cb(m.color);
       ctx.fillRect(x + Math.round(pt.x) - 1, y + Math.round(pt.y) - 1, 2, 2);
     }
     // The hero: a white dot with a dark rim.

@@ -22,5 +22,5 @@ export function demoResults(app: App): Screen {
   st.rescues = 1;
   st.killsByType = { zombie: 240, skeleton: 150, creeper: 38, spider: 90, raid_captain: 1 };
   st.timeByBiome = { plains: 400, forest: 200, desert: 120, nether: 34 };
-  return resultsScreen(app, run, true, { submit: false });
+  return resultsScreen(app, run, false, { submit: false });
 }

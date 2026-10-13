@@ -1,15 +1,24 @@
 import { describe, expect, it } from 'vitest';
+import { colorDistance } from '../src/core/accessibility';
+import type { ColorblindMode } from '../src/core/save';
+import { RunState } from '../src/game';
+import { STRUCTURE_DEFS } from '../src/world/structures/registry';
 import {
   BIOME_MAP_COLOUR,
   CELL_PX,
   ExploredSet,
+  Minimap,
+  POI_GLYPH,
   PX_PER_CELL,
   REVEAL_RADIUS,
   WINDOW_CELLS,
   cellColour,
   cellOf,
+  discoveredPois,
   mapPoint,
+  minimapSlot,
   paintWindow,
+  poiColourFor,
 } from '../src/ui/minimap';
 import { BIOME_IDS } from '../src/world/biomes';
 import { World } from '../src/world/world';
@@ -152,5 +161,102 @@ describe('minimap painting', () => {
     const per = (performance.now() - t0) / 20;
     // Done once per cell crossing (every ~2 s), so even 5 ms would be invisible; this guards regressions.
     expect(per).toBeLessThan(10);
+  });
+});
+
+describe('structure icons on the minimap', () => {
+  const MODES: Exclude<ColorblindMode, 'off'>[] = ['protanopia', 'deuteranopia', 'tritanopia'];
+  const ids = STRUCTURE_DEFS.map((d) => d.id);
+
+  function worldWithVillage(): { world: World; v: { cx: number; cy: number } } {
+    for (let seed = 1; seed < 200; seed++) {
+      const world = new World(seed);
+      const v = world.structures?.nearest('village', 0, 0, 6000);
+      if (v) return { world, v };
+    }
+    throw new Error('no village in the first 200 seeds');
+  }
+
+  it('gives every structure its own glyph, a colour and a safe colour for each deficiency', () => {
+    expect(new Set(ids.map((id) => POI_GLYPH[id])).size).toBe(ids.length);
+    for (const id of ids) {
+      expect(POI_GLYPH[id]).toBeGreaterThan(0);
+      expect(POI_GLYPH[id]).toBeLessThan(512);
+    }
+    const base = STRUCTURE_DEFS.map((d) => d.color);
+    for (const m of MODES) {
+      const safe = base.map((c) => poiColourFor(m, c));
+      for (const c of safe) expect(c).toMatch(/^#[0-9a-f]{6}$/);
+      for (let i = 0; i < safe.length; i++)
+        for (let j = i + 1; j < safe.length; j++)
+          expect(colorDistance(m, safe[i] ?? '', safe[j] ?? '')).toBeGreaterThan(30);
+    }
+    for (const c of base) expect(poiColourFor('off', c)).toBe(c);
+  });
+
+  it('shows only structures standing in explored cells', () => {
+    const { world, v } = worldWithVillage();
+    const explored = new ExploredSet();
+    const hidden = discoveredPois(world, explored, v.cx, v.cy);
+    expect(hidden.some((m) => m.id === 'village')).toBe(false);
+    explored.reveal(cellOf(v.cx), cellOf(v.cy), 0);
+    const shown = discoveredPois(world, explored, v.cx, v.cy);
+    expect(shown.some((m) => m.id === 'village' && Math.hypot(m.x - v.cx, m.y - v.cy) < 1)).toBe(
+      true,
+    );
+    // A world without structures (the arena) has nothing to show.
+    expect(discoveredPois(new World(1, { r: 22 }), explored, 0, 0)).toEqual([]);
+  });
+
+  it('draws a frame with icons in well under 0.3 ms of script time', () => {
+    const g = globalThis as Record<string, unknown>;
+    let rects = 0;
+    const fakeCtx = new Proxy(
+      {},
+      {
+        get: (_t, name) => () => {
+          if (name === 'fillRect') rects++;
+        },
+        set: () => true,
+      },
+    );
+    const savedDoc = g.document;
+    const savedImg = g.ImageData;
+    g.document = { createElement: () => ({ width: 0, height: 0, getContext: () => fakeCtx }) };
+    g.ImageData = class {
+      constructor(
+        public data: Uint8ClampedArray,
+        public width: number,
+        public height: number,
+      ) {}
+    };
+    try {
+      const { world, v } = worldWithVillage();
+      const run = new RunState(world.seed, 960);
+      run.player.x = v.cx;
+      run.player.y = v.cy;
+      const map = new Minimap();
+      map.visible = true;
+      // Explore a wide band so several structures are on the map.
+      for (let cx = cellOf(v.cx) - 12; cx <= cellOf(v.cx) + 12; cx += 4)
+        for (let cy = cellOf(v.cy) - 12; cy <= cellOf(v.cy) + 12; cy += 4)
+          map.explored.reveal(cx, cy, 4);
+      map.draw(fakeCtx as unknown as CanvasRenderingContext2D, run, 320, 56, 180, false, 0);
+      // Frame (2) + hero (2) + at least one structure icon (1 rim + glyph pixels).
+      expect(rects).toBeGreaterThan(4 + 6);
+      const t0 = performance.now();
+      const N = 400;
+      for (let i = 0; i < N; i++)
+        map.draw(fakeCtx as unknown as CanvasRenderingContext2D, run, 320, 56, 180, false, i / 60);
+      const per = (performance.now() - t0) / N;
+      expect(per).toBeLessThan(0.3);
+      // And a map that fits the 320x180 view with room to spare: top-right, clear of the bottom.
+      const slot = minimapSlot(320, 56, 180, false, true);
+      expect(slot.map && slot.map.y + slot.map.h + 2 <= 180).toBe(true);
+      expect(slot.map && slot.map.x >= 0).toBe(true);
+    } finally {
+      g.document = savedDoc;
+      g.ImageData = savedImg;
+    }
   });
 });
