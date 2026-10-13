@@ -1,3 +1,4 @@
+import { aimPointY } from '../core/geom';
 import { Projectile } from '../entities/projectile';
 import { countOf, damageOf, faceToward, nearestEnemy, onHitMods } from './helpers';
 import type { WeaponDef } from './types';
@@ -47,7 +48,7 @@ export const snowball: WeaponDef = {
     if (!target || Math.hypot(target.x - p.x, target.y - p.y) > RANGE) return false;
     faceToward(run, target.x);
     run.emit('snow');
-    const base = Math.atan2(target.y - 4 - (p.y - 8), target.x - p.x);
+    const base = Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x);
     const evolved = w.evolved;
     const n = evolved ? Math.max(BLIZZARD_FANS, countOf(run, s)) : countOf(run, s);
     const step = evolved ? BLIZZARD_SPREAD : SPREAD;

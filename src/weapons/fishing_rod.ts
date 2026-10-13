@@ -1,3 +1,4 @@
+import { aimPointY } from '../core/geom';
 import type { Enemy } from '../entities/enemy';
 import { Projectile } from '../entities/projectile';
 import type { RunState } from '../game';
@@ -81,7 +82,7 @@ export const fishing_rod: WeaponDef = {
     const dmg = damageOf(run, s, true);
     const pierce = s.pierce + run.mods.pierce;
     for (const target of targets) {
-      const a = Math.atan2(target.y - 4 - (p.y - 8), target.x - p.x);
+      const a = Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x);
       const hook = new Projectile(
         p.x,
         p.y - 8,

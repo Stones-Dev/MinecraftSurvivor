@@ -1,3 +1,4 @@
+import { aimPointY } from '../core/geom';
 import { Projectile } from '../entities/projectile';
 import { areaOf, countOf, damageOf, faceToward, nearestEnemy, onHitMods } from './helpers';
 import type { WeaponDef } from './types';
@@ -52,7 +53,7 @@ export const trident: WeaponDef = {
     const reach = areaOf(run, s);
     const speed = SPEED * run.mods.projSpeed;
     const count = countOf(run, s);
-    const base = Math.atan2(target.y - 4 - (p.y - 8), target.x - p.x);
+    const base = Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x);
     const dmg = damageOf(run, s, true) * (evolved ? RIPTIDE_BONUS : 1);
     // Hits are counted over both passes: the budget covers the outbound and the return trip.
     const pierce = 3 + s.pierce + run.mods.pierce;

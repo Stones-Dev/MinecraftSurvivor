@@ -1,3 +1,4 @@
+import { aimPointY } from '../core/geom';
 import { Projectile } from '../entities/projectile';
 import { countOf, damageOf, faceToward, nearestEnemy, onHitMods } from './helpers';
 import type { WeaponDef } from './types';
@@ -44,7 +45,7 @@ export const crossbow: WeaponDef = {
     if (!target || Math.hypot(target.x - p.x, target.y - p.y) > RANGE) return false;
     faceToward(run, target.x);
     run.emit('bow');
-    const base = Math.atan2(target.y - 4 - (p.y - 8), target.x - p.x);
+    const base = Math.atan2(aimPointY(target) - (p.y - 8), target.x - p.x);
     const evolved = w.evolved;
     // Evolved: a fan of at least five bolts spanning FAN_SPREAD in total.
     const n = evolved ? Math.max(5, countOf(run, s)) : countOf(run, s);

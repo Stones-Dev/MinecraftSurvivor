@@ -1,5 +1,5 @@
 /** Damage, kills, projectiles, mines, pools and orbiters (BRIEF sections 4 and 9). */
-import { bodyTop, BODY_LOW, sweepHit, sweepHitCapsule } from '../core/geom';
+import { aimPointY, BODY_CAP, BODY_LOW, enemyBodyTop, sweepHit, sweepHitCapsule } from '../core/geom';
 import type { Enemy } from '../entities/enemy';
 import { makeFx } from '../entities/fx';
 import { Pickup } from '../entities/pickup';
@@ -264,7 +264,7 @@ function applyHitStatus(p: Projectile, e: Enemy): void {
 }
 
 /** Vertical band (px) above a body's feet in which a shot can still hit it (the broad phase looks that far down). */
-const BODY_BAND = 32;
+const BODY_BAND = BODY_CAP;
 
 export function updateProjectiles(run: RunState, dt: number): void {
   const near: Enemy[] = [];
@@ -289,7 +289,7 @@ export function updateProjectiles(run: RunState, dt: number): void {
       if (p.target?.dying) p.target = null;
       if (p.target || !p.friendly) {
         const tx = p.target ? p.target.x : pl.x;
-        const ty = p.target ? p.target.y - 4 : pl.y;
+        const ty = p.target ? aimPointY(p.target) : pl.y;
         const want = Math.atan2(ty - p.y, tx - p.x);
         const cur = Math.atan2(p.vy, p.vx);
         let d = want - cur;
@@ -335,7 +335,7 @@ export function updateProjectiles(run: RunState, dt: number): void {
       run.hash.query(mx, my + BODY_BAND / 2, reach + BODY_BAND / 2, near);
       for (const e of near) {
         if (e.dying || p.hits.has(e.id)) continue;
-        const top = bodyTop(e.def.height ?? 28);
+        const top = enemyBodyTop(e.def);
         if (
           !sweepHitCapsule(p.px, p.py, p.x, p.y, p.radius, e.x, e.y - BODY_LOW, e.y - top, e.radius)
         )

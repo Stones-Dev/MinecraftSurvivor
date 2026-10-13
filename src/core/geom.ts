@@ -81,11 +81,35 @@ export function sweepHitCapsule(
   return segSegDist2(ax, ay, bx, by, cx, yLow, cx, yHigh) <= sum * sum;
 }
 
-/** Vertical extent of a body for hit tests: from just above the ankles (`BODY_LOW`) up to 80% of its sprite height, at most `BODY_CAP`. */
+/**
+ * Vertical extent of a body for hit tests: from just above the ankles (`BODY_LOW`) up to 80% of its drawn sprite
+ * height, at most `BODY_CAP` (a Warden is about 61 px tall on screen, a Raid Captain about 51 px).
+ */
 export const BODY_LOW = 4;
-export const BODY_CAP = 32;
+export const BODY_CAP = 56;
 export function bodyTop(spriteHeight: number): number {
   return Math.max(BODY_LOW, Math.min(BODY_CAP, spriteHeight * 0.8));
+}
+
+/** The parts of an enemy definition that give its drawn height. */
+interface BodyDef {
+  height?: number;
+  scale?: number;
+}
+
+/** Drawn sprite height of an enemy: the base height times the draw scale (bosses are 1.35x to 1.8x). */
+export function drawnHeight(def: BodyDef): number {
+  return (def.height ?? 28) * (def.scale ?? 1);
+}
+
+/** Height above the feet of the top of an enemy's hit capsule. */
+export function enemyBodyTop(def: BodyDef): number {
+  return bodyTop(drawnHeight(def));
+}
+
+/** World y of the centre of an enemy's hit capsule: where a ranged weapon should aim to hit the centre of mass. */
+export function aimPointY(e: { y: number; def: BodyDef }): number {
+  return e.y - (BODY_LOW + enemyBodyTop(e.def)) / 2;
 }
 
 export function dist2(ax: number, ay: number, bx: number, by: number): number {
