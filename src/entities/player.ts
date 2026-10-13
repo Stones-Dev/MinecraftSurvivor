@@ -133,7 +133,8 @@ export class Player {
     }
     this.aimT = Math.max(0, this.aimT - dt);
     if (v.x !== 0) this.facing = v.x > 0 ? 1 : -1;
-    else if (!input2 && this.aimT > 0 && Math.hypot(this.vx, this.vy) < 6) this.facing = this.aimFacing;
+    else if (!input2 && this.aimT > 0 && Math.hypot(this.vx, this.vy) < 6)
+      this.facing = this.aimFacing;
     if (Math.hypot(this.vx, this.vy) >= 0.01) {
       const wx = this.x + this.vx * dt;
       const wy = this.y + this.vy * dt;

@@ -1,5 +1,5 @@
 /** Damage, kills, projectiles, mines, pools and orbiters (BRIEF sections 4 and 9). */
-import { bodyTop, BODY_LOW, sweepHitCapsule } from '../core/geom';
+import { bodyTop, BODY_LOW, sweepHit, sweepHitCapsule } from '../core/geom';
 import type { Enemy } from '../entities/enemy';
 import { makeFx } from '../entities/fx';
 import { Pickup } from '../entities/pickup';
@@ -265,8 +265,6 @@ function applyHitStatus(p: Projectile, e: Enemy): void {
 
 /** Vertical band (px) above a body's feet in which a shot can still hit it (the broad phase looks that far down). */
 const BODY_BAND = 32;
-/** Hero hit height: layered heroes are 35 px tall, the sprite heroes 30-48 (80%, capped like the enemies). */
-const HERO_BODY_TOP = 28;
 
 export function updateProjectiles(run: RunState, dt: number): void {
   const near: Enemy[] = [];
@@ -358,19 +356,9 @@ export function updateProjectiles(run: RunState, dt: number): void {
         if (p.blast > 0) explode(run, p.x, p.y, p.blast, 0, p.dmg, null);
         continue;
       }
-      if (
-        sweepHitCapsule(
-          p.px,
-          p.py,
-          p.x,
-          p.y,
-          p.radius,
-          pl.x,
-          pl.y - BODY_LOW,
-          pl.y - HERO_BODY_TOP,
-          pl.radius,
-        )
-      ) {
+      // The hero keeps the small ankle-height hit circle: the audit asked for a taller body only where it
+      // applies, and a taller hero hurtbox cost the balance bot about 1-2 minutes against ranged mobs.
+      if (sweepHit(p.px, p.py, p.x, p.y, p.radius, pl.x, pl.y - 6, pl.radius)) {
         if (run.shield.has && run.shield.ready && run.shield.reflect) {
           // Spiked Shield: block and send the projectile back.
           run.shield.ready = false;

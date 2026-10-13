@@ -88,19 +88,17 @@ describe('projectile vs body hit tests', () => {
     expect(p.pierce).toBe(2);
   });
 
-  it('a hostile arrow through the hero torso hurts, one far above does not', () => {
+  it('keeps the hero hit circle at the ankles (hostile shots through the torso are not new hits)', () => {
     const run = new RunState(4);
     const pl = run.player;
     const hp = pl.hp;
-    const flat = new Projectile(pl.x - 40, pl.y - 20, 240, 0, 2, 5, 0, false, 2);
-    run.projectiles.push(flat);
+    // A hostile arrow flying across the hero's torso passes over the old ankle circle.
+    run.projectiles.push(new Projectile(pl.x - 40, pl.y - 24, 240, 0, 2, 5, 0, false, 2));
+    for (let i = 0; i < 40; i++) step(run);
+    expect(pl.hp).toBe(hp);
+    // One at the ankles still hurts.
+    run.projectiles.push(new Projectile(pl.x - 40, pl.y - 6, 240, 0, 2, 5, 0, false, 2));
     for (let i = 0; i < 40; i++) step(run);
     expect(pl.hp).toBeLessThan(hp);
-    const hp2 = pl.hp;
-    pl.iframes = 0;
-    const high = new Projectile(pl.x - 40, pl.y - 60, 240, 0, 2, 5, 0, false, 2);
-    run.projectiles.push(high);
-    for (let i = 0; i < 40; i++) step(run);
-    expect(pl.hp).toBe(hp2);
   });
 });

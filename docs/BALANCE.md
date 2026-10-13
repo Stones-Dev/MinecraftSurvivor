@@ -140,3 +140,15 @@ smart 4:16 and the 4-seed weapon medians discussed above.
 ## Biome rosters (v1.1)
 
 Biomes now change the spawn pool and apply their `danger` to density and HP (`data/rosters.ts`, see GDD 9.1). `playRun` takes a `biome` option and `BAL_BIOMES=1 npm run balance` adds a "Per start biome (smart bot, sword)" table to `docs/BALANCE_RESULTS.md`. Plains play is bit-identical to before (a test compares the pools). Current per-start-biome smart medians (48 seeds, sword): plains 5:09, forest 5:20, dark forest 5:24, snowy taiga 5:00, desert 5:07, swamp 5:23, jungle 5:11, badlands 5:07, cherry grove 5:08, mushroom fields 5:54, all inside 3:30-6:00 (+-0:23 to 0:31 each). History (12 seeds, before the v1.1 re-tune): newbie 3:01 -> 2:51 and smart 4:54 -> 5:00 across the roster change, plains 4:38, forest 3:51, badlands 5:21; those differences were inside the noise, as the regression hunt above confirms.
+
+## Early plains variants, starter companion and new mobs (audit pass, 2026-10-13)
+
+Sword-only smart bot, seeds 2000+/1000+, 36 seeds, same working tree, plains early variants switched off then on
+(`add` entry of `ROSTERS.plains` renamed): newbie 2:35 +-0:13 -> 2:39 +-0:17, smart policy 4:46 +-0:21 -> 4:39 +-0:21,
+smart sword per weapon 4:32 +-0:19 -> 4:37 +-0:19. The variants are balance-neutral (all differences far under one
+standard error); the smart sword median stays inside 4-6 minutes (p10-p90 2:48-6:59). A first 12-seed check read
+4:38 / 4:45. **The absolute numbers are about 0:45 lower than the v1.1 re-tune table above (5:27-5:41) because the same
+tree now contains other agents' movement/combat changes made in this audit pass; that shift is not from the rosters.** The
+simulator has no companions, so the starter Wolf, the lesser Warden (minute 9+, strong starters only) and the Badlands
+Big Magma Cube (BAL_BIOMES start only) are outside what it measures; the Warden's numbers (420 base HP, 24 damage, one
+alive, 150 s apart) were set to the other mini-bosses (Piglin Brute 300 / 26).

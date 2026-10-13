@@ -40,7 +40,7 @@ All text is drawn from a 1-bit glyph atlas of the Tiny5 font (OFL) rasterized on
 Title ("Click to start" — needed for audio)
   → Hub (main menu): background = a live slice of the world at dusk with the equipped hero idling;
         player level and rank (Wood → Netherite, derived from lifetime stats), a badge on MISSIONS when something can be claimed
-        PLAY → Run setup: pick Hero · Pet (1 slot) · Allies (1 slot; 2nd slot via upgrade) · optional start biome · [Start]
+        PLAY → Run setup: pick Hero · Pet (1 slot) · Allies (1 slot; 2nd slot via upgrade) · start biome (Random by default) · [Start]. A new save already owns and equips the **Wolf** ally, so a companion fights next to the hero from the first minute
         COLLECTION → Heroes / Pets / Allies tabs, levels, buffs, hero ability and rank, lore line, "equip"
         SPAWNER (gacha) → pull ×1 / ×10, pity meter, rates, results
         UPGRADES → per-hero permanent upgrades (Emeralds) + account-wide ones
@@ -85,10 +85,12 @@ Stats are the hero's base values before upgrades; speed is shown relative to Ste
 
 - **Length:** 15:00 to the final boss; killing it = *Night Survived* (run won). After that, **Endless** continues with escalating difficulty until death (local records: best time, best kills).
 - **Day/night cycle:** 5 min period (3 min day, 2 min night). Night = darker vignette, torches/lava glow, spawn rate ×1.4, phantoms possible, better drops. Second night (10:00–12:00) overlaps the Wither.
+- **Start biome:** *Random* (the default in the run setup) draws the biome the hero starts in from the run seed (`randomStartBiome`: Plains 30%, Forest 14%, Cherry Grove / Snowy Taiga / Desert 8% each, Swamp / Jungle 7%, Dark Forest / Badlands / Mushroom Fields 6%); a biome picked in the setup always wins, and so does the `?biome=` debug parameter. The very first run (tutorial) and debug runs stay in the usual meadow. Every start biome sits inside the 4-6 minute sword target (docs/BALANCE.md).
 - **Biomes** (Overworld) are regions of the map, not a timer (v1.1): 10 overworld biomes from a climate noise map (Plains around the spawn, then Forest, Dark Forest, Snowy Taiga, Desert, Badlands, Swamp, Jungle, Cherry Grove, Mushroom Fields), plus the Nether rift arena. Each has its own enemy roster (9.1), ambient particles (snow, petals, dust, leaves, pollen, spores, embers, fireflies at night in forests and swamps), music theme and props. The "Entering <biome>" banner and the music follow the hero with hysteresis at borders.
-- **Enemy tides** every ~45 s; soft cap 64 on screen (quality setting can lower to 40); beyond the cap, newcomers are **Elites** (×1.6 HP/XP, ×1.25 dmg, small crown icon). Enemies left far behind despawn and re-spawn ahead of the player.
+- **Enemy tides** every ~45 s; soft cap 64 on screen (quality setting can lower to 40); beyond the cap, newcomers are **Elites** (×1.6 HP/XP, ×1.25 dmg, small crown icon). Enemies left far behind are moved back onto the ring ahead of the player; one that is still at full health is replaced by a freshly rolled mob from the current roster (same count), so the variety on screen refreshes.
 - **Bosses** at **5:00 Ravager** (Raid Captain, charge + stomp), **10:00 Wither** (flying, 3 heads: fan of wither skulls, blue skull homing, summons wither skeletons; enrages <50% HP with a dash) and **15:00 Warden** (final: blind, telegraphed sonic boom beam, ground shock rings, "darkness" pulses that shrink the view). Bosses drop a **Rare Spawn Egg** and an item. Tides drop to 25% during a boss; boss theme plays.
 - **Mini-bosses** (random, 1–2 per run from minute 2, between bosses): Vindicator captain, Piglin Brute, Elder Guardian (in water), Charged Creeper.
+- **Lesser Warden** (rare late elite): from minute 9 the spawner may send one (a roll every 20 s, 8% per roll, 30% in the Dark Forest, 150 s apart), **never more than one alive**. It is the Warden sheet at 1.1x with 420 base HP and 24 damage, the final boss's pattern (sonic line, three shock rings, darkness), a mini-boss payout (Spawn Egg, 30% an item) and never counts as the 15:00 win.
 - **Charged mobs** ("shiny"): any enemy has **1/1000** chance to spawn *Charged* (blue glow, ×2 HP, ×5 XP, screen-edge arrow); killing it drops a **Spawn Egg** (×1) and 150 Emeralds.
 
 ### 7.1 XP, level-up, cards
@@ -213,7 +215,7 @@ Desired v1.0 roster (adapt to the sheets at Checkpoint 0). Each run draws a cast
 | Evoker | 8+ | summons 2 Vexes + fang line telegraph |
 | Vex | 8+ | flying, fast, fragile |
 | Blaze | Nether rift / 9+ | 3-fireball fan |
-| Magma Cube | Nether / 9+ | splits, burning trail |
+| Magma Cube | Badlands 3+ (Big), generic 9+ (Medium), Nether rift | Big > Medium > Small like the slimes (two children each), burning trail; the Big is the Medium sheet drawn 1.5x |
 | Piglin / Zombified Piglin | Nether / 10+ | gold sword; zombified ones aggro as a pack when one is hit |
 | Hoglin | Nether / 10+ | charge (telegraphed) |
 | Wither Skeleton | 10+ | wither DoT on hit |
@@ -221,11 +223,11 @@ Desired v1.0 roster (adapt to the sheets at Checkpoint 0). Each run draws a cast
 | Guardian | water / 12+ | laser beam telegraph 1.2 s |
 | Shulker | 13+ | static, homing bullets that levitate (slow you) |
 | Ravager · Wither · Warden | bosses | §7 |
-| Elder Guardian · Piglin Brute · Vindicator Captain · Charged Creeper | mini-bosses | — |
+| Elder Guardian · Piglin Brute · Vindicator Captain · Charged Creeper · Lesser Warden | mini-bosses | — |
 
 ### 9.1 Biome rosters (v1.1)
 
-The biome under the hero (spatial biome map, `RunState.biome()`) reweights the spawn pool; the data lives in `data/rosters.ts` (pure functions, tested). A mob with a `biomes` filter only spawns there; generic mobs are scaled per biome (`mult`) and some arrive earlier (`from`). **Plains is untouched** (same pool and curve as before, so the start stays gentle). Each biome's `danger` scales spawn density (trickle and tides) and HP (60% of the distance from 1): Plains 1.0, Cherry Grove 0.9, Mushroom Fields 0.6, Forest/Taiga/Desert 1.05, Swamp/Jungle 1.1, Dark Forest/Badlands 1.15.
+The biome under the hero (spatial biome map, `RunState.biome()`) reweights the spawn pool; the data lives in `data/rosters.ts` (pure functions, tested). A mob with a `biomes` filter only spawns there; generic mobs are scaled per biome (`mult`) and some arrive earlier (`from`). **The Plains keeps the generic pool and curve and only adds low-weight early variants** (`add` in the roster: swamp rabbit, medium slime, jungle zombie from minute 0 about 16% of the spawns; plains chompers and the killer bunny from minute 1; forest wolves, frozen zombie and mossy skeleton from minute 2; silverfish from minute 3, about 25% by minute 3), all no tougher than a zombie, so the start stays gentle but is no longer 100% zombies. The Forest and Dark Forest get their chompers at minute 0, the Swamp its rabbits and lobbers. Each biome's `danger` scales spawn density (trickle and tides) and HP (60% of the distance from 1): Plains 1.0, Cherry Grove 0.9, Mushroom Fields 0.6, Forest/Taiga/Desert 1.05, Swamp/Jungle 1.1, Dark Forest/Badlands 1.15.
 
 | Biome | Cast (on top of the reweighted generic mobs) |
 |---|---|
@@ -233,13 +235,13 @@ The biome under the hero (spatial biome map, `RunState.biome()`) reweights the s
 | Dark Forest | Webspinner (cobweb: slow on hit), Jack o Lantern turret (fireballs, min 5), wolf packs; witches from min 3, pillagers/vindicators from min 5, evokers from min 7; no slimes |
 | Snowy Taiga | Stray (slowing arrows), Frozen Zombie and Frost Spider (slow on hit), Frost Creeper, wolf packs, Iceologer (frost pools, min 5) |
 | Desert | Husk (hunger), Dune Spider, Bone Hound packs (min 3); almost no slimes or drowned |
-| Badlands | Husk, Rockback Zombie (20% shield), Bone Spider (ranged, min 3), Miner (min 4), Dune Spider, Bone Hounds |
+| Badlands | Husk, Rockback Zombie (20% shield), Bone Spider (ranged, min 3), Miner (min 4), Dune Spider, Bone Hounds, Big Magma Cube (min 3, splits twice, burning trail) |
 | Swamp | Lobber Zombie (poison pools), Mossy Skeleton, Swamp Witch (heals allies, min 3), Zombie Rabbit; slimes x3 from min 1, Drowned x2.5 from min 2 near water |
 | Jungle | Jungle Zombie, Tropical Slimes (split twice), Mossy Skeleton, Quill Vine turret (slowing spit, min 4); double cave spiders from min 2 |
 | Cherry Grove | Killer Bunny (leaper), Pink Slimes; everything else softer |
 | Mushroom Fields | Mossy Ram (telegraphed charge), Pink Slimes; regular hostiles at 20% |
 
-**Chompers** are the tiny 14x13 biters of the sheets' "Great Hunger" family, one skin per ground type, in every overworld biome but Plains.
+**Chompers** are the tiny 14x13 biters of the sheets' "Great Hunger" family, one skin per ground type, in every overworld biome (the Plains uses its own skin from minute 1).
 
 Enemy AI archetypes to implement generically: `chaser`, `ranged-kiter`, `charger` (telegraphed), `kamikaze`, `splitter`, `summoner`, `healer`, `shielder`, `teleporter`, `flyer-diver`, `turret`, plus boss patterns. Telegraphs are drawn on the ground (red outline shapes) ≥ 0.6 s before damage.
 
@@ -249,7 +251,7 @@ Damage model: simple, no type chart. Status effects: burn, poison, wither, slow,
 
 ## 10. Events & Nether portal
 
-- **Nether Portal (rift):** from 1:15, every 30 s a 14% chance a portal opens for 45 s (big pulsing arrow with distance/time). Enter → separate circular arena (netherrack, lava rivers, soul sand slows, basalt pillars for cover), **90 s** vs a Nether mini-boss (Blaze Lord / Ghast / Piglin Brute / Hoglin pack). Win: **Rare Spawn Egg**, 3 Spawn Eggs, Emeralds, return where you were. Lose/time out: back with 30% HP, no reward. Overworld mobs wait meanwhile.
+- **Nether Portal (rift):** from 1:15, every 30 s a 14% chance a portal opens for 45 s (big pulsing arrow with distance/time). Enter → separate circular arena (netherrack, lava rivers, soul sand slows, basalt pillars for cover), **90 s** vs a Nether mini-boss (Blaze Lord / Ghast / Piglin Brute / Hoglin pack / two Big Magma Cubes, won only when every split-off cube is dead). Win: **Rare Spawn Egg**, 3 Spawn Eggs, Emeralds, return where you were. Lose/time out: back with 30% HP, no reward. Overworld mobs wait meanwhile.
 - **Raid** (every 4–5 min, 30 s): horn sound, pillager/vindicator horde from one side, banner carrier drops a chest.
 - **Thunderstorm** (weather, rare): rain visuals, lightning strikes telegraphed on the ground (hurt anyone), creepers that get hit become Charged, Trident *Channeling* enabled, fire weapons −30%.
 - **Snowfall** (Snowy Taiga only): −10% speed for non-Frost Walker, visual.
@@ -261,7 +263,7 @@ Damage model: simple, no type chart. Status effects: burn, poison, wither, slow,
 
 ## 11. Companions (the gacha pool)
 
-Companions have **rarity** (Common / Uncommon / Rare / Epic / Legendary) and **level 1–5** (duplicates: 1/2/3/4 more copies for levels 2–5; extra copies refund Emeralds, 30/60/120/250/500 by rarity). Level scales the buff (the tables show level 1 → 5). Collection shows a one-line lore quip per companion. The pool holds 11 heroes, **30 pets** and **22 allies**; v1.0 shipped 3 / 15 / 10 and v1.1 added 8 heroes, 15 pets and 12 allies, all with real in-run effects (data in `data/companions.ts`). Allay and Sniffer from the original brief were dropped at Checkpoint 0 (no sprites).
+Companions have **rarity** (Common / Uncommon / Rare / Epic / Legendary) and **level 1–5** (duplicates: 1/2/3/4 more copies for levels 2–5; extra copies refund Emeralds, 30/60/120/250/500 by rarity). Level scales the buff (the tables show level 1 → 5). Collection shows a one-line lore quip per companion. The pool holds 11 heroes, **30 pets** and **22 allies**; v1.0 shipped 3 / 15 / 10 and v1.1 added 8 heroes, 15 pets and 12 allies, all with real in-run effects (data in `data/companions.ts`). Allay and Sniffer from the original brief were dropped at Checkpoint 0 (no sprites). **Starter companion:** a new save owns and equips the Wolf ally (existing saves are never given it). **Auto-equip:** a newly pulled pet or ally goes into the matching slot when that slot is empty (the pet slot, or a free ally slot within the Leadership count); it never replaces an equipped companion, duplicates and heroes are never equipped.
 
 Rarity split. Heroes: 1 Common, 1 Uncommon, 2 Rare, 3 Epic, 4 Legendary. Pets: 8 / 8 / 7 / 4 / 3. Allies: 4 / 7 / 5 / 4 / 2.
 
@@ -394,7 +396,7 @@ SFX: hit, hurt, sword swing, bow, potion smash, TNT, snowball, lightning, level-
 
 This section is the source of truth where it differs from the brief text above; every deviation is explained in `docs/DECISIONS.md`.
 
-**Content counts.** 14 weapons (Sword, Bow, TNT, Crossbow, Trident, Snowball, Fishing Rod, Harming and Poison potions, Lava Bucket, Lightning Rod, Blaze Rods, Axe, Shield), each with 5 levels and an evolution (14 evolutions); 24 passives (enchantments and potion effects); 7 armor tiers and 7 sword tiers (the sprite swaps for the layered heroes; the top tier glints); 8 items; 74 enemy definitions (including 3 bosses and size variants such as slimes) over 11 AI archetypes, 3 bosses (Raid Captain at 5:00 replacing the Ravager, Wither at 10:00, Warden at 15:00) and 4 mini-bosses; 10 overworld biomes on a spatial map plus the Nether rift arena; 11 heroes with abilities, 30 pets, 22 allies; 13 procedural music themes and about 30 sound effects; 55 achievements, 27 daily and 12 weekly mission templates.
+**Content counts.** 14 weapons (Sword, Bow, TNT, Crossbow, Trident, Snowball, Fishing Rod, Harming and Poison potions, Lava Bucket, Lightning Rod, Blaze Rods, Axe, Shield), each with 5 levels and an evolution (14 evolutions); 24 passives (enchantments and potion effects); 7 armor tiers and 7 sword tiers (the sprite swaps for the layered heroes; the top tier glints); 8 items; 76 enemy definitions (including 3 bosses and size variants such as slimes) over 11 AI archetypes, 3 bosses (Raid Captain at 5:00 replacing the Ravager, Wither at 10:00, Warden at 15:00) and 4 mini-bosses plus the Lesser Warden elite; 10 overworld biomes on a spatial map plus the Nether rift arena; 11 heroes with abilities, 30 pets, 22 allies; 13 procedural music themes and about 30 sound effects; 55 achievements, 27 daily and 12 weekly mission templates.
 
 **Run rules.** Fixed 60 Hz simulation, all randomness from seeded streams. Base hero regeneration is 0.7 HP/s (added at 0.4 after balance simulation, raised to 0.7 in the v1.1 re-tune, see DECISIONS). Armor tiers cost 2 cards (1 for Steve); level-up offers 3 cards (4 with the Librarian), 1 reroll (+ Reroll upgrade), skip pays 25 Emeralds. The soft enemy cap is 64 (+10 overflow for tides and raids); pickups are capped at 300 (oldest XP orbs are banked automatically). Golden Hour, Raids, Thunderstorms, the trader and the lost villager are suppressed while a boss is alive. Winning means killing the Warden; Endless then sends a stronger boss every 5 minutes. The biome under the hero (not the clock) picks the spawn roster and danger (§9.1).
 
