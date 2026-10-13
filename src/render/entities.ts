@@ -2,6 +2,7 @@
 import { cb, reduceFlash } from '../core/accessibility';
 import { frameAt } from '../core/animator';
 import type { Atlas } from '../core/atlas';
+import { feetShift } from '../core/feet';
 import { heroById, type HeroDef } from '../data/companions';
 import { ARMOR_IDS, SWORD_IDS } from '../data/tiers';
 import type { Ally, PetState } from '../entities/ally';
@@ -265,13 +266,15 @@ export function drawSpriteHero(
   const npc = base.startsWith('npc.');
   const sc = def.scale ?? 1;
   let key: string | undefined;
-  let flip = def.faceLeft ? p.facing > 0 : p.facing < 0;
-  let alpha = 1;
-  const row = npc ? npcRow(p.moveDX, p.moveDY) : null;
-  if (row) flip = row.flip;
   const castId =
     p.castT > 0 ? spriteHeroAnim(atlas, base, 'cast', def.castAnims ?? ATTACK_ANIMS) : null;
   const attackId = p.swingT > 0 ? spriteHeroAnim(atlas, base, 'attack', ATTACK_ANIMS) : null;
+  // A melee swing faces the attack; walking, idling and casting follow the body facing (the movement).
+  const face = attackId && !castId && !p.dead ? p.attackFacing : p.facing;
+  let flip = def.faceLeft ? face > 0 : face < 0;
+  let alpha = 1;
+  const row = npc ? npcRow(p.moveDX, p.moveDY) : null;
+  if (row) flip = row.flip;
   if (p.dead) {
     const deathId = spriteHeroAnim(atlas, base, 'death', DEATH_ANIMS);
     if (deathId) {
@@ -366,6 +369,7 @@ export function drawHero(
 ): void {
   const p: Player = run.player;
   const def = heroById(run.loadout.hero);
+  projQuality = run.quality;
   if (run.decoys.length > 0) drawDecoys(ctx, atlas, run, def, camX, camY);
   const armor = ARMOR_IDS[run.armorTier] ?? 'none';
   const sword = SWORD_IDS[run.swordTier] ?? 'wood';
@@ -414,22 +418,37 @@ function drawLayeredHero(
   y: number,
 ): void {
   const p: Player = run.player;
-  const swinging = p.swingT > 0;
+  const swinging = p.swingT > 0 && !p.dead;
   const id = `hero.${name}.${armor}.sword_${sword}.${swinging ? 'swing' : 'idle'}`;
-  const walking = p.moving && !swinging && !p.dead;
+  const walking = p.moving && !p.dead;
+  // The walk bob and leg shuffle keep going during a swing; the swing clock is the swing's own.
   const t = swinging ? SWING_TIME - p.swingT : run.time * (walking ? 1.5 : 1);
-  const anim = atlas.hasAnim(id) ? atlas.anim(id) : atlas.anim(`hero.${name}.none.sword_wood.idle`);
+  const idleAnim = atlas.anim(`hero.${name}.none.sword_wood.idle`);
+  const anim = atlas.hasAnim(id) ? atlas.anim(id) : idleAnim;
   let key = frameAt(anim, t);
+  // The swing frames are anchored differently from the idle ones (feet 2-6 px higher, a little sideways):
+  // shift them so the feet stay where the idle feet are.
+  let offX = 0;
+  let offY = 0;
+  if (swinging) {
+    const idleId = `hero.${name}.${armor}.sword_${sword}.idle`;
+    const ref = atlas.hasAnim(idleId) ? atlas.anim(idleId).frames[0] : idleAnim.frames[0];
+    const shift = feetShift(ref ? atlas.feetOf(ref) : null, atlas.feetOf(key));
+    offX = shift.dx;
+    offY = shift.dy;
+  }
   if (p.hurtT > 0 && !reduceFlash()) key += '@flash';
   if (p.dead) ctx.globalAlpha = 0.5;
   else if (p.iframes > 0 && (reduceFlash() || Math.floor(run.time * 20) % 2 === 0))
     ctx.globalAlpha = 0.65;
+  // A swing faces the attack, the rest of the body follows the movement.
+  const flip = (swinging ? p.attackFacing : p.facing) < 0;
   if (walking) {
     // Distance-driven walk cycle: the legs shuffle +1, 0, -1, 0 px and the body rises on the passing step.
     const stage = Math.floor(p.walkPhase) & 3;
     const legDx = stage === 1 ? 1 : stage === 3 ? -1 : 0;
-    atlas.drawWalk(ctx, key, x, y, p.facing < 0, legDx, stage & 1);
-  } else atlas.draw(ctx, key, x, y, p.facing < 0);
+    atlas.drawWalk(ctx, key, x, y, flip, legDx, stage & 1, undefined, offX, offY);
+  } else atlas.draw(ctx, key, x, y, flip, 1, offX, offY);
   ctx.globalAlpha = 1;
 }
 
@@ -472,6 +491,121 @@ function px(
   ctx.fillRect(Math.round(x), Math.round(y), w, h);
 }
 
+/** Quality tier of the run, remembered from `drawHero` (drawn every frame) for callers that do not pass one. */
+let projQuality: 0 | 1 | 2 = 2;
+/** Spin rate of boomerangs (the thrown trident), radians per second: 720 degrees. */
+const BOOMERANG_SPIN = 4 * Math.PI;
+const TRAIL_STEPS = [0, 4, 8] as const;
+
+/** Soft ground shadow: a small ellipse of three translucent rows (one row on the lowest tier). */
+function projShadow(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  half: number,
+  q: number,
+): void {
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  const cx = Math.round(x);
+  const cy = Math.round(y);
+  ctx.fillRect(cx - half, cy, half * 2 + 1, 1);
+  if (q === 0) return;
+  ctx.fillRect(cx - half + 1, cy - 1, half * 2 - 1, 1);
+  ctx.fillRect(cx - half + 1, cy + 1, half * 2 - 1, 1);
+}
+
+/**
+ * A short faint streak behind a fast projectile (no objects, no arrays: a handful of rects, fewer on lower
+ * quality tiers). `from` is the distance behind the position where it starts, `dx/dy` the unit direction.
+ */
+function projTrail(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  from: number,
+  color: string,
+  q: number,
+): void {
+  const n = TRAIL_STEPS[q] ?? 0;
+  if (n === 0) return;
+  ctx.fillStyle = color;
+  for (let i = 0; i < n; i++) {
+    ctx.globalAlpha = 0.3 * (1 - i / n);
+    ctx.fillRect(Math.round(x - dx * (from + i)), Math.round(y - dy * (from + i)), 1, 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Arrow / bolt: head (bright tip, barbs), wooden shaft, feathers; `len` px from the tip back. */
+function drawShaft(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  len: number,
+  thick: number,
+  tip: string,
+  head: string,
+  shaft: string,
+  feather: string,
+): void {
+  const nx = -dy;
+  const ny = dx;
+  const featherAt = len - 3;
+  for (let i = 0; i < len; i++) {
+    const bx = x - dx * i;
+    const by = y - dy * i;
+    if (i < 3) {
+      px(ctx, bx, by, thick, thick, i === 0 ? tip : head);
+      if (i === 2) {
+        // Barbs: the head reads as a small triangle.
+        px(ctx, bx + nx, by + ny, 1, 1, head);
+        px(ctx, bx - nx, by - ny, 1, 1, head);
+      }
+    } else if (i >= featherAt) {
+      px(ctx, bx, by, thick, thick, feather);
+      px(ctx, bx + nx * 1.5, by + ny * 1.5, 1, 1, feather);
+      px(ctx, bx - nx * 1.5, by - ny * 1.5, 1, 1, feather);
+    } else px(ctx, bx, by, thick, thick, shaft);
+  }
+}
+
+/** The thrown trident: a shaft with a bright three-prong head; `a` is the angle of the head. */
+function drawTridentSprite(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  a: number,
+  len: number,
+): void {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  // Centre the sprite on the projectile position so a spinning trident turns around its middle.
+  const hx = x + c * (len / 2);
+  const hy = y + s * (len / 2);
+  for (let i = 0; i < len; i++)
+    px(ctx, hx - c * i, hy - s * i, 1, 1, i < 6 ? '#e8ffff' : '#8a6a3a');
+  // Prongs: two outer tines and a longer middle one, with a cross-guard behind them.
+  for (const o of [-2, 2]) {
+    for (let k = 0; k < 4; k++)
+      px(
+        ctx,
+        hx - c * (1 - k) - s * o,
+        hy - s * (1 - k) + c * o,
+        1,
+        1,
+        k === 3 ? '#ffffff' : '#7ff0f0',
+      );
+  }
+  for (let k = 0; k < 3; k++)
+    px(ctx, hx + c * k, hy + s * k, 1, 1, k === 2 ? '#ffffff' : '#9ff8f8');
+  for (const o of [-2, -1, 0, 1, 2])
+    px(ctx, hx - c * 4 - s * o, hy - s * 4 + c * o, 1, 1, '#5fc8c8');
+}
+
 /** Projectiles are drawn lifted off the ground with a small shadow; lobbed ones follow an arc. */
 export function drawProjectile(
   ctx: CanvasRenderingContext2D,
@@ -480,6 +614,7 @@ export function drawProjectile(
   camY: number,
   heroX: number,
   heroY: number,
+  quality: 0 | 1 | 2 = projQuality,
 ): void {
   const x = pr.rx - camX;
   let y = pr.ry - camY;
@@ -491,43 +626,39 @@ export function drawProjectile(
     const t = Math.min(1, pr.lobT / pr.lobDur);
     lift = Math.sin(Math.PI * t) * pr.height;
   }
-  px(ctx, x - 1, y + 8, 3, 1, 'rgba(0,0,0,0.25)');
+  const long = pr.style === 'arrow' || pr.style === 'bolt' || pr.style === 'trident';
+  // The ground shadow stays on the ground (a lobbed shot shrinks it as it rises).
+  projShadow(ctx, x, y + 8, long ? 3 : 1 + (lift > 8 ? 0 : 1), quality);
   y -= lift;
   switch (pr.style) {
     case 'arrow':
     case 'bolt': {
-      const thick = pr.style === 'bolt' ? 2 : 1;
-      for (let i = 0; i < 9; i++) {
-        const c =
-          i === 0
-            ? pr.friendly
-              ? '#e8e8e8'
-              : '#ff8a8a'
-            : i > 6
-              ? pr.friendly
-                ? '#f2f2f2'
-                : '#b04040'
-              : pr.style === 'bolt'
-                ? '#5a4a3a'
-                : '#8a6a3a';
-        px(ctx, x - dx * i, y - dy * i, thick, thick, c);
-      }
-      if (pr.burn > 0) px(ctx, x - dx * 2, y - dy * 2 - 2, 2, 2, '#ff8a1c');
+      const bolt = pr.style === 'bolt';
+      const f = pr.friendly;
+      const n = bolt ? 12 : 14;
+      drawShaft(
+        ctx,
+        x,
+        y,
+        dx,
+        dy,
+        n,
+        bolt ? 2 : 1,
+        f ? '#ffffff' : '#ffb0b0',
+        f ? '#c9ccd6' : '#e05a5a',
+        bolt ? '#5a4a3a' : '#9a7440',
+        f ? '#f4f4f4' : '#c04848',
+      );
+      projTrail(ctx, x, y, dx, dy, n, f ? '#ffffff' : '#ff8a8a', quality);
+      if (pr.burn > 0) px(ctx, x - dx * 3, y - dy * 3 - 2, 2, 2, '#ff8a1c');
       break;
     }
     case 'trident': {
-      const a = Math.atan2(dy, dx);
-      for (let i = 0; i < 11; i++)
-        px(ctx, x - Math.cos(a) * i, y - Math.sin(a) * i, 1, 1, i < 3 ? '#6fe0e0' : '#7a5a34');
-      for (const o of [-2, 0, 2])
-        px(
-          ctx,
-          x + Math.cos(a) * 2 - Math.sin(a) * o,
-          y + Math.sin(a) * 2 + Math.cos(a) * o,
-          1,
-          1,
-          '#6fe0e0',
-        );
+      // The hero's thrown trident is a boomerang: it spins at 720 degrees per second around its middle, in both
+      // directions of the flight. A hostile (drowned) trident flies point first.
+      const a = pr.boomerang ? pr.life * BOOMERANG_SPIN : Math.atan2(dy, dx);
+      drawTridentSprite(ctx, x, y, a, 18);
+      projTrail(ctx, x, y, dx, dy, pr.boomerang ? 4 : 18, '#8ff4f4', quality);
       break;
     }
     case 'snowball':
@@ -802,33 +933,81 @@ export function drawFxTexts(
   ctx.globalAlpha = 1;
 }
 
+/** Width in px of a line telegraph's strip. */
+export const TELEGRAPH_STRIP = 6;
+
+/**
+ * Steady alpha for a telegraph: a slow pulse (under 1 Hz, +-15%) unless flashing is reduced, which keeps it flat.
+ * `age` is the seconds since the telegraph started.
+ */
+export function telegraphPulse(age: number, reduced: boolean): number {
+  return reduced ? 1 : 1 + 0.15 * Math.sin(age * 5);
+}
+
+/**
+ * Attack telegraphs: a line is a 6 px wide translucent strip with a brighter edge, a circle a translucent disc whose
+ * fill grows toward the edge as the charge timer runs out. Hostile ones are red, an ally's blue; both go through
+ * the colour-blind remap. The pulse is slow and absent with "reduce flashing" (never a strobe).
+ */
 export function drawTelegraph(
   ctx: CanvasRenderingContext2D,
   t: Telegraph,
   camX: number,
   camY: number,
 ): void {
-  const k = t.t / t.dur;
-  // The pulse is a steady 0.6 when flashing is reduced.
-  ctx.globalAlpha = reduceFlash() ? 0.6 : 0.35 + 0.35 * Math.abs(Math.sin(k * Math.PI * 4));
-  ctx.fillStyle = cb(t.friendly ? '#7dd0ff' : '#ff3b3b');
+  const k = Math.max(0, Math.min(1, t.t / t.dur));
+  const pulse = telegraphPulse(t.t, reduceFlash());
+  const hex = t.friendly ? '#7dd0ff' : '#ff3b3b';
+  const prev = ctx.globalAlpha;
+  ctx.fillStyle = cb(hex);
+  ctx.strokeStyle = cb(hex);
   if (t.kind === 'line') {
     const dx = t.x2 - t.x;
     const dy = t.y2 - t.y;
     const len = Math.hypot(dx, dy) || 1;
-    for (let d = 0; d < len + 40; d += 3) {
-      ctx.fillRect(
-        Math.round(t.x - camX + (dx / len) * d),
-        Math.round(t.y - camY + (dy / len) * d),
-        1,
-        1,
-      );
-    }
+    const ux = dx / len;
+    const uy = dy / len;
+    const half = TELEGRAPH_STRIP / 2;
+    const x0 = t.x - camX;
+    const y0 = t.y - camY;
+    const reach = len + 40; // the shot keeps going past the aim point
+    const nx = -uy * half;
+    const ny = ux * half;
+    const x1 = x0 + ux * reach;
+    const y1 = y0 + uy * reach;
+    ctx.beginPath();
+    ctx.moveTo(x0 + nx, y0 + ny);
+    ctx.lineTo(x1 + nx, y1 + ny);
+    ctx.lineTo(x1 - nx, y1 - ny);
+    ctx.lineTo(x0 - nx, y0 - ny);
+    ctx.closePath();
+    ctx.globalAlpha = Math.min(0.5, (0.25 + 0.1 * k) * pulse);
+    ctx.fill();
+    // Brighter edges.
+    ctx.globalAlpha = Math.min(0.9, (0.55 + 0.25 * k) * pulse);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0 + nx, y0 + ny);
+    ctx.lineTo(x1 + nx, y1 + ny);
+    ctx.moveTo(x0 - nx, y0 - ny);
+    ctx.lineTo(x1 - nx, y1 - ny);
+    ctx.stroke();
   } else {
-    pixelRing(ctx, t.x - camX, t.y - camY, t.r, 0, Math.PI * 2, 1);
-    pixelRing(ctx, t.x - camX, t.y - camY, t.r * k, 0, Math.PI * 2, 1);
+    const cx = t.x - camX;
+    const cy = t.y - camY;
+    ctx.globalAlpha = 0.12 * pulse;
+    ctx.beginPath();
+    ctx.arc(cx, cy, t.r, 0, Math.PI * 2);
+    ctx.fill();
+    // The charge: a brighter disc that grows to the edge as the timer runs out.
+    ctx.globalAlpha = Math.min(0.5, (0.2 + 0.2 * k) * pulse);
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(0.5, t.r * k), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = Math.min(0.9, 0.6 * pulse + 0.2 * k);
+    pixelRing(ctx, cx, cy, t.r, 0, Math.PI * 2, 1);
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = prev;
 }
 
 /** NPC sprites: villagers use a 4-direction sheet (down 0-3, up 4-7, side 8-11); llamas are side-on. */

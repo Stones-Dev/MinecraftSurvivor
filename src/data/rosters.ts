@@ -5,8 +5,8 @@
  * (illagers in the dark forest), and how the biome's `danger` scales spawn density and HP.
  *
  * Everything here is a pure function of (biome, minute, night, water), so the spawner, the debug crowd
- * and the tests share one definition. Plains has no entry: the starting meadow keeps the exact
- * pre-biome pool and curve.
+ * and the tests share one definition. Plains used to have no entry (minute 0 was 100% plain zombies and the
+ * first three minutes only five mob types); it now has low-weight early variants, see `plains` below.
  */
 import { BIOMES, type BiomeId } from '../world/biomes';
 import { ENEMIES, type EnemyDef } from './enemies';
@@ -18,10 +18,45 @@ export interface BiomeRoster {
   mult?: Readonly<Record<string, number>>;
   /** First minute per enemy id in this biome, replacing the mob's own `fromMinute`. */
   from?: Readonly<Record<string, number>>;
+  /**
+   * Admits a mob here with this absolute weight even though it is filtered to other biomes (or has weight 0,
+   * like the slime halves), e.g. a swamp rabbit hopping through the meadow. Still honours `from`, `nightOnly`
+   * and `nearWater`; `mult` scales it.
+   */
+  add?: Readonly<Record<string, number>>;
 }
 
 export const ROSTERS: Readonly<Partial<Record<BiomeId, BiomeRoster>>> = {
-  forest: { mult: { spider: 1.3, witch: 0.5 } },
+  // Early variety for the starting meadow (about 15% of the spawns from minute 0, growing to about 25%
+  // by minute 3): low-weight cousins of the zombie that are no tougher than it, then wolves, biters
+  // and an earlier silverfish swarm. The generic pool (zombie, skeleton, spider, creeper, slime) is untouched.
+  plains: {
+    add: {
+      zombie_rabbit: 0.7,
+      slime_medium: 0.6,
+      jungle_zombie: 0.6,
+      chomper_plains: 1.3,
+      killer_bunny: 1.0,
+      angry_brown_wolf: 1.4,
+      frozen_zombie: 1.0,
+      mossy_skeleton: 1.0,
+    },
+    from: {
+      zombie_rabbit: 0,
+      slime_medium: 0,
+      jungle_zombie: 0,
+      chomper_plains: 1,
+      killer_bunny: 1,
+      angry_brown_wolf: 2,
+      frozen_zombie: 2,
+      mossy_skeleton: 2,
+      silverfish: 3,
+    },
+  },
+  forest: {
+    mult: { spider: 1.3, witch: 0.5 },
+    from: { chomper_forest: 0, angry_brown_wolf: 1 },
+  },
   dark_forest: {
     mult: {
       zombie: 0.7,
@@ -33,7 +68,7 @@ export const ROSTERS: Readonly<Partial<Record<BiomeId, BiomeRoster>>> = {
       vindicator: 1.5,
       evoker: 1.5,
     },
-    from: { witch: 3, pillager: 5, vindicator: 5, evoker: 7 },
+    from: { witch: 3, pillager: 5, vindicator: 5, evoker: 7, chomper_dark_forest: 0 },
   },
   snowy_taiga: {
     mult: {
@@ -44,6 +79,7 @@ export const ROSTERS: Readonly<Partial<Record<BiomeId, BiomeRoster>>> = {
       slime_big: 0,
       cave_spider: 0.5,
       drowned: 0.4,
+      magma_cube_medium: 0,
     },
   },
   desert: {
@@ -79,7 +115,7 @@ export const ROSTERS: Readonly<Partial<Record<BiomeId, BiomeRoster>>> = {
       witch: 0,
       drowned: 2.5,
     },
-    from: { slime_big: 1, drowned: 2 },
+    from: { slime_big: 1, drowned: 2, zombie_rabbit: 0, lobber_zombie: 0 },
   },
   jungle: {
     mult: {
@@ -109,13 +145,15 @@ export function spawnWeight(
   night: boolean,
   water: boolean,
 ): number {
-  if (def.weight <= 0) return 0;
-  if (def.biomes && !def.biomes.includes(biome)) return 0;
+  const r = ROSTERS[biome] ?? EMPTY;
+  const added = r.add?.[def.id];
   if (def.nightOnly && !night) return 0;
   if (def.nearWater && !water) return 0;
-  const r = ROSTERS[biome] ?? EMPTY;
   const from = r.from?.[def.id] ?? def.fromMinute;
   if (from > minute) return 0;
+  if (added !== undefined) return added * (r.mult?.[def.id] ?? 1);
+  if (def.weight <= 0) return 0;
+  if (def.biomes && !def.biomes.includes(biome)) return 0;
   const m = r.mult?.[def.id] ?? (def.biomes ? 1 : (r.base ?? 1));
   return def.weight * m;
 }

@@ -67,22 +67,66 @@ describe('enemy data', () => {
   it('roster tables only mention real enemies and biomes', () => {
     for (const [biome, r] of Object.entries(ROSTERS)) {
       expect(BIOME_IDS).toContain(biome);
-      for (const id of [...Object.keys(r.mult ?? {}), ...Object.keys(r.from ?? {})])
+      for (const id of [
+        ...Object.keys(r.mult ?? {}),
+        ...Object.keys(r.from ?? {}),
+        ...Object.keys(r.add ?? {}),
+      ])
         expect(ENEMIES[id], `${biome}: ${id}`).toBeDefined();
     }
   });
 });
 
 describe('roster selection', () => {
-  it('plains keeps exactly the legacy pool (the starting meadow stays gentle)', () => {
+  // Intentional change (audit, 2026-10-13): the plains used to equal the legacy pool exactly, which made minute 0
+  // 100% plain zombies and the first three minutes five mob types. The plains now adds low-weight early variants
+  // (ROSTERS.plains.add); the generic pool (zombie, skeleton, spider, creeper, slime, ...) is still untouched.
+  it('plains keeps the legacy generic pool and only adds the early variants on top', () => {
+    const extra = new Set(Object.keys(ROSTERS.plains?.add ?? {}));
     for (const minute of [0, 0.5, 1, 2, 3, 4, 6, 8, 10, 13]) {
       for (const night of [false, true]) {
         for (const water of [false, true]) {
-          const now = spawnPool('plains', minute, night, water).map((e) => [e.def.id, e.weight]);
-          expect(now).toEqual(legacyPool('plains', minute, night, water));
+          const now = spawnPool('plains', minute, night, water).map(
+            (e) => [e.def.id, e.weight] as [string, number],
+          );
+          const generic = now.filter(([id]) => !extra.has(id));
+          // silverfish arrive two minutes earlier (from: 3); everything else is the legacy rule.
+          const legacy = legacyPool('plains', minute, night, water).filter(
+            ([id]) => id !== 'silverfish',
+          );
+          expect(generic.filter(([id]) => id !== 'silverfish')).toEqual(legacy);
         }
       }
     }
+  });
+
+  it('plains has about 15% variety from minute 0, growing over the first three minutes', () => {
+    const share = (minute: number): number => {
+      const pool = spawnPool('plains', minute, false, false);
+      const total = pool.reduce((a, e) => a + e.weight, 0);
+      const legacy = new Set(legacyPool('plains', minute, false, false).map(([id]) => id));
+      return pool.filter((e) => !legacy.has(e.def.id)).reduce((a, e) => a + e.weight, 0) / total;
+    };
+    expect(share(0)).toBeGreaterThan(0.12);
+    expect(share(0)).toBeLessThan(0.2);
+    expect(share(3.1)).toBeGreaterThan(share(0));
+    expect(share(3.1)).toBeLessThan(0.35);
+    // Minute 0 now has several different mobs and none of them hits harder than a zombie.
+    const ids = spawnPool('plains', 0, false, false).map((e) => e.def.id);
+    expect(ids.length).toBeGreaterThanOrEqual(4);
+    // Minutes 0-3 draw on at least eight different mob types.
+    expect(spawnPool('plains', 3.1, false, false).length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('a roster `add` admits a biome-filtered mob and still honours its start minute', () => {
+    const rabbit = ENEMIES['zombie_rabbit'];
+    const wolf = ENEMIES['angry_brown_wolf'];
+    if (!rabbit || !wolf) throw new Error('missing defs');
+    expect(spawnWeight(rabbit, 'plains', 0, false, false)).toBeGreaterThan(0);
+    expect(spawnWeight(wolf, 'plains', 1, false, false)).toBe(0);
+    expect(spawnWeight(wolf, 'plains', 2, false, false)).toBeGreaterThan(0);
+    // Not added to a biome that has no entry for it.
+    expect(spawnWeight(rabbit, 'desert', 5, false, false)).toBe(0);
   });
 
   it('biome-only mobs never appear elsewhere (husk: desert/badlands, stray: snowy taiga)', () => {
@@ -90,7 +134,10 @@ describe('roster selection', () => {
       const ids = spawnPool(b, 12, true, true).map((e) => e.def.id);
       expect(ids.includes('stray'), `stray in ${b}`).toBe(b === 'snowy_taiga');
       expect(ids.includes('husk'), `husk in ${b}`).toBe(b === 'desert' || b === 'badlands');
-      expect(ids.includes('jungle_zombie'), `jungle zombie in ${b}`).toBe(b === 'jungle');
+      // The plains admits the jungle zombie as an early variant (ROSTERS.plains.add).
+      expect(ids.includes('jungle_zombie'), `jungle zombie in ${b}`).toBe(
+        b === 'jungle' || b === 'plains',
+      );
     }
   });
 
@@ -163,7 +210,9 @@ describe('roster selection', () => {
     expect(pickEnemyId('desert', 4, false, false, 0.37)).toBe(
       pickEnemyId('desert', 4, false, false, 0.37),
     );
-    expect(pickEnemyId('plains', 0, false, false, 0.99)).toBe('zombie');
+    expect(pickEnemyId('plains', 0, false, false, 0.0)).toBe('zombie');
+    expect(pickEnemyId('plains', 0, false, false, 0.5)).toBe('zombie');
+    expect(pickEnemyId('plains', 0, false, false, 0.99)).not.toBe('zombie');
   });
 });
 

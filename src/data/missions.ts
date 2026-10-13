@@ -49,6 +49,7 @@ export const ENEMY_GROUPS: Record<string, readonly string[]> = {
   arthropod: ['spider', 'cave_spider', 'silverfish', 'endermite'],
   nether: [
     'blaze',
+    'magma_cube_big',
     'magma_cube_medium',
     'magma_cube_small',
     'piglin',

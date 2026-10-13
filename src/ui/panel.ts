@@ -4,9 +4,10 @@
  * with whole-pixel rectangles (no gradients except the backdrop vignette) so it stays crisp at any zoom;
  * textures are tiny code-made tiles used as repeating patterns (one fillRect per panel).
  */
-import { drawGlyphs, textWidth, type TextAlign } from './font';
+import { alignedX, ASCENT, DESCENT, drawGlyphs, textWidth, type TextAlign } from './font';
 import { drawIcon, type IconName } from './icons';
 import { toastAlpha, toastSlide } from './hubModel';
+import { HUD_PLATE_ALPHA, HUD_PLATE_RGB } from './hudModel';
 
 export { LINE_HEIGHT, textWidth } from './font';
 
@@ -280,6 +281,45 @@ export function drawTextScaled(
   align: TextAlign = 'left',
   scale = 2,
 ): void {
+  drawGlyphs(ctx, s, x, y, color, align, scale);
+}
+
+/**
+ * Rect of the dark plate behind `s` drawn with `drawText` / `drawTextScaled` at baseline `y` (pure given the
+ * text width `w`). The plate pads the glyphs by `pad` px so HUD text stays readable on light terrain.
+ */
+export function textPlateRect(
+  x: number,
+  y: number,
+  w: number,
+  align: TextAlign | CanvasTextAlign = 'left',
+  scale = 1,
+  pad = 2,
+): Rect {
+  const k = Math.max(1, Math.round(scale));
+  const left = alignedX(x, w, align);
+  return {
+    x: left - pad,
+    y: Math.round(y) - ASCENT * k + k - 1,
+    w: w + 2 * pad,
+    h: (ASCENT + DESCENT) * k - k + 2,
+  };
+}
+
+/** Text over a translucent dark plate (HUD text that sits directly on the world, readable on sand and snow). */
+export function drawTextPlate(
+  ctx: CanvasRenderingContext2D,
+  s: string,
+  x: number,
+  y: number,
+  color = '#fff',
+  align: TextAlign | CanvasTextAlign = 'left',
+  scale = 1,
+): void {
+  if (!s) return;
+  const r = textPlateRect(x, y, textWidth(s, scale), align, scale);
+  ctx.fillStyle = `rgba(${HUD_PLATE_RGB[0]},${HUD_PLATE_RGB[1]},${HUD_PLATE_RGB[2]},${HUD_PLATE_ALPHA})`;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
   drawGlyphs(ctx, s, x, y, color, align, scale);
 }
 

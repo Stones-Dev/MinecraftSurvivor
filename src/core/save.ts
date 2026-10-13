@@ -130,6 +130,12 @@ export const MAX_COUNT = 1e12;
 /** Upper bound for second-based stats (about 31 years). */
 export const MAX_SECONDS = 1e9;
 
+/**
+ * Companion every NEW save starts with, owned and equipped in the first ally slot, so the companion mechanic is
+ * felt from the first minute. It is a common ally (Wolf: melee chaser). Existing saves are never given it.
+ */
+export const STARTER_ALLY = 'wolf';
+
 export function defaultSave(now = Date.now()): SaveData {
   const gachaSeed = (now ^ 0x5bd1e995) >>> 0;
   return {
@@ -140,8 +146,11 @@ export function defaultSave(now = Date.now()): SaveData {
     pullCount: 0,
     pity: {},
     currencies: { emeralds: 500, spawnEggs: 0, rareSpawnEggs: 0 },
-    owned: { steve: { level: 1, shards: 0, obtainedAt: now } },
-    loadout: { hero: 'steve', pet: null, allies: [] },
+    owned: {
+      steve: { level: 1, shards: 0, obtainedAt: now },
+      [STARTER_ALLY]: { level: 1, shards: 0, obtainedAt: now },
+    },
+    loadout: { hero: 'steve', pet: null, allies: [STARTER_ALLY] },
     upgrades: {},
     records: { bestTimeSec: 0, bestKills: 0, wins: 0, runs: 0 },
     // Deterministic so defaultSave(t) is reproducible; local profiles get a random id when created.
@@ -194,6 +203,9 @@ export const migrations: Record<number, Migration> = {
     const d = defaultSave(typeof old.createdAt === 'number' ? old.createdAt : Date.now());
     return {
       ...d,
+      // The prototype save predates the starter companion: it keeps its Steve-only collection.
+      owned: { steve: { level: 1, shards: 0, obtainedAt: d.createdAt } },
+      loadout: { hero: 'steve', pet: null, allies: [] },
       currencies: {
         ...d.currencies,
         emeralds: typeof old.emeralds === 'number' ? old.emeralds : 500,
@@ -503,7 +515,7 @@ export interface SaveSummary {
   pullCount: number;
   lastPlayed: number;
   name: string;
-  /** runs + pulls + owned companions beyond Steve: 0 means a fresh, untouched save. */
+  /** runs + pulls + owned companions beyond Steve and the (unpulled) starter ally: 0 means a fresh, untouched save. */
   progress: number;
 }
 
@@ -517,7 +529,10 @@ export function summarizeSave(s: SaveData): SaveSummary {
     pullCount: s.pullCount,
     lastPlayed: s.lastModified,
     name: s.profile.name,
-    progress: runs + s.pullCount + Math.max(0, owned - 1),
+    progress:
+      runs +
+      s.pullCount +
+      Math.max(0, owned - 1 - (s.owned[STARTER_ALLY] && s.pullCount === 0 ? 1 : 0)),
   };
 }
 

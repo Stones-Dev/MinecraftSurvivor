@@ -659,6 +659,54 @@ export function updateAllies(run: RunState, dt: number): void {
   }
 }
 
+/** Distance behind the hero the pet trails and how fast the trailing point may slide from one side to the other. */
+export const PET_BEHIND = 18;
+const PET_SIDE_SLIDE = 60; // px/s
+/** The hero must keep moving the other way this long before the pet changes side (turn-backs do not count). */
+export const PET_SIDE_DELAY = 0.45;
+const PET_RADIUS = 3;
+
+/** Per-pet side choice: which side of the hero the trailing point sits on and the smoothed offset in px. */
+export interface PetSide {
+  /** Current side: the pet trails on the left (-1) or right (+1) of the hero. */
+  side: 1 | -1;
+  /** Seconds the hero has been moving the way that would put the pet on the other side. */
+  flipT: number;
+  /** Smoothed horizontal offset of the target from the hero (-PET_BEHIND..PET_BEHIND). */
+  off: number;
+}
+const petSides = new WeakMap<PetState, PetSide>();
+
+/**
+ * Horizontal offset of the pet's trailing point from the hero. The side is only switched after the hero has moved
+ * in the new direction for `PET_SIDE_DELAY` seconds (standing still or a quick back-and-forth keeps it) and the
+ * offset slides there at a limited speed, so the pet never snaps across the hero.
+ */
+export function petTargetOffset(
+  st: PetSide,
+  heroVx: number,
+  bodyFacing: 1 | -1,
+  dt: number,
+  fresh = false,
+): number {
+  if (fresh) {
+    st.side = bodyFacing === 1 ? -1 : 1;
+    st.flipT = 0;
+    st.off = st.side * PET_BEHIND;
+    return st.off;
+  }
+  // The pet trails behind the movement: moving right puts it on the left (side -1).
+  const want: 1 | -1 | 0 = heroVx > 20 ? -1 : heroVx < -20 ? 1 : 0;
+  if (want !== 0 && want !== st.side) {
+    st.flipT += dt;
+    if (st.flipT >= PET_SIDE_DELAY) st.side = want;
+  } else st.flipT = 0;
+  const goal = st.side * PET_BEHIND;
+  const step = PET_SIDE_SLIDE * dt;
+  st.off += Math.max(-step, Math.min(step, goal - st.off));
+  return st.off;
+}
+
 export function updatePet(run: RunState, dt: number): void {
   const pet = run.pet;
   if (!pet) return;
@@ -666,8 +714,14 @@ export function updatePet(run: RunState, dt: number): void {
   pet.t += dt;
   pet.cd -= dt;
   pet.noiseCd -= dt;
-  // Lazy spring toward a point behind the hero.
-  const tx = p.x - p.facing * 18;
+  let st = petSides.get(pet);
+  const fresh = !st;
+  if (!st) {
+    st = { side: -1, flipT: 0, off: 0 };
+    petSides.set(pet, st);
+  }
+  // Lazy spring toward a point behind the hero (the side follows sustained movement, not the facing flicker).
+  const tx = p.x + petTargetOffset(st, p.vx, p.facing, dt, fresh);
   const ty = p.y + 8;
   const ax = (tx - pet.x) * 9 - pet.vx * 4.5;
   const ay = (ty - pet.y) * 9 - pet.vy * 4.5;
@@ -678,8 +732,22 @@ export function updatePet(run: RunState, dt: number): void {
     pet.vx *= 110 / sp;
     pet.vy *= 110 / sp;
   }
-  pet.x += pet.vx * dt;
-  pet.y += pet.vy * dt;
+  const wx = pet.x + pet.vx * dt;
+  const wy = pet.y + pet.vy * dt;
+  // Solid props (trees, walls) stop the pet like everyone else; the velocity into them is dropped.
+  const hit = run.world.collide(wx, wy, PET_RADIUS);
+  const cx = hit.x - wx;
+  const cy = hit.y - wy;
+  const clen = Math.hypot(cx, cy);
+  if (clen > 1e-4) {
+    const vn = (pet.vx * cx + pet.vy * cy) / clen;
+    if (vn < 0) {
+      pet.vx -= (vn * cx) / clen;
+      pet.vy -= (vn * cy) / clen;
+    }
+  }
+  pet.x = hit.x;
+  pet.y = hit.y;
   pet.moving = sp > 8;
   if (Math.abs(pet.vx) > 4) pet.facing = pet.vx > 0 ? 1 : -1;
   if (Math.hypot(p.x - pet.x, p.y - pet.y) > 300) {

@@ -1,61 +1,19 @@
 /** Procedural Web Audio synth: square/triangle/noise voices with simple envelopes. No audio files. */
 import type { ThemeId } from '../data/music';
 import { MusicEngine } from './music';
-export type SfxName =
-  | 'hit'
-  | 'hurt'
-  | 'swing'
-  | 'bow'
-  | 'explode'
-  | 'xp'
-  | 'emerald'
-  | 'levelup'
-  | 'click'
-  | 'death'
-  | 'tnt'
-  | 'hiss'
-  | 'legendary'
-  | 'victory'
-  | 'boss'
-  | 'portal'
-  | 'trade'
-  | 'splash'
-  | 'snow'
-  | 'thunder'
-  | 'chest'
-  | 'egg'
-  | 'spin'
-  | 'gameover'
-  | 'step';
+import { Rng } from './rng';
+import {
+  burstPlan,
+  detune,
+  RateLimiter,
+  SOFT_VOICE_CAP,
+  STEP_TIMBRE,
+  type SfxName,
+  type StepMaterial,
+} from './sfxModel';
 
-/** Minimum seconds between two plays of the same effect (keeps crowds from clipping). */
-const SPACING: Record<SfxName, number> = {
-  hit: 0.045,
-  hurt: 0.15,
-  swing: 0.1,
-  bow: 0.08,
-  explode: 0.08,
-  xp: 0.03,
-  emerald: 0.05,
-  levelup: 0.5,
-  click: 0.05,
-  death: 0.3,
-  tnt: 0.1,
-  hiss: 0.3,
-  legendary: 1,
-  victory: 2,
-  boss: 1,
-  portal: 0.5,
-  trade: 0.3,
-  splash: 0.1,
-  snow: 0.08,
-  thunder: 0.15,
-  chest: 0.2,
-  egg: 0.3,
-  spin: 0.03,
-  gameover: 2,
-  step: 0.17,
-};
+export type { SfxName } from './sfxModel';
+export type { StepMaterial } from './sfxModel';
 
 const MAX_VOICES = 18;
 
@@ -68,7 +26,9 @@ export class AudioEngine {
   private music: MusicEngine | null = null;
   private pendingTheme: ThemeId | null = null;
   private noiseBuf: AudioBuffer | null = null;
-  private last = new Map<SfxName, number>();
+  private readonly limiter = new RateLimiter();
+  /** Detune source for pitch variation (sound only, never touches the simulation's streams). */
+  private readonly rng = new Rng(0x5f3759df);
   private voices = 0;
   private xpStreak = 0;
   private xpAt = 0;
@@ -85,7 +45,15 @@ export class AudioEngine {
     if (!Ctor) return;
     this.ctx = new Ctor();
     this.sfxBus = this.ctx.createGain();
-    this.sfxBus.connect(this.ctx.destination);
+    // A gentle safety limiter on the effects only (the threshold sits above every single effect's level, so
+    // it only acts when many voices stack): a crowd of hits plus an explosion must not clip.
+    const limiter = this.ctx.createDynamicsCompressor();
+    limiter.threshold.value = -8;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 6;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.12;
+    this.sfxBus.connect(limiter).connect(this.ctx.destination);
     const musicBus = this.ctx.createGain();
     musicBus.connect(this.ctx.destination);
     const len = this.ctx.sampleRate;
@@ -170,31 +138,78 @@ export class AudioEngine {
     };
   }
 
-  play(name: SfxName): void {
+  /** A pitch factor near 1 for variation between repeated effects (`amount` 0.05 = +-5%). */
+  private pitch(amount: number): number {
+    return detune(this.rng.float(), amount);
+  }
+
+  /**
+   * Play an effect. `count` is how many of it happened in the same simulation step: a crowd of hits plays a
+   * short staggered burst of detuned voices (see `burstPlan`) instead of one click. `material` picks the
+   * timbre of a footstep.
+   */
+  play(name: SfxName, count = 1, material?: StepMaterial): void {
     const ctx = this.ctx;
     const bus = this.sfxBus;
     if (!ctx || !bus || this.muted || ctx.state !== 'running') return;
-    const now = ctx.currentTime;
-    if (now - (this.last.get(name) ?? -1) < SPACING[name]) return;
-    this.last.set(name, now);
+    if (!this.limiter.allow(name, ctx.currentTime)) return;
     bus.gain.value = this.sfxVolume;
+    if (name === 'step') {
+      this.step(material ?? 'grass');
+      return;
+    }
+    if (name === 'hit' || name === 'swing' || name === 'bow' || name === 'hurt') {
+      this.burst(name, count);
+      return;
+    }
+    this.playOnce(name);
+  }
+
+  /** Footstep with the timbre of the surface under the hero (grass, sand, snow, stone, water, mud). */
+  private step(material: StepMaterial): void {
+    const t = STEP_TIMBRE[material];
+    const k = this.pitch(0.12);
+    for (let i = 0; i < t.ticks; i++) {
+      this.noise(t.noiseDur, t.noiseVol, t.noiseCut * k, i * 0.035);
+    }
+    if (t.toneVol > 0) this.tone(t.toneHz * k, t.toneDur, t.toneType, t.toneVol, t.toneTo * k);
+  }
+
+  /** The hit-like effects: one voice, or a staggered burst with falling volume and a little pitch spread. */
+  private burst(name: 'hit' | 'swing' | 'bow' | 'hurt', count: number): void {
+    const plan = burstPlan(name, count);
+    plan.forEach((v, i) => {
+      // Extra voices only while the engine is not already busy; the first voice always plays.
+      if (i > 0 && this.voices >= SOFT_VOICE_CAP) return;
+      const k = this.pitch(0.05 + 0.04 * v.spread);
+      const g = v.gain;
+      const d = v.delay;
+      switch (name) {
+        case 'hit':
+          this.tone(220 * k, 0.07, 'square', 0.18 * g, 90 * k, d);
+          this.noise(0.05, 0.12 * g, 3000, d);
+          // Three or more at once: a short low thump underneath, so a crowd sounds heavier, not just busier.
+          if (i === 0 && count >= 4) this.tone(110, 0.09, 'triangle', 0.1, 60);
+          break;
+        case 'hurt':
+          this.tone(160 * k, 0.22, 'sawtooth', 0.22, 60 * k);
+          this.noise(0.12, 0.18, 1800);
+          break;
+        case 'swing':
+          this.noise(0.14, 0.14 * g, 5000, d);
+          this.tone(480 * k, 0.1, 'triangle', 0.08 * g, 220 * k, d);
+          break;
+        case 'bow':
+          this.tone(700 * k, 0.09, 'triangle', 0.12 * g, 260 * k, d);
+          this.noise(0.05, 0.08 * g, 6000, d);
+          break;
+      }
+    });
+  }
+
+  private playOnce(name: SfxName): void {
+    const now = this.ctx?.currentTime ?? 0;
     switch (name) {
-      case 'hit':
-        this.tone(220, 0.07, 'square', 0.18, 90);
-        this.noise(0.05, 0.12, 3000);
-        break;
-      case 'hurt':
-        this.tone(160, 0.22, 'sawtooth', 0.22, 60);
-        this.noise(0.12, 0.18, 1800);
-        break;
-      case 'swing':
-        this.noise(0.14, 0.14, 5000);
-        this.tone(480, 0.1, 'triangle', 0.08, 220);
-        break;
-      case 'bow':
-        this.tone(700, 0.09, 'triangle', 0.12, 260);
-        this.noise(0.05, 0.08, 6000);
-        break;
       case 'explode':
         this.noise(0.45, 0.4, 1600);
         this.tone(90, 0.4, 'square', 0.25, 30);
@@ -277,9 +292,6 @@ export class AudioEngine {
         [392, 349, 311, 261, 196].forEach((f, i) =>
           this.tone(f, i === 4 ? 0.9 : 0.22, 'triangle', 0.16, f * 0.98, i * 0.2),
         );
-        break;
-      case 'step':
-        this.noise(0.04, 0.035, 900);
         break;
       case 'trade':
         this.tone(784, 0.08, 'triangle', 0.12, 784);

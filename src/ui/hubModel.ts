@@ -361,7 +361,7 @@ export function wrapIndex(i: number, d: number, n: number): number {
 // ---------------------------------------------------------------------------------------------------
 // Start biome selector (run setup).
 
-/** `null` is "Random" (the usual spawn meadow); then every overworld biome. */
+/** `null` is "Random" (a biome drawn from the run seed, see `resolveStartBiome`; plains stays the most common); then every overworld biome. */
 export const START_BIOME_OPTIONS: readonly (BiomeId | null)[] = [null, ...OVERWORLD_BIOMES];
 
 export function cycleStartBiome(cur: BiomeId | null, dir: number): BiomeId | null {

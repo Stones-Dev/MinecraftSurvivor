@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MineSurvive</title>
+    <meta
+      name="description"
+      content="MineSurvive is a free browser bullet-heaven set in a blocky world: survive the night, level up, gear up and collect every mob. Keyboard, gamepad and touch."
+    />
     <link rel="icon" type="image/png" href="./icons/icon-192.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <meta name="theme-color" content="#12121a" />
@@ -26,14 +30,40 @@
         align-items: center;
         justify-content: center;
       }
+      main {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+      }
       canvas {
         image-rendering: pixelated;
         display: block;
       }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
     </style>
   </head>
   <body>
-    <canvas id="game"></canvas>
+    <main>
+      <h1 class="sr-only">MineSurvive</h1>
+      <canvas
+        id="game"
+        role="application"
+        aria-label="MineSurvive game. Move with WASD or the arrow keys, a gamepad, or the on-screen stick on touch screens. Menus work with arrows, Enter and Escape."
+      ></canvas>
+    </main>
+    <noscript>MineSurvive needs JavaScript and an HTML canvas to run.</noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

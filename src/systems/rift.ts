@@ -79,7 +79,7 @@ function enter(run: RunState): void {
   p.iframes = 1.5;
   gatherCompanions(run);
   r.foes = [];
-  const kind = run.rng.events.pick(['blaze_lord', 'ghast', 'brute', 'hoglins'] as const);
+  const kind = run.rng.events.pick(['blaze_lord', 'ghast', 'brute', 'hoglins', 'magma'] as const);
   const spawn = (id: string, x: number, y: number, hpMult: number): Enemy | null => {
     const e = makeEnemy(run, id, x, y, false);
     if (!e) return null;
@@ -101,9 +101,13 @@ function enter(run: RunState): void {
   } else if (kind === 'brute') {
     spawn('piglin_brute', 0, -60, 1);
     run.announce('Piglin Brute!', '#ff9a3a', 4);
-  } else {
+  } else if (kind === 'hoglins') {
     for (let i = 0; i < 3; i++) spawn('hoglin', -40 + i * 40, -60, 1.3);
     run.announce('Hoglin pack!', '#ff9a3a', 4);
+  } else {
+    // Two Big Magma Cubes; the rift is won once they and every cube split off them are dead.
+    for (let i = 0; i < 2; i++) spawn('magma_cube_big', -30 + i * 60, -60, 2.5);
+    run.announce('Magma Cubes!', '#ff9a3a', 4);
   }
   run.fx.push(makeFx('ring', 0, 90, 0.6, { r: 40, color: '#b06bff' }));
 }
@@ -175,7 +179,12 @@ export function updateRift(run: RunState, dt: number): void {
     // A dead hero escapes even if the last foe fell the same step: no reward, no corpse in the overworld.
     if (p.dead) {
       leave(run, false);
-    } else if (r.foes.length > 0 && r.foes.every((e) => e.dying || e.hp <= 0)) {
+    } else if (
+      r.foes.length > 0 &&
+      r.foes.every((e) => e.dying || e.hp <= 0) &&
+      // Magma Cubes split into more cubes that are not foes themselves: wait for them too.
+      !run.enemies.some((e) => !e.dying && e.hp > 0 && e.def.id.startsWith('magma_cube'))
+    ) {
       leave(run, true);
     } else if (r.timer <= 0) {
       leave(run, false);

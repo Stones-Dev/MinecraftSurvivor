@@ -1,4 +1,5 @@
 import type { AnimDef } from './animator';
+import { columnBottoms, findFeet, type Feet } from './feet';
 
 interface FrameInfo {
   page: number;
@@ -71,6 +72,8 @@ export class Atlas {
     legDx: number,
     lift: number,
     legFrac = 0.34,
+    offX = 0,
+    offY = 0,
   ): void {
     const f = this.data.frames[key];
     const page = f ? this.pages[f.page] : undefined;
@@ -78,7 +81,7 @@ export class Atlas {
     const cut = Math.max(1, Math.min(f.h - 1, Math.round(f.h * legFrac)));
     const upper = f.h - cut;
     const dx = Math.round(x);
-    const dy = Math.round(y - f.oy);
+    const dy = Math.round(y - f.oy) + offY;
     const draw = (left: number): void => {
       ctx.drawImage(page, f.x, f.y, f.w, upper, left, dy - lift, f.w, upper);
       ctx.drawImage(page, f.x, f.y + upper, f.w, cut, left + legDx, dy + upper, f.w, cut);
@@ -87,10 +90,10 @@ export class Atlas {
       ctx.save();
       ctx.translate(dx, 0);
       ctx.scale(-1, 1);
-      draw(Math.round(-f.w + f.ox));
+      draw(Math.round(-f.ox + offX));
       ctx.restore();
     } else {
-      draw(Math.round(dx - f.ox));
+      draw(Math.round(dx - f.ox + offX));
     }
   }
 
@@ -138,7 +141,33 @@ export class Atlas {
     ctx.restore();
   }
 
-  /** Draw a frame with its feet anchor at (x, y); flip mirrors around the anchor; scale grows it from the feet. */
+  private readonly feetCache = new Map<string, Feet | null>();
+
+  /** Where the feet are in a frame (see `core/feet.ts`), read from its pixels once; null without a canvas. */
+  feetOf(key: string): Feet | null {
+    const hit = this.feetCache.get(key);
+    if (hit !== undefined) return hit;
+    let feet: Feet | null = null;
+    const f = this.data.frames[key];
+    const page = f ? this.pages[f.page] : undefined;
+    if (f && page && typeof document !== 'undefined') {
+      const c = document.createElement('canvas');
+      c.width = f.w;
+      c.height = f.h;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      if (g) {
+        g.drawImage(page, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+        feet = findFeet(columnBottoms(g.getImageData(0, 0, f.w, f.h).data, f.w, f.h), f.ox, f.oy);
+      }
+    }
+    this.feetCache.set(key, feet);
+    return feet;
+  }
+
+  /**
+   * Draw a frame with its feet anchor at (x, y); flip mirrors around the anchor; scale grows it from the feet.
+   * `offX`/`offY` shift the sprite in frame space (whole px; +x moves it right when unflipped, left when flipped).
+   */
   draw(
     ctx: CanvasRenderingContext2D,
     key: string,
@@ -146,6 +175,8 @@ export class Atlas {
     y: number,
     flip = false,
     scale = 1,
+    offX = 0,
+    offY = 0,
   ): void {
     const f = this.data.frames[key];
     const page = f ? this.pages[f.page] : undefined;
@@ -154,20 +185,21 @@ export class Atlas {
       ctx.save();
       ctx.translate(Math.round(x), Math.round(y));
       ctx.scale(flip ? -scale : scale, scale);
-      ctx.drawImage(page, f.x, f.y, f.w, f.h, -f.ox, -f.oy, f.w, f.h);
+      ctx.drawImage(page, f.x, f.y, f.w, f.h, -f.ox + offX, -f.oy + offY, f.w, f.h);
       ctx.restore();
       return;
     }
     const dx = Math.round(x);
-    const dy = Math.round(y - f.oy);
+    const dy = Math.round(y - f.oy) + offY;
     if (flip) {
+      // Mirror around the anchor: the anchor column of the frame stays on `dx` (not the frame's centre).
       ctx.save();
       ctx.translate(dx, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(page, f.x, f.y, f.w, f.h, Math.round(-f.w + f.ox), dy, f.w, f.h);
+      ctx.drawImage(page, f.x, f.y, f.w, f.h, Math.round(-f.ox + offX), dy, f.w, f.h);
       ctx.restore();
     } else {
-      ctx.drawImage(page, f.x, f.y, f.w, f.h, Math.round(dx - f.ox), dy, f.w, f.h);
+      ctx.drawImage(page, f.x, f.y, f.w, f.h, Math.round(dx - f.ox + offX), dy, f.w, f.h);
     }
   }
 }

@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import { cameraLead, reduceFlash, textScale } from '../core/accessibility';
+import { aggregateEvents, stepMaterial, type StepMaterial } from '../core/sfxModel';
 import { Camera } from '../core/camera';
 import type { View } from '../core/canvas';
 import { makeEnemy } from '../systems/spawner';
@@ -124,6 +125,16 @@ function drawWeather(
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
   }
+}
+
+/** The footstep material under the hero (tile, the biome's ground family and the world's surface answer). */
+function stepMaterialUnder(run: RunState): StepMaterial {
+  const p = run.player;
+  return stepMaterial(
+    run.world.tileAtPx(p.x, p.y),
+    BIOMES[run.biome()].ground,
+    run.world.surface(p.x, p.y, run.biome()),
+  );
 }
 
 /** The 20-second first-run hints (BRIEF section 5). */
@@ -307,7 +318,9 @@ export function runScreen(app: App, opts: RunOptions): Screen {
               biome: run.biome(),
             }),
       );
-      for (const ev of new Set(run.events)) app.audio.play(ev);
+      for (const [ev, count] of aggregateEvents(run.events)) {
+        app.audio.play(ev, count, ev === 'step' ? stepMaterialUnder(run) : undefined);
+      }
       run.events.length = 0;
       if (run.status === 'dead' && !deathSting) {
         deathSting = true;
@@ -432,7 +445,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         app.touch.enabled,
         run.time,
       );
-      app.touch.draw(ctx, width, height);
+      app.touch.draw(ctx, width, height, view.zoom);
       if (tutorial && run.time < 22) drawTutorial(ctx, width, height, run.time);
 
       if (showDebug) {

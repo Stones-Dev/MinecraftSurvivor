@@ -7,7 +7,7 @@ import { GamepadInput } from './core/gamepad';
 import { KeyboardInput, MergedInput } from './core/input';
 import { TouchInput } from './core/touch';
 import { Loop } from './core/loop';
-import { loadoutFromSave, type RunLoadout } from './systems/meta';
+import { loadoutFromSave, resolveStartBiome, type RunLoadout } from './systems/meta';
 import { HEROES } from './data/companions';
 import { AuthService } from './net/auth';
 import { loadBackend } from './net/backend';
@@ -147,10 +147,13 @@ async function boot(): Promise<void> {
     },
     startRun: (loadout?: RunLoadout) => {
       const lo = loadout ?? debugLoadout();
+      const seed = num('seed', Date.now() % 1_000_000_000);
+      const debug = params.has('debug');
+      const save = store.load();
       router.reset(
         runScreen(app, {
           loadout: lo,
-          seed: num('seed', Date.now() % 1_000_000_000),
+          seed,
           startTime: params.has('debug') ? num('t', 0) : 0,
           debug: params.has('debug'),
           // Test hooks only work together with `debug`, and debug runs never touch the save.
@@ -163,9 +166,15 @@ async function boot(): Promise<void> {
           portal: params.has('debug') && params.has('portal'),
           trader: params.has('debug') && params.has('trader'),
           villager: params.has('debug') && params.has('villager'),
-          // `?biome=` (debug) wins over the start biome picked in the run setup.
-          biome:
-            (params.has('debug') ? biomeParam(params.get('biome')) : undefined) ?? lo.startBiome,
+          // `?biome=` (debug) wins over the start biome picked in the run setup; "Random" (nothing picked) draws
+          // one from the run seed, except on the very first run (tutorial) and in debug runs.
+          biome: resolveStartBiome({
+            picked: lo.startBiome,
+            debugBiome: debug ? biomeParam(params.get('biome')) : undefined,
+            seed,
+            firstRun: !save.flags.tutorialDone && save.records.runs === 0,
+            debug,
+          }),
         }),
       );
     },

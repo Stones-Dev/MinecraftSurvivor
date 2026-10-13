@@ -112,7 +112,7 @@ describe('errors and validators', () => {
     expect(formatAgo(1, 1 + 3 * 86_400_000)).toBe('3 days ago');
     const s = summarizeSave(defaultSave(1000));
     expect(describeSummary(s, 1000)).toBe(
-      '0 runs, 500 emeralds, 1 companions, last played just now',
+      '0 runs, 500 emeralds, 2 companions, last played just now',
     );
   });
 });

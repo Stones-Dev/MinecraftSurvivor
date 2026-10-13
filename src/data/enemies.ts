@@ -512,6 +512,29 @@ add({
     life: 2,
   },
 });
+// A Big Magma Cube is the Medium sheet drawn 1.5x (the source sheets have only Small and Medium, no new art).
+// It splits like the slimes (Big > Medium > Small, two children each) and leaves burning ground.
+add({
+  ...base,
+  id: 'magma_cube_big',
+  sprite: 'mob.magma_cube_medium',
+  name: 'Magma Cube',
+  hp: 22,
+  dmg: 7,
+  speed: 20,
+  radius: 10,
+  xp: 3,
+  archetype: 'chaser',
+  fromMinute: 3,
+  weight: 3,
+  biomes: ['badlands'],
+  splitInto: 'magma_cube_medium',
+  slime: true,
+  walkAnim: false,
+  trail: true,
+  scale: 1.5,
+  height: 26,
+});
 add({
   ...base,
   id: 'magma_cube_medium',
@@ -526,6 +549,7 @@ add({
   fromMinute: 9,
   weight: 4,
   splitInto: 'magma_cube_small',
+  slime: true,
   walkAnim: false,
   trail: true,
   height: 16,
@@ -541,6 +565,7 @@ add({
   radius: 5,
   xp: 2,
   archetype: 'chaser',
+  slime: true,
   walkAnim: false,
   trail: true,
   height: 10,
@@ -1403,6 +1428,27 @@ add({
   mini: true,
   scale: 1.4,
   height: 36,
+});
+
+// A lesser Warden (same sheet as the 15:00 final boss): a rare late elite that the spawner sends after minute 9,
+// at most one alive at a time (systems/spawner.ts). It reuses the Warden's boss pattern (sonic line with a
+// 1.3 s telegraph, three shockwave rings, darkness) with a fraction of the HP and damage, and pays out like a
+// mini-boss (Spawn Egg, 30% an item). It is `mini`, so it is never counted as the Wither/Warden win.
+add({
+  ...base,
+  id: 'warden_lesser',
+  sprite: 'mob.warden',
+  name: 'Lesser Warden',
+  hp: 420,
+  dmg: 24,
+  speed: 22,
+  radius: 11,
+  xp: 40,
+  archetype: 'boss',
+  boss: 'warden',
+  mini: true,
+  scale: 1.1,
+  height: 44,
 });
 
 export const MINI_BOSSES = [

@@ -4,7 +4,8 @@ import { allyById, heroById, petById, type PetDef } from '../data/companions';
 import { kitOf } from '../data/heroKits';
 import type { Mods } from '../data/upgrades';
 import type { SaveData } from '../core/save';
-import type { BiomeId } from '../world/biomes';
+import { Rng } from '../core/rng';
+import { OVERWORLD_BIOMES, type BiomeId } from '../world/biomes';
 
 export interface LoadoutCompanion {
   id: string;
@@ -39,6 +40,59 @@ export function abilityRank(shards: number): number {
     1,
     Math.min(MAX_ABILITY_RANK, 1 + Math.floor(Math.max(0, shards) / SHARDS_PER_RANK)),
   );
+}
+
+/**
+ * Relative odds of each overworld biome for a "Random" start. Plains stays the single most common start
+ * (30%) but is no longer certain; the harder biomes (Dark Forest, Badlands) are the rarest. Every start biome
+ * sits inside the 4-6 minute sword target in the balance simulator (BAL_BIOMES), see docs/BALANCE.md.
+ */
+export const RANDOM_START_WEIGHTS: Readonly<Record<string, number>> = {
+  plains: 30,
+  forest: 14,
+  cherry_grove: 8,
+  snowy_taiga: 8,
+  desert: 8,
+  swamp: 7,
+  jungle: 7,
+  dark_forest: 6,
+  badlands: 6,
+  mushroom_fields: 6,
+};
+
+/** The random start biome of a run seed (pure; a separate hash stream, so gameplay RNG is never touched). */
+export function randomStartBiome(seed: number): BiomeId {
+  const rng = new Rng((seed ^ 0x51a7b10e) >>> 0);
+  rng.nextU32(); // decorrelate from nearby seeds
+  let total = 0;
+  for (const b of OVERWORLD_BIOMES) total += RANDOM_START_WEIGHTS[b] ?? 0;
+  let r = rng.float() * total;
+  for (const b of OVERWORLD_BIOMES) {
+    r -= RANDOM_START_WEIGHTS[b] ?? 0;
+    if (r < 0) return b;
+  }
+  return 'plains';
+}
+
+export interface StartBiomeInput {
+  /** Biome picked in the run setup (absent = "Random"). */
+  picked?: BiomeId | undefined;
+  /** `?biome=` debug override: always wins. */
+  debugBiome?: BiomeId | undefined;
+  seed: number;
+  /** The very first run (tutorial) always starts in the usual meadow. */
+  firstRun: boolean;
+  /** Debug runs (`?debug`) keep the meadow unless `?biome=` says otherwise, so seeded reviews stay comparable. */
+  debug: boolean;
+}
+
+/** Where a run starts: undefined = the usual meadow around the origin, else a biome to move the hero into. */
+export function resolveStartBiome(i: StartBiomeInput): BiomeId | undefined {
+  if (i.debugBiome) return i.debugBiome;
+  if (i.picked) return i.picked;
+  if (i.firstRun || i.debug) return undefined;
+  const b = randomStartBiome(i.seed);
+  return b === 'plains' ? undefined : b;
 }
 
 export function defaultLoadout(): RunLoadout {

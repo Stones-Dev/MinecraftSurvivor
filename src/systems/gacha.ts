@@ -13,6 +13,7 @@ import {
 } from '../data/companions';
 import { Rng } from '../core/rng';
 import type { SaveData } from '../core/save';
+import { maxAllySlots } from './meta';
 
 export interface Banner {
   id: string;
@@ -68,6 +69,8 @@ export interface PullResult {
   guaranteed: boolean;
   /** Hero duplicates: shards added. */
   shards: number;
+  /** The slot this new companion was equipped into because it was empty (never replaces an equipped one). */
+  equipped?: 'pet' | 'ally';
 }
 
 /** Rarity roll from a uniform value in [0, 1). */
@@ -112,14 +115,35 @@ export function dupesToReach(level: number): number {
   return sum;
 }
 
-type Grant = Pick<PullResult, 'isNew' | 'level' | 'refund' | 'shards'>;
+type Grant = Pick<PullResult, 'isNew' | 'level' | 'refund' | 'shards' | 'equipped'>;
+
+/**
+ * A newly obtained pet or ally takes the matching loadout slot when it is empty (the pet slot, or a free ally
+ * slot within the Leadership-unlocked count). It never replaces an equipped companion; heroes are not equipped.
+ */
+function autoEquip(save: SaveData, id: string): 'pet' | 'ally' | undefined {
+  const kind = COMPANION_BY_ID.get(id)?.kind;
+  const lo = save.loadout;
+  if (kind === 'pet') {
+    if (lo.pet) return undefined;
+    lo.pet = id;
+    return 'pet';
+  }
+  if (kind === 'ally') {
+    if (lo.allies.includes(id) || lo.allies.length >= maxAllySlots(save)) return undefined;
+    lo.allies.push(id);
+    return 'ally';
+  }
+  return undefined;
+}
 
 function grant(save: SaveData, id: string, rarity: CompanionRarity, now: number): Grant {
   const def = COMPANION_BY_ID.get(id);
   const owned = save.owned[id];
   if (!owned) {
     save.owned[id] = { level: 1, shards: 0, obtainedAt: now };
-    return { isNew: true, level: 1, refund: 0, shards: 0 };
+    const equipped = autoEquip(save, id);
+    return { isNew: true, level: 1, refund: 0, shards: 0, ...(equipped ? { equipped } : {}) };
   }
   if (def?.kind === 'hero') {
     owned.shards += 5;

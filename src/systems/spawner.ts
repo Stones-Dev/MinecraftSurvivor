@@ -24,8 +24,19 @@ export function tideCount(t: number): number {
   return Math.max(3, Math.round((14 + Math.floor(t / 22)) * 0.4));
 }
 
+/** The lesser Warden (rare late elite): first possible minute, roll spacing, cooldown and per-roll chances. */
+export const WARDEN_ID = 'warden_lesser';
+export const WARDEN_FROM = 9 * 60;
+const WARDEN_ROLL = 20;
+const WARDEN_COOLDOWN = 150;
+const WARDEN_CHANCE = 0.08;
+const WARDEN_CHANCE_DARK_FOREST = 0.3;
+
 export class SpawnerState {
   acc = 0;
+  /** Next time the lesser Warden may roll, and when the last one appeared. */
+  wardenRollAt = WARDEN_FROM;
+  wardenLastAt = -1e9;
   tideT = 32;
   waterNear = false;
   waterCheckAt = -9;
@@ -51,8 +62,9 @@ export function makeEnemy(
   e.cd = run.rng.spawn.range(0.5, 2);
   e.cd2 = run.rng.spawn.range(1, 4);
   if (def.shieldPct) e.shield = def.shieldPct * e.maxHp;
-  if (def.boss) e.boss = 'boss';
-  else if (def.mini) e.boss = 'mini';
+  // `mini` wins over `boss`: the lesser Warden uses the Warden's pattern but is not the final boss.
+  if (def.mini) e.boss = 'mini';
+  else if (def.boss) e.boss = 'boss';
   return e;
 }
 
@@ -109,6 +121,13 @@ export function ringPoint(
 
 const SPAN_Y = 0.9;
 
+/** Apply the biome's danger to a freshly made enemy: tougher in the dark forest and badlands, softer in the mushroom fields. */
+function applyBiomeHp(e: Enemy, hpMult: number): void {
+  if (hpMult === 1) return;
+  e.maxHp *= hpMult;
+  e.hp = e.maxHp;
+}
+
 function spawnOne(run: RunState, angle: number, limit: number): boolean {
   if (run.enemies.length >= limit) return false;
   const id = pickType(run);
@@ -128,11 +147,7 @@ function spawnOne(run: RunState, angle: number, limit: number): boolean {
       elite,
     );
     if (!e) continue;
-    // The biome's danger: tougher mobs in the dark forest and badlands, softer ones in the mushroom fields.
-    if (hpMult !== 1) {
-      e.maxHp *= hpMult;
-      e.hp = e.maxHp;
-    }
+    applyBiomeHp(e, hpMult);
     if (run.rng.spawn.chance(CHARGED_CHANCE + run.chargedBonus)) {
       e.charged = true;
       e.maxHp *= 2;
@@ -163,20 +178,71 @@ export function updateSpawner(run: RunState, dt: number): void {
     for (let i = 0; i < n; i++)
       spawnOne(run, anchor + run.rng.spawn.range(-0.55, 0.55), ENEMY_CAP + OVERFLOW);
   }
+  updateWarden(run);
   // Enemies left far behind are moved back onto the ring so the player never faces an empty field.
   const p = run.player;
-  for (const e of run.enemies) {
-    if (e.dying || e.boss) continue;
+  const list = run.enemies;
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    if (!e || e.dying || e.boss) continue;
     const d = Math.hypot(e.x - p.x, e.y - p.y);
     e.farT = d > SPAWN_RING * 1.6 ? e.farT + dt : 0;
     if (e.farT > 2.5 || d > SPAWN_RING * 2.6) {
-      const pt = ringPoint(run, run.rng.spawn.range(0, Math.PI * 2), e.radius, e.def.nearWater);
-      if (pt) {
-        e.x = pt.x;
-        e.y = pt.y;
-        e.prevX = Number.NaN;
-        e.farT = 0;
+      const fresh = recycleType(run, e);
+      const def = fresh ?? e.def;
+      const pt = ringPoint(run, run.rng.spawn.range(0, Math.PI * 2), def.radius, def.nearWater);
+      if (!pt) continue;
+      if (fresh) {
+        // Same slot, same count: the straggler is replaced by a newly rolled mob from the current roster.
+        const n = makeEnemy(run, fresh.id, pt.x, pt.y, false);
+        if (n) {
+          applyBiomeHp(n, biomeHpMult(run.biome()));
+          list[i] = n;
+          continue;
+        }
       }
+      e.x = pt.x;
+      e.y = pt.y;
+      e.prevX = Number.NaN;
+      e.farT = 0;
     }
   }
+}
+
+/**
+ * A straggler at full health can be swapped for a freshly rolled mob so that the variety on screen refreshes
+ * instead of the same instances following the hero forever. Only plain, untouched spawns qualify (not elites,
+ * Charged, summons, slime children, banner carriers, packs or rift foes) and only into a single-body type.
+ */
+function recycleType(run: RunState, e: Enemy): (typeof ENEMIES)[string] | null {
+  if (e.hp < e.maxHp || e.shield > 0) return null;
+  if (e.elite || e.charged || e.banner || e.riftFoe || e.summonerId !== 0 || e.splitDepth > 0)
+    return null;
+  if (e.def.pack || e.def.weight <= 0) return null;
+  const def = ENEMIES[pickType(run)];
+  if (!def || def.pack || def.weight <= 0 || def.id === e.def.id) return null;
+  return def;
+}
+
+/** Rare late elite: after minute 9, one lesser Warden at a time (cap 1), far likelier in the Dark Forest. */
+function updateWarden(run: RunState): void {
+  const s = run.spawner;
+  const t = run.time;
+  if (t < s.wardenRollAt) return;
+  s.wardenRollAt = t + WARDEN_ROLL;
+  if (t - s.wardenLastAt < WARDEN_COOLDOWN) return;
+  if (run.enemies.some((e) => !e.dying && (e.def.id === WARDEN_ID || e.boss === 'boss'))) return;
+  const chance = run.biome() === 'dark_forest' ? WARDEN_CHANCE_DARK_FOREST : WARDEN_CHANCE;
+  if (!run.rng.spawn.chance(chance)) return;
+  const e = makeEnemy(run, WARDEN_ID, 0, 0, false);
+  if (!e) return;
+  const pt = ringPoint(run, run.rng.spawn.range(0, Math.PI * 2), e.radius);
+  if (!pt) return;
+  e.x = pt.x;
+  e.y = pt.y;
+  e.cd = 2;
+  applyBiomeHp(e, biomeHpMult(run.biome()));
+  run.enemies.push(e);
+  s.wardenLastAt = t;
+  run.announce(`${e.def.name} emerges!`, '#6fe0ff', 3);
 }

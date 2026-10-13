@@ -3,16 +3,26 @@
  * ability, the item and pause. Pure pointer logic (testable without a DOM) plus `attach` to hook a canvas.
  * Coordinates are art pixels.
  */
-import { coarsePointer, touchEnabled } from './accessibility';
+import { coarsePointer, textScale, touchEnabled } from './accessibility';
 import type { InputSource } from './input';
 
 export interface TouchButton {
   id: 'ability' | 'item' | 'pause';
   x: number;
   y: number;
+  /** Drawn radius in art px. */
   r: number;
+  /** Radius of the area that reacts to a finger, in art px (never below 22 CSS px, see MIN_TOUCH_CSS). */
+  hit: number;
   label: string;
 }
+
+/** Smallest touch target edge in CSS px (WCAG 2.5.5 / platform guidance is 44). */
+export const MIN_TOUCH_CSS = 44;
+/** Extra reach around a drawn button, in art px. */
+const HIT_SLOP = 4;
+/** The art canvas is shown at an integer zoom (2 on phones and small windows, 3 on large ones). */
+const DEFAULT_ZOOM = 2;
 
 const STICK_RADIUS = 30;
 const DEADZONE = 0.18;
@@ -33,19 +43,38 @@ export class TouchInput implements InputSource {
   private readonly pressed = new Set<TouchButton['id']>();
   private width = 426;
   private height = 240;
+  /** Canvas zoom (CSS px per art px), learnt from the view; sizes the buttons to a finger. */
+  private zoom = DEFAULT_ZOOM;
 
-  /** Layout of the buttons for a view size. */
-  buttons(width = this.width, height = this.height): TouchButton[] {
+  /**
+   * Layout of the buttons for a view size. Every button reacts to a finger within at least 44 CSS px
+   * (`zoom` converts from art px). Pause sits in the right column under the kill / emerald counters, away from
+   * the left half where the floating stick starts and clear of the minimap and the ability / item buttons;
+   * on views too short for that it moves to the top row left of the counters.
+   */
+  buttons(width = this.width, height = this.height, zoom = this.zoom): TouchButton[] {
+    const minHit = MIN_TOUCH_CSS / 2 / zoom;
+    const reach = (r: number): number => Math.max(r + HIT_SLOP, minHit);
+    const pr = Math.max(9, Math.ceil(minHit));
+    const ph = reach(pr);
+    const big = textScale() === 2;
+    // Right column: from just under the counters (and the golden-apple timer) down to above the ability button.
+    const colTop = (big ? 70 : 54) + ph;
+    const colBottom = height - 82 - 2 - ph;
+    const pause =
+      colTop <= colBottom
+        ? { x: width - 24, y: colTop }
+        : { x: width - (big ? 66 : 58) - ph, y: 7 + ph };
     return [
-      { id: 'ability', x: width - 30, y: height - 64, r: 14, label: 'Q' },
-      { id: 'item', x: width - 62, y: height - 30, r: 13, label: '' },
-      { id: 'pause', x: 14, y: height / 2 - 20, r: 9, label: '' },
+      { id: 'ability', x: width - 30, y: height - 64, r: 14, hit: reach(14), label: 'Q' },
+      { id: 'item', x: width - 62, y: height - 30, r: 13, hit: reach(13), label: '' },
+      { id: 'pause', x: pause.x, y: pause.y, r: pr, hit: ph, label: '' },
     ];
   }
 
   /** Is (x, y) on one of the on-screen buttons (so other tap targets must ignore it)? */
   buttonAt(x: number, y: number, width = this.width, height = this.height): boolean {
-    return this.buttons(width, height).some((b) => Math.hypot(x - b.x, y - b.y) <= b.r + 4);
+    return this.buttons(width, height).some((b) => Math.hypot(x - b.x, y - b.y) <= b.hit);
   }
 
   get enabled(): boolean {
@@ -59,13 +88,21 @@ export class TouchInput implements InputSource {
   }
 
   /** A pointer went down at (x, y) in art px of a width x height view. Returns true when the touch was taken. */
-  pointerDown(id: number, x: number, y: number, width: number, height: number): boolean {
+  pointerDown(
+    id: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    zoom = this.zoom,
+  ): boolean {
     this.width = width;
     this.height = height;
+    this.zoom = zoom;
     if (this.mode === 'off') return false;
     this.active = true;
     for (const b of this.buttons(width, height)) {
-      if (Math.hypot(x - b.x, y - b.y) <= b.r + 4) {
+      if (Math.hypot(x - b.x, y - b.y) <= b.hit) {
         this.held.set(id, b.id);
         this.pressed.add(b.id);
         return true;
@@ -155,14 +192,14 @@ export class TouchInput implements InputSource {
   attach(
     canvas: HTMLCanvasElement,
     toArt: (e: PointerEvent) => { x: number; y: number },
-    size: () => { width: number; height: number },
+    size: () => { width: number; height: number; zoom?: number },
   ): void {
     canvas.style.touchAction = 'none';
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;
       const { x, y } = toArt(e);
       const s = size();
-      this.pointerDown(e.pointerId, x, y, s.width, s.height);
+      this.pointerDown(e.pointerId, x, y, s.width, s.height, s.zoom);
     });
     canvas.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'mouse') return;
@@ -175,10 +212,11 @@ export class TouchInput implements InputSource {
   }
 
   /** Draw the joystick and buttons (call from the run screen when `enabled`). */
-  draw(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  draw(ctx: CanvasRenderingContext2D, width: number, height: number, zoom = this.zoom): void {
     if (!this.enabled) return;
     this.width = width;
     this.height = height;
+    this.zoom = zoom;
     ctx.save();
     ctx.globalAlpha = 0.5;
     const st = this.stick();
@@ -198,6 +236,14 @@ export class TouchInput implements InputSource {
       ctx.globalAlpha = this.isHeld(b.id) ? 0.8 : 0.38;
       ctx.fillStyle = b.id === 'ability' ? '#6ad0ff' : b.id === 'item' ? '#ffe27a' : '#cfcfd8';
       disc(ctx, b.x, b.y, b.r);
+      if (b.id === 'pause') {
+        // Pause glyph: two bars.
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = '#101014';
+        const h = Math.max(6, Math.round(b.r * 0.8));
+        ctx.fillRect(Math.round(b.x) - 3, Math.round(b.y) - Math.floor(h / 2), 2, h);
+        ctx.fillRect(Math.round(b.x) + 1, Math.round(b.y) - Math.floor(h / 2), 2, h);
+      }
     }
     ctx.restore();
   }

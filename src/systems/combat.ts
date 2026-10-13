@@ -1,5 +1,5 @@
 /** Damage, kills, projectiles, mines, pools and orbiters (BRIEF sections 4 and 9). */
-import { sweepHit } from '../core/geom';
+import { bodyTop, BODY_LOW, sweepHitCapsule } from '../core/geom';
 import type { Enemy } from '../entities/enemy';
 import { makeFx } from '../entities/fx';
 import { Pickup } from '../entities/pickup';
@@ -263,6 +263,11 @@ function applyHitStatus(p: Projectile, e: Enemy): void {
   if (p.stun > 0) applyStatus(e, 'stun', p.stun);
 }
 
+/** Vertical band (px) above a body's feet in which a shot can still hit it (the broad phase looks that far down). */
+const BODY_BAND = 32;
+/** Hero hit height: layered heroes are 35 px tall, the sprite heroes 30-48 (80%, capped like the enemies). */
+const HERO_BODY_TOP = 28;
+
 export function updateProjectiles(run: RunState, dt: number): void {
   const near: Enemy[] = [];
   const pl = run.player;
@@ -327,10 +332,16 @@ export function updateProjectiles(run: RunState, dt: number): void {
       const mx = (p.px + p.x) / 2;
       const my = (p.py + p.y) / 2;
       const reach = Math.hypot(p.x - p.px, p.y - p.py) / 2 + p.radius;
-      run.hash.query(mx, my, reach, near);
+      // Bodies stand up from their feet: look for feet up to a body height below the shot (circle query around the
+      // middle of that band), then test the capsule.
+      run.hash.query(mx, my + BODY_BAND / 2, reach + BODY_BAND / 2, near);
       for (const e of near) {
         if (e.dying || p.hits.has(e.id)) continue;
-        if (!sweepHit(p.px, p.py, p.x, p.y, p.radius, e.x, e.y - 4, e.radius)) continue;
+        const top = bodyTop(e.def.height ?? 28);
+        if (
+          !sweepHitCapsule(p.px, p.py, p.x, p.y, p.radius, e.x, e.y - BODY_LOW, e.y - top, e.radius)
+        )
+          continue;
         p.hits.add(e.id);
         damageEnemy(run, e, p.dmg, p.px, p.py, p.knock);
         applyHitStatus(p, e);
@@ -347,7 +358,19 @@ export function updateProjectiles(run: RunState, dt: number): void {
         if (p.blast > 0) explode(run, p.x, p.y, p.blast, 0, p.dmg, null);
         continue;
       }
-      if (sweepHit(p.px, p.py, p.x, p.y, p.radius, pl.x, pl.y - 6, pl.radius)) {
+      if (
+        sweepHitCapsule(
+          p.px,
+          p.py,
+          p.x,
+          p.y,
+          p.radius,
+          pl.x,
+          pl.y - BODY_LOW,
+          pl.y - HERO_BODY_TOP,
+          pl.radius,
+        )
+      ) {
         if (run.shield.has && run.shield.ready && run.shield.reflect) {
           // Spiked Shield: block and send the projectile back.
           run.shield.ready = false;

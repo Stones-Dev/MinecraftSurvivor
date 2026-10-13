@@ -93,7 +93,7 @@ export function assignSlot(data: SaveData, slot: Slot, id: string | null): SaveD
   return { hero, pet, allies };
 }
 
-/** The remembered start biome for this session (null = random / the usual meadow). */
+/** The remembered start biome for this session (null = Random: drawn per run from the run seed, see resolveStartBiome). */
 let lastStartBiome: BiomeId | null = null;
 
 export function runSetupScreen(

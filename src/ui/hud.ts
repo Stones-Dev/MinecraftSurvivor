@@ -1,5 +1,5 @@
 import { abilityById, abilityCooldown } from '../abilities';
-import { cb, cbAlpha, textScale } from '../core/accessibility';
+import { cb, cbAlpha, reduceFlash, textScale } from '../core/accessibility';
 import type { View } from '../core/canvas';
 import { PASSIVES } from '../data/upgrades';
 import { ITEMS } from '../data/items';
@@ -8,7 +8,8 @@ import type { RunState } from '../game';
 import { xpToNext } from '../systems/economy';
 import { getMarkers } from '../systems/npcs';
 import { drawIcon } from './icons';
-import { drawText, drawTextScaled } from './panel';
+import { drawText, drawTextPlate } from './panel';
+import { HUD_TEXT, LOW_HP_FRACTION, lowHpVignetteAlpha } from './hudModel';
 
 function clock(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -77,7 +78,7 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
   ctx.fillRect(1, 1, width - 2, 4);
   ctx.fillStyle = '#7ddc4a';
   ctx.fillRect(1, 1, Math.floor((width - 2) * Math.min(1, run.xp / need)), 4);
-  drawText(ctx, `Lv ${run.level}`, 4, 15, '#d8ffc0');
+  drawTextPlate(ctx, `Lv ${run.level}`, 4, 15, HUD_TEXT.level);
 
   // Hearts: 10 hearts, each worth a tenth of max HP.
   for (let i = 0; i < 10; i++) {
@@ -92,23 +93,24 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
   }
   // Biome mob effects the hero should notice: husk hunger (no regeneration) and frost slowness.
   const statusX = 4 + 10 * 11 + 3;
-  if (p.hungerT > 0) drawText(ctx, 'Hunger', statusX, 28, '#c9b458');
-  if (p.slowT > 0) drawText(ctx, 'Slow', statusX + (p.hungerT > 0 ? 40 : 0), 28, '#8fc4ff');
+  if (p.hungerT > 0) drawTextPlate(ctx, 'Hunger', statusX, 28, HUD_TEXT.hunger);
+  if (p.slowT > 0)
+    drawTextPlate(ctx, 'Slow', statusX + (p.hungerT > 0 ? 40 : 0), 28, HUD_TEXT.slow);
 
   // Accessibility text scale 2: the timer and the counters are drawn double size (menus stay 1x).
   const big = textScale() === 2;
   if (big) {
-    drawTextScaled(ctx, clock(run.time), width / 2, 23, '#fff', 'center', 2);
+    drawTextPlate(ctx, clock(run.time), width / 2, 23, HUD_TEXT.timer, 'center', 2);
     drawIcon(ctx, 'skull', width - 62, 10);
-    drawTextScaled(ctx, String(run.kills), width - 48, 24, '#fff', 'left', 2);
+    drawTextPlate(ctx, String(run.kills), width - 48, 24, HUD_TEXT.kills, 'left', 2);
     drawIcon(ctx, 'emerald', width - 62, 32);
-    drawTextScaled(ctx, String(run.emeraldsPicked), width - 48, 46, '#7dff9a', 'left', 2);
+    drawTextPlate(ctx, String(run.emeraldsPicked), width - 48, 46, HUD_TEXT.emeralds, 'left', 2);
   } else {
-    drawText(ctx, clock(run.time), width / 2, 16, '#fff', 'center');
+    drawTextPlate(ctx, clock(run.time), width / 2, 16, HUD_TEXT.timer, 'center');
     drawIcon(ctx, 'skull', width - 54, 8);
-    drawText(ctx, String(run.kills), width - 40, 17, '#fff');
+    drawTextPlate(ctx, String(run.kills), width - 40, 17, HUD_TEXT.kills);
     drawIcon(ctx, 'emerald', width - 54, 22);
-    drawText(ctx, String(run.emeraldsPicked), width - 40, 31, '#7dff9a');
+    drawTextPlate(ctx, String(run.emeraldsPicked), width - 40, 31, HUD_TEXT.emeralds);
   }
 
   // Weapon slots (bottom-left) and passive slots above them.
@@ -121,12 +123,12 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
   drawMarkers(view, run, camX, camY);
   if (run.rift.active) {
     const left = Math.max(0, Math.ceil(run.rift.timer));
-    drawText(
+    drawTextPlate(
       ctx,
       `Rift ${Math.floor(left / 60)}:${(left % 60).toString().padStart(2, '0')}`,
       width / 2,
       big ? 36 : 26,
-      '#ff9a3a',
+      HUD_TEXT.rift,
       'center',
     );
   }
@@ -142,24 +144,24 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
     ctx.fillRect(x, by + 1, w, 5);
     ctx.fillStyle = cb('#e04040');
     ctx.fillRect(x, by + 1, Math.max(0, Math.floor((w * boss.hp) / boss.maxHp)), 5);
-    drawText(ctx, boss.def.name, width / 2, by + 16, cb('#ffd0d0'), 'center');
+    drawTextPlate(ctx, boss.def.name, width / 2, by + 16, cb(HUD_TEXT.boss), 'center');
     by += 20;
   }
   for (const b of run.banners) {
     ctx.globalAlpha = Math.min(1, (b.dur - b.t) * 2, b.t * 4 + 0.2);
-    drawText(ctx, b.text, width / 2, by + 8, b.color, 'center');
+    drawTextPlate(ctx, b.text, width / 2, by + 8, b.color, 'center');
     ctx.globalAlpha = 1;
     by += 11;
   }
   if (run.director.goldenUntil > run.time) {
     const sy = big ? 52 : 36;
     drawIcon(ctx, 'star', width - (big ? 62 : 54), sy);
-    drawText(
+    drawTextPlate(
       ctx,
       `${Math.ceil(run.director.goldenUntil - run.time)}s`,
       width - (big ? 48 : 40),
       sy + 9,
-      '#ffd84a',
+      HUD_TEXT.golden,
     );
   }
 
@@ -175,7 +177,7 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
       ctx.fillRect(x + 1, y + 15 - h, 14, h);
       drawText(ctx, String(Math.ceil(run.ability.cd)), x + 8, y + 12, '#fff', 'center');
     } else {
-      drawText(ctx, 'Q', x + 8, y - 3, '#8ee8ff', 'center');
+      drawTextPlate(ctx, 'Q', x + 8, y - 3, HUD_TEXT.abilityKey, 'center');
     }
   }
 
@@ -192,12 +194,13 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
       ctx.fillRect(x + 1, y + 15 - h, 14, h);
       drawText(ctx, String(Math.ceil(run.itemCd)), x + 8, y + 12, '#fff', 'center');
     } else if (def.active) {
-      drawText(ctx, 'SPACE', x + 8, y - 3, '#ffe27a', 'center');
+      drawTextPlate(ctx, 'SPACE', x + 8, y - 3, HUD_TEXT.itemKey, 'center');
     }
   }
 
-  if (p.hp / p.maxHp < 0.3 && !p.dead) {
-    const pulse = 0.35 + 0.15 * Math.sin(run.time * 6);
+  // Low HP: a red edge vignette that stays still with "reduce flashing" and otherwise swells slowly and softly.
+  if (p.hp / p.maxHp < LOW_HP_FRACTION && !p.dead) {
+    const pulse = lowHpVignetteAlpha(run.time, reduceFlash());
     const g = ctx.createRadialGradient(
       width / 2,
       height / 2,
