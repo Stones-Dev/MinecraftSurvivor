@@ -11,8 +11,8 @@ fixed 60 Hz step, with seeded runs (seeds 1000+ for the policy table, 2000+ for 
 table), so results are reproducible.
 
 - **smart**: keeps a weapon-dependent distance (melee weapons close in, ranged ones kite), flees when
-  HP drops below 35%, sidesteps hostile projectiles, avoids creepers, TNT traps, magma and lava, collects
-  gems when safe, uses the equipped item when swarmed, and picks cards by priority
+  HP drops below 35%, sidesteps hostile projectiles, avoids creepers, TNT traps, magma, lava and (v1.4)
+  structure footprints, collects gems when safe, uses the equipped item when swarmed, and picks cards by priority
   (evolution > weapon level > armor/sword tier > passive). It re-plans its direction every 2 steps (30 Hz).
 - **newbie**: reacts late (re-plans every 6 steps, 10 Hz), ignores far gems and picks random cards.
 
@@ -116,6 +116,8 @@ Switches on the head (48 seeds, same four weapons, average of the means; "base" 
   "fresh save" baseline.
 - The bot wanders in a straight line for hundreds of tiles, so a run crosses most biomes; "start biome"
   only matters for the first minute or two.
+- Its steering is "flee along the straight line", with no path-finding: it cannot walk around a wall. Since v1.4 the
+  smart bot therefore keeps clear of structure footprints (see "v1.4 check"); the newbie policy does not.
 
 ## Weapon snapshot (smart bot, cap 20 min)
 
@@ -180,3 +182,46 @@ The hero now takes projectile hits over a vertical capsule (y-4 to y-22) instead
 | crossbow | 10:04 +-0:39 | 7:34 +-0:27 | **8:25 +-0:29** | 8-10 |
 
 Reading: bow, crossbow and the sword starter are inside their bands. The smart policy (6:05) sits at the top edge and the newbie policy (2:57) about 1.4 standard errors under its aim; the newbie bot is a melee-only baseline with no companions, upgrades or abilities, and it measured 3:11-3:19 before the capsule. Neither was tuned further: another 10% off hostile damage would push every strong build above the 10:00 Wither mark and make a human, who can dodge vertically, find the game too easy. Plan B (not applied): Steve at 110 HP. The bot cannot judge feel, so re-check with real play before changing numbers again.
+
+## v1.4 check (world structures vs the simulator, 2026-10-13)
+
+The first v1.4 run (24 seeds) showed the smart bot well under its v1.3 numbers (newbie 2:43, smart 4:38, sword 4:25, bow 5:51, crossbow 6:58 against 2:57, 6:05, 5:25, 8:16, 8:25). All measurements below are A/B on the same seeds in throwaway worktrees (v1.3 = `f1d0711`, v1.4 = `96dba77`), `BAL_RUNS`-style cells driven by a scratch script; medians with +-1 standard error.
+
+**The cause is the bot meeting the structures, not a game-side regression.** The only v1.4 code that matters to the simulator is the world structures (villages, temples, trial chamber, outposts, witch hut). Evidence:
+
+| Experiment (smart bot, bow, seeds 6000-6047) | Median | Mean |
+|---|---|---|
+| v1.3 | 10:04 +-0:27 | 8:49 |
+| v1.4 as it was | 5:20 +-0:32 | 5:21 |
+| v1.4 with `World.structures = null` | 10:04 +-0:27 | 8:49 (bit-identical to v1.3 on every seed) |
+| v1.4 with the structure subsystem on but no structure placed | identical to v1.3 on every seed | |
+| v1.4, structures on, structure enemies never spawn | 5:45 +-0:34 | 5:52 |
+
+So the manual aim (default auto), the End, `spawnCount`, `collideSwept` and every other v1.4 change are neutral for the bot (no hidden RNG draws either); the loss comes from structures standing in the world, mostly their walls. Chasing the commit history gives the same picture (smart sword, 96 seeds, and bow, 48 seeds): v1.3 5:00 / 10:04, `00da40f` (aim + structure framework + village + desert temple) 4:32 / 6:00, `381c93f` (golem, NPCs) 4:41 / 6:13, part 2 (`e39c581`) 4:41 (bow not run), HEAD 4:41 / 5:20. The drop comes with the first structures and the later ones add little. Newbie, 96 seeds: 3:04 +-0:08 (v1.3) against 2:56 +-0:08 (v1.4): noise, the 24-seed difference was mostly sampling error. Sword smart, 96 seeds: 5:00 +-0:18 against 4:41 +-0:16: also inside the noise. The ranged builds are where it shows because they kite.
+
+What the bot does wrong, from tracing the worst seeds:
+1. **It pins itself against walls.** Its only movement rule is "step away from the enemies along the straight line". With a house wall ahead and a zombie pack behind it stands still against the wall (seed 6003, bow: the hero stands on the same spot for six seconds in a village street, level 1, dead at 0:39). Its random wander walks it straight into villages: 20 of 48 bow runs (42%) ended within six tiles of a structure.
+2. **It walks into hostile structures.** The melee policy "closes in on the nearest enemy", and a sleeping guard counts; the bow's auto-aim (230 px) wakes a whole outpost. In 13 of 24 smart sword runs (seeds 1000-1023) woken pillager-outpost or witch-hut foes fought the hero (up to 7 at once; structure enemies sit on top of the soft cap of 64), and 4 of those runs died in the fight (seeds 1009, 1013, 1017, 1022).
+3. The game itself is fine: the hero slides along walls (`Player.update` drops the velocity component into the wall), the doors are walkable, a human chooses whether to enter. Nothing was changed in `src/`.
+
+**Fix (bot only, `tools/balance/bot.ts`, smart policy only, newbie unchanged):** structures are terrain to stay clear of, like lava. `structureRepulsion` adds, to the steering vector, a push away from every footprint within a berth (110 px around villages, temples and the trial chamber; 420 px around outposts and witch huts, whose guards wake at 130-200 px or when an arrow hits them; magnitude 3 at the wall, linear to 0 at the berth's edge), and a sleeping guard (`structureFoe(e).guard && !aggro`) is not "the nearest enemy" to close in on. Chased heroes still get pushed through by the enemies' flee force, so the bot is not made invulnerable: with the fix 1 of 48 bow runs ends within six tiles of a structure (was 20) and in 24 bow runs not one fight with woken structure enemies happened. The berths were not tuned further: in ghost runs (below) 60/30, 200/40, 260/50 and 420/110 px gave the same bow result inside the noise.
+
+**Final 48-seed run** (`BAL_RUNS=48 BAL_WEAPONS=sword,bow,crossbow npm run balance`, seeds 1000+ for the policies, 2000+ for the weapons; the same run is in `docs/BALANCE_RESULTS.md`):
+
+| Cell | v1.3 (docs) | v1.4 before the fix | **v1.4 after the fix** | Target |
+|---|---|---|---|---|
+| newbie policy | 2:57 +-0:13 | 2:41 +-0:10 | **2:41 +-0:10** | >= 3:15 (see below) |
+| smart policy, sword | 6:05 +-0:28 | 4:13 +-0:23 | **5:04 +-0:22** | 4-6 |
+| sword starter | 5:25 +-0:24 | 4:57 +-0:23 | **5:03 +-0:27** | 4-6 |
+| bow | 8:16 +-0:29 | 5:28 +-0:41 | **7:03 +-0:36** | 8-10 |
+| crossbow | 8:25 +-0:29 | 7:10 +-0:34 | **7:20 +-0:41** | 8-10 |
+
+Larger samples (smart, same seeds for both columns, medians / means): bow 144 seeds (6000-6143) v1.3 8:22 +-0:17 / 8:13, fixed v1.4 7:01 +-0:17 / 7:30; crossbow 96 seeds (7000-7095) v1.3 8:19 +-0:29 / 8:50, fixed v1.4 7:34 +-0:26 / 8:02. A control that only perturbs v1.3 (one extra random draw in the bot) gives bow 8:03 +-0:19 / 7:49 on the same 144 seeds, and a "ghost" run (no structures in the world, the bot still avoids their invisible footprints) 7:45 / 7:40: most of what remains is the bimodal bow distribution (about a quarter of the runs end just after the 10:00 Wither mark) and the cost of the detours themselves, not the walls.
+
+Reading. The smart policy, the sword starter and the crossbow are back inside the noise of v1.3 and (sword) inside their bands. The bow (7:03, 1.4 standard errors under the 8:00 edge) and the crossbow (7:20) remain about 45-60 s under the v1.3 medians: on the larger samples the means differ by 0:43 (bow) and 0:48 (crossbow), roughly two standard errors, and that residual is not in the game's numbers (see the ghost run) but in the extra distance a bot that detours around villages and outposts walks. It is not worth re-tuning hostile damage for: v1.3 itself measured 7:42 to 10:04 for the bow depending on the seed set. The newbie policy (2:41, v1.3 2:57, 3:04 on 96 seeds) was already under the 3:15 aim before v1.4 and is unchanged by the fix; it has no structure avoidance on purpose (a first-time player walks into villages and outposts), the 16-second difference to v1.3 is inside the noise.
+
+Residual risks.
+- Structures are genuinely extra difficulty for a human who walks into an outpost: 4-6 pillagers and a captain, all outside the soft cap, and a woken outpost's guards despawn only when the hero is 1000 px from it. The simulator no longer measures it (the bot stays out); the trial chamber was measured separately with a scripted hero (73-95% HP left, see DECISIONS.md).
+- Structures also give the player things the bot never takes (chests, the golem, half-price services, Hero of the Village), so real runs are easier than the simulator suggests, as before for the other chests.
+- The 420 px berth around outposts and witch huts keeps the bot out of a large share of the biomes that host them; that is a simulator property, not a statement about the game.
+- Re-check with real play before moving any number: the bot cannot judge feel.

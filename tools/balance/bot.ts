@@ -11,6 +11,10 @@ import type { InputSource } from '../../src/core/input';
 import { Rng } from '../../src/core/rng';
 import { RunState } from '../../src/game';
 import { applyCard, type Card, finishOffer } from '../../src/systems/levelup';
+import { structureFoe } from '../../src/systems/structureEnemies';
+import { structuresInRect } from '../../src/world/structures';
+import type { StructureId } from '../../src/world/structures/stamp';
+import { TILE_PX } from '../../src/world/terrain';
 import { resolveItemChoice, useItem } from '../../src/systems/items';
 import { newWeapon } from '../../src/weapons';
 import type { WeaponId } from '../../src/weapons/types';
@@ -86,6 +90,60 @@ function lavaRepulsion(run: RunState): { x: number; y: number } {
   return { x: hx, y: hy };
 }
 
+/**
+ * Structures (v1.4, world/structures.ts) are terrain the smart bot stays clear of, like lava. A human chooses
+ * whether to enter a village, a temple, a trial hall, a pillager outpost or a witch hut; the bot cannot judge
+ * that. Its steering is "flee along the straight line away from the enemies", which pins it against the new solid
+ * walls (a zombie pack behind it, a house wall in front: it stands still and dies) and walks it into the
+ * outpost's guards and the trial's sealed hall. Measured (docs/BALANCE.md, "v1.4 check"): without this the
+ * bow median fell by about 4 minutes and 40% of the runs ended within six tiles of a structure.
+ *
+ * `STRUCTURE_KEEP_OUT` is the berth (art px) around the footprint: narrow for plain walls and traps, wide where
+ * hostile guards wait (a sleeping guard wakes when the hero is within 130-200 px or when anything hurts it, and
+ * the bow's auto-aim reaches 230 px, so the bot stays out of arrow range of the yard).
+ */
+const STRUCTURE_KEEP_OUT: Record<StructureId, number> = {
+  village: 110,
+  desert_temple: 110,
+  jungle_temple: 110,
+  trial_chamber: 110,
+  pillager_outpost: 420,
+  witch_hut: 420,
+};
+const STRUCTURE_REACH = 420;
+
+/** Push away from nearby structure footprints (zero when there is none); magnitude 3 at the wall, falling to 0 at the berth's edge. */
+function structureRepulsion(run: RunState): { x: number; y: number } {
+  const p = run.player;
+  let hx = 0;
+  let hy = 0;
+  for (const st of structuresInRect(
+    run.world,
+    p.x - STRUCTURE_REACH,
+    p.y - STRUCTURE_REACH,
+    p.x + STRUCTURE_REACH,
+    p.y + STRUCTURE_REACH,
+  )) {
+    const keep = STRUCTURE_KEEP_OUT[st.def.id];
+    const qx = Math.max(st.tx * TILE_PX, Math.min(p.x, (st.tx + st.width) * TILE_PX));
+    const qy = Math.max(st.ty * TILE_PX, Math.min(p.y, (st.ty + st.height) * TILE_PX));
+    let dx = p.x - qx;
+    let dy = p.y - qy;
+    let d = Math.hypot(dx, dy);
+    if (d >= keep) continue;
+    if (d < 0.01) {
+      // Inside the footprint (chased in, or pushed): out through the nearest side is unknowable here; leave from the middle.
+      dx = p.x - st.cx;
+      dy = p.y - st.cy;
+      d = Math.hypot(dx, dy) || 1;
+    }
+    const w = 3 * (1 - Math.min(d, keep) / keep);
+    hx += (dx / d) * w;
+    hy += (dy / d) * w;
+  }
+  return { x: hx, y: hy };
+}
+
 function steer(run: RunState, bot: BotInput, policy: Policy, wander: number, melee: boolean): void {
   const p = run.player;
   const hpFrac = p.hp / Math.max(1, p.maxHp);
@@ -100,7 +158,9 @@ function steer(run: RunState, bot: BotInput, policy: Policy, wander: number, mel
     const dx = p.x - e.x;
     const dy = p.y - e.y;
     const d2 = dx * dx + dy * dy;
-    if (d2 < nd) {
+    // A sleeping structure guard (outpost, witch hut) is not prey: a player does not walk into the yard to wake it.
+    const guard = structureFoe(e);
+    if (d2 < nd && !(policy === 'smart' && guard?.guard && !guard.aggro)) {
       nd = d2;
       nearest = e;
     }
@@ -166,10 +226,13 @@ function steer(run: RunState, bot: BotInput, policy: Policy, wander: number, mel
   if (policy === 'smart') {
     // Lava burns for as long as the hero stands in it; the v1.1 biomes (badlands, desert) are full of it.
     const lava = lavaRepulsion(run);
-    if (lava.x !== 0 || lava.y !== 0) {
+    const walls = structureRepulsion(run);
+    const rx = lava.x + walls.x;
+    const ry = lava.y + walls.y;
+    if (rx !== 0 || ry !== 0) {
       const l0 = Math.hypot(fx, fy) || 1;
-      fx = fx / l0 + lava.x;
-      fy = fy / l0 + lava.y;
+      fx = fx / l0 + rx;
+      fy = fy / l0 + ry;
     }
   }
   const l = Math.hypot(fx, fy);
