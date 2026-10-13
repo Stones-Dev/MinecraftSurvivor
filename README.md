@@ -6,7 +6,7 @@ A browser bullet-heaven (horde survival) with a blocky, Minecraft-inspired look,
 
 > Non-commercial fan project. Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB. See [CREDITS.md](CREDITS.md).
 
-Status: version 1.1.0 in the game's About screen, plus the v1.3 audit work and the v1.4 content (structures, the End, manual aim) on a work branch; none of it has been signed off by the owner or merged to `main` yet (see `docs/CHECKPOINTS.md`, Checkpoints 6 and 7).
+Status: version 1.4.0 in the game's About screen, plus the v1.3 audit work and the v1.4 content (structures, the End, manual aim) on a work branch; none of it has been signed off by the owner or merged to `main` yet (see `docs/CHECKPOINTS.md`, Checkpoints 6 and 7).
 
 ## Features
 
