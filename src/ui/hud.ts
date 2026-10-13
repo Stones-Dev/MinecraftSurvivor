@@ -11,7 +11,7 @@ import { structureStatusTags } from '../systems/structureInteract';
 import { END_ISLAND_PX, dragonStatus } from '../systems/endDimension';
 import { actionPrompt } from './inputLabels';
 import { drawIcon } from './icons';
-import { drawText, drawTextPlate, textWidth } from './panel';
+import { drawText, drawTextPlate, fitText, textWidth } from './panel';
 import { HUD_TEXT, LOW_HP_FRACTION, lowHpVignetteAlpha } from './hudModel';
 
 function clock(sec: number): string {
@@ -33,6 +33,36 @@ function slot(
   ctx.fillRect(x + 1, y + 1, 14, 14);
   drawIcon(ctx, icon, x + 2, y + 2);
   drawText(ctx, String(level), x + 15, y + 15, '#ffe27a', 'right');
+}
+
+/** Gap between two status tags, and the room the kill / emerald counters keep on the right. */
+const TAG_GAP = 6;
+const COUNTER_ROOM = 58;
+/** Baselines of the first tag row (beside the hearts) and of the overflow row under it. */
+const TAG_ROW_Y = [28, 40] as const;
+
+/**
+ * Where status tags (Bad Omen, Hero, Regen after Hunger / Slow) go. They run left to right from `startX`; a
+ * tag that would reach `maxX` starts a second row at x = 4 instead, so a long combination never runs into
+ * the counters or off a 320 px wide screen (pure, tested). A tag wider than a whole row is cut by the caller.
+ */
+export function layoutStatusTags(
+  widths: readonly number[],
+  startX: number,
+  maxX: number,
+): { x: number; row: 0 | 1 }[] {
+  const out: { x: number; row: 0 | 1 }[] = [];
+  let x = startX;
+  let row: 0 | 1 = 0;
+  for (const w of widths) {
+    if (row === 0 && x > startX && x + w > maxX) {
+      row = 1;
+      x = 4;
+    }
+    out.push({ x, row });
+    x += w + TAG_GAP;
+  }
+  return out;
 }
 
 /** Canvas HUD: hearts, XP bar, timer, counters, weapon and passive slots, low-HP vignette. */
@@ -100,12 +130,18 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
   if (p.slowT > 0)
     drawTextPlate(ctx, 'Slow', statusX + (p.hungerT > 0 ? 40 : 0), 28, HUD_TEXT.slow);
   // Structure effects after them: Bad Omen, Hero of the Village, a cauldron's Regeneration (with seconds left).
-  let tagX = statusX + (p.hungerT > 0 ? 40 : 0) + (p.slowT > 0 ? 32 : 0);
-  for (const t of structureStatusTags(run)) {
-    const label = `${t.text} ${clock(t.left)}`;
-    drawTextPlate(ctx, label, tagX, 28, t.color);
-    tagX += textWidth(label) + 6;
-  }
+  const tagX = statusX + (p.hungerT > 0 ? 40 : 0) + (p.slowT > 0 ? 32 : 0);
+  const tags = structureStatusTags(run).map((t) => ({ ...t, label: `${t.text} ${clock(t.left)}` }));
+  const tagMax = width - COUNTER_ROOM;
+  const spots = layoutStatusTags(
+    tags.map((t) => textWidth(t.label)),
+    tagX,
+    tagMax,
+  );
+  tags.forEach((t, i) => {
+    const at = spots[i];
+    if (at) drawTextPlate(ctx, fitText(t.label, tagMax - at.x), at.x, TAG_ROW_Y[at.row], t.color);
+  });
 
   // Accessibility text scale 2: the timer and the counters are drawn double size (menus stay 1x).
   const big = textScale() === 2;
@@ -159,13 +195,13 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
     if (boss.def.boss === 'dragon') {
       // Crystals left and what hurts it right now (melee only when it is down, ranged only in the air).
       const st = dragonStatus(run.end);
-      drawTextPlate(ctx, st.text, width / 2, by + 6, cb(st.color), 'center');
+      drawTextPlate(ctx, fitText(st.text, width - 12), width / 2, by + 6, cb(st.color), 'center');
       by += 11;
     }
   }
   for (const b of run.banners) {
     ctx.globalAlpha = Math.min(1, (b.dur - b.t) * 2, b.t * 4 + 0.2);
-    drawTextPlate(ctx, b.text, width / 2, by + 8, b.color, 'center');
+    drawTextPlate(ctx, fitText(b.text, width - 12), width / 2, by + 8, b.color, 'center');
     ctx.globalAlpha = 1;
     by += 11;
   }

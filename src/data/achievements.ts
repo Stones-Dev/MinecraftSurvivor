@@ -351,7 +351,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     'exploration',
     'crown',
     'Village Defender',
-    'Repel a village raid, called by Bad Omen from an Outpost Captain, to earn the Hero buff.',
+    'Repel a village raid and earn the Hero buff.',
     1,
     (c) => cnt(c.save, 'struct.hero'),
     { emeralds: 250, rareSpawnEggs: 1 },

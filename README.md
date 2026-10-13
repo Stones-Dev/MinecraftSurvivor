@@ -6,7 +6,7 @@ A browser bullet-heaven (horde survival) with a blocky, Minecraft-inspired look,
 
 > Non-commercial fan project. Not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB. See [CREDITS.md](CREDITS.md).
 
-Status: version 1.1.0 (in the game's About screen). v1.1 is on a work branch; it has not been signed off by the owner and is not merged to `main` yet (see `docs/CHECKPOINTS.md`, Checkpoint 6).
+Status: version 1.1.0 in the game's About screen, plus the v1.3 audit work and the v1.4 content (structures, the End, manual aim) on a work branch; none of it has been signed off by the owner or merged to `main` yet (see `docs/CHECKPOINTS.md`, Checkpoints 6 and 7).
 
 ## Features
 
@@ -16,9 +16,12 @@ Status: version 1.1.0 (in the game's About screen). v1.1 is on a work branch; it
 - **Runs:** 14 weapons with evolutions, 24 passives, visible armor and sword tiers, items, interactables, events (raids, thunderstorms, Golden Hour, trader, lost villager), the Nether rift, three bosses (5:00 / 10:00 / 15:00) and Endless mode after the Warden. The Warden also opens a permanent End portal: the optional final fight against the Ender Dragon (v1.4).
 - **Meta:** daily and weekly missions, achievements, a 7-day daily reward, run statistics and a detailed results screen, profile and ranking screens.
 - **Accounts (optional):** guest, local profile, or a Firebase account (Google or email) with cloud save and global leaderboards. Without Firebase everything works locally.
-- **Minimap (M)** with fog of war, biome colours and markers.
+- **Minimap (M)** with fog of war, biome colours, markers (portals, trader, rescue flag, the End portal) and structure icons for the places you have explored.
 - **Input:** keyboard, touch (floating joystick plus ability, item and pause buttons) and gamepad, all usable in menus too.
 - **Accessibility:** colour-blind cue palettes (protanopia, deuteranopia, tritanopia), reduce-flash mode, text size 2x for the in-run HUD and account dialogs, camera look-ahead toggle, touch controls auto/on/off, remappable keys.
+- **World structures (v1.4).** Six stamps laid over the terrain at deterministic sites: **Villages** (houses, a chest, crops, a Blacksmith / Librarian / Cleric and an Iron Golem), **Desert Temples** (a TNT pressure-plate trap and four chests), **Jungle Temples** (tripwire arrows, a three-lever puzzle, a Crossbow or Trident chest), **Trial Chambers** (a sealed-room wave, the Trial Key and a Vault), **Pillager Outposts** (a Captain whose death brings Bad Omen, a cage with a captive bird; Bad Omen in a village starts a three-wave **raid**, and winning it gives the Hero of the Village effect and a legendary chest) and **Witch Huts** (a cauldron potion and a Black Cat that calms creepers). Explored structures show as shaped icons on the minimap.
+- **The End (v1.4, optional).** Killing the Warden at 15:00 still wins the run and also opens a permanent End portal. Behind it: a floating end-stone island with six obsidian pillars carrying healing End Crystals, a deadly void rim and the **Ender Dragon** (three phases: dives along telegraphed lanes, Dragon's Breath fireballs, a perched phase with a tail sweep). Killing it drops the Dragon Egg and an exit portal, which is the **final victory**. The End, the dragon and the structures are drawn by the game code (provisional art).
+- **Manual aim (v1.4, optional).** Settings > Controls > Aim: *Auto* (the default, unchanged) or *Manual*, where the mouse, the gamepad right stick or a touch aim stick point the directional weapons and the melee swings, with a small reticle.
 - **Pixel-perfect text and movement:** a 1-bit glyph atlas of the Tiny5 font, render interpolation, acceleration/braking and an integer-snapped camera.
 
 ## Play
@@ -38,15 +41,15 @@ npm run dev        # http://localhost:5173
 | M | Toggle the minimap (tapping or clicking the map does the same) |
 | Esc / P | Pause |
 | F3 | Debug overlay |
-| Mouse | Menus, aimed abilities and items |
-| Gamepad (standard mapping) | Left stick / d-pad move, A item, X or RB ability, Start pause, B back |
-| Touch | Floating joystick on the left, ability / item / pause buttons |
+| Mouse | Menus, aimed abilities and items; with Aim: Manual also aims the weapons |
+| Gamepad (standard mapping) | Left stick / d-pad move, right stick aims (Aim: Manual), A item, X or RB ability, Start pause, B back |
+| Touch | Floating joystick on the left, ability / item / pause buttons, an aim stick on the right with Aim: Manual |
 
-Menus work without a mouse: arrows or d-pad move the focus ring, Enter or A presses, Q / E or LB / RB switch tabs, Esc or B goes back. All weapons fire automatically. Movement, pause, item and ability keys can be remapped in Settings.
+Menus work without a mouse: arrows or d-pad move the focus ring, Enter or A presses, Q / E or LB / RB switch tabs, Esc or B goes back. All weapons fire automatically (with Aim: Manual they still fire on their own, but along your aim). Movement, pause, item and ability keys can be remapped in Settings.
 
 ## A run in one paragraph
 
-Survive 15 minutes and defeat the Warden to win, or keep going in Endless. Collect XP gems, pick a card on every level-up (weapons, enchantments, armor and sword tiers, evolutions), use your hero's ability, fight bosses at 5:00 / 10:00 / 15:00, enter Nether rifts, trade with wanderers and rescue villagers. Runs pay Emeralds and Spawn Eggs: spend Emeralds on permanent upgrades and Eggs at the Spawner to collect heroes, pets and allies. In the run setup you can pick the biome you start in.
+Survive 15 minutes and defeat the Warden to win, or keep going in Endless, or step into the End portal the Warden leaves behind to fight the Ender Dragon for the final victory. Collect XP gems, pick a card on every level-up (weapons, enchantments, armor and sword tiers, evolutions), use your hero's ability, fight bosses at 5:00 / 10:00 / 15:00, enter Nether rifts, explore villages and temples, trade with wanderers and rescue villagers. Runs pay Emeralds and Spawn Eggs: spend Emeralds on permanent upgrades and Eggs at the Spawner to collect heroes, pets and allies. In the run setup you can pick the biome you start in.
 
 ## Scripts
 
@@ -79,7 +82,7 @@ Most of these only work together with `debug`, and debug runs never touch the sa
 
 ```
 src/core       loop, rng, input (keyboard, gamepad, touch, merged), canvas, camera, atlas, audio, music, save (versioned SaveStore), settings, accessibility
-src/world      spatial biome map, biomes, noise terrain, 16x16 block textures (blocks), per-tile painting, props and prop sprites, chunks, collision
+src/world      spatial biome map, biomes, noise terrain, 16x16 block textures (blocks), per-tile painting, props and prop sprites, chunks, collision, structures (stamps, placement, `structures/`), the End's tiles
 src/entities   player, enemy, projectile, pickup, ally, fx
 src/data       enemies, rosters (per-biome spawn pools), upgrades, tiers, items, companions (heroes, pets, allies), heroKits, meta upgrades, missions, achievements, music
 src/systems    combat, AI, spawner, director, bosses, rift, npcs, gacha, allies, meta, missions, achievements, run stats, economy

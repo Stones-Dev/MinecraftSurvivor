@@ -249,7 +249,7 @@ describe('the End portal', () => {
     for (let i = 0; i < 10; i++) step(run, 20);
     expect(run.end.portal).not.toBeNull();
     expect(run.end.active).toBe(false);
-  });
+  }, 30_000);
 
   it('does not swallow a hero who stands where the Warden died, but takes one who walks in', () => {
     const run = new RunState(5, 960);

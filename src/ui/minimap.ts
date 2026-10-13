@@ -340,6 +340,8 @@ export class Minimap {
   private dirty = true;
   /** Structures in explored cells near the hero, rebuilt with the window. */
   private pois: PoiMarker[] = [];
+  /** The structure list is stale: rebuild it on the next frame that does not repaint the window. */
+  private poisDue = false;
   /** Where the map or chip was drawn last frame (for taps). */
   private slot: MapSlot = { map: null, chip: null };
 
@@ -414,13 +416,16 @@ export class Minimap {
         this.buf,
       );
       this.g.putImageData(this.img, 0, 0);
+      this.dirty = false;
+      this.poisDue = true; // the structure query runs next frame, so the two costs never share one
+    } else if (this.poisDue) {
+      this.poisDue = false;
       this.pois = discoveredPois(
         run.world,
         this.explored,
         (this.lastCx + 0.5) * CELL_PX,
         (this.lastCy + 0.5) * CELL_PX,
       );
-      this.dirty = false;
     }
     // Frame and map.
     ctx.fillStyle = '#101014';

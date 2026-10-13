@@ -1,13 +1,14 @@
 /** About / credits / legal (BRIEF sections 3.5 and 5). */
 import type { App } from '../app';
-import { drawPanel, drawText, wrap } from './panel';
+import { drawPanel, drawText, wrap, wrapText } from './panel';
+import { textWidth } from './font';
 import type { Screen } from './router';
 import { keyToNav, type NavEvent } from './hubModel';
 import { Buttons, PadNav, drawTitle } from './widgets';
 
-export const GAME_VERSION = '1.1.0';
+export const GAME_VERSION = '1.4.0';
 
-interface Section {
+export interface Section {
   head: string;
   body: string;
 }
@@ -44,7 +45,7 @@ export const SPRITE_CREDITS: { name: string; url: string }[] = [
   },
 ];
 
-const GENERAL: Section[] = [
+export const GENERAL: Section[] = [
   {
     head: 'MineSurvive',
     body: `Version ${GAME_VERSION}. A browser bullet-heaven in a blocky world: survive the night, gear up, collect every mob.`,
@@ -62,10 +63,46 @@ const GENERAL: Section[] = [
     body: 'All music and sound effects are generated live with the Web Audio API. No audio files.',
   },
   {
+    head: 'Art',
+    body: 'Terrain, blocks, props, icons, the End, the Ender Dragon and the world structures are drawn by the game code. No AI-generated art is included.',
+  },
+  {
     head: 'Legal',
     body: 'Non-commercial fan project. Not affiliated with, endorsed or sponsored by Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.',
   },
 ];
+
+/** Height of the section list's first row below the panel top, and the room left at the bottom. */
+const TOP = 12;
+const BOTTOM = 4;
+
+/**
+ * Split the credits sections over as many pages as the panel height needs (pure; a section is never split,
+ * and every page holds at least one). A 320x180 view has room for about four sections, taller views fit more.
+ */
+export function paginateSections(
+  sections: readonly Section[],
+  boxW: number,
+  boxH: number,
+  measure: (s: string) => number = (t) => textWidth(t),
+): Section[][] {
+  const pages: Section[][] = [];
+  let cur: Section[] = [];
+  let y = TOP;
+  for (const s of sections) {
+    const rows = 1 + wrapText(s.body, boxW - 16, measure).length;
+    const h = rows * 9;
+    if (cur.length > 0 && y + h > boxH - BOTTOM) {
+      pages.push(cur);
+      cur = [];
+      y = TOP;
+    }
+    cur.push(s);
+    y += h + 4;
+  }
+  if (cur.length > 0) pages.push(cur);
+  return pages;
+}
 
 export function aboutScreen(_app: App, onBack: () => void): Screen {
   const buttons = new Buttons();
@@ -73,7 +110,10 @@ export function aboutScreen(_app: App, onBack: () => void): Screen {
   let page = 0;
   const ENTRY_H = 18;
   const perPage = (boxH: number): number => Math.max(3, Math.floor((boxH - 36) / ENTRY_H));
-  const pageCount = (boxH: number): number => 1 + Math.ceil(SPRITE_CREDITS.length / perPage(boxH));
+  const generalPages = (box: { w: number; h: number }): Section[][] =>
+    paginateSections(GENERAL, box.w, box.h);
+  const pageCount = (box: { w: number; h: number }): number =>
+    generalPages(box).length + Math.ceil(SPRITE_CREDITS.length / perPage(box.h));
   /** Keyboard and pad: left / right (or Q / E) turn pages, OK presses the focused button or turns the page. */
   const navigate = (ev: NavEvent): void => {
     if (ev === 'back') return onBack();
@@ -89,17 +129,20 @@ export function aboutScreen(_app: App, onBack: () => void): Screen {
     render(view) {
       const { ctx, width, height } = view;
       const box = { x: 12, y: 30, w: width - 24, h: height - 58 };
-      const pages = pageCount(box.h);
+      const general = generalPages(box);
+      const pages = pageCount(box);
       page = Math.min(page, pages - 1);
       drawTitle(
         view,
         'ABOUT',
-        page === 0 ? `Credits and legal  (1/${pages})` : `Sprite credits  (${page + 1}/${pages})`,
+        page < general.length
+          ? `Credits and legal  (${page + 1}/${pages})`
+          : `Sprite credits  (${page + 1}/${pages})`,
       );
       drawPanel(ctx, box);
-      let y = box.y + 12;
-      if (page === 0) {
-        for (const s of GENERAL) {
+      let y = box.y + TOP;
+      if (page < general.length) {
+        for (const s of general[page] ?? []) {
           drawText(ctx, s.head, box.x + 8, y, '#ffd84a');
           y += 9;
           for (const line of wrap(ctx, s.body, box.w - 16)) {
@@ -122,7 +165,8 @@ export function aboutScreen(_app: App, onBack: () => void): Screen {
         }
         y += 3;
         const n = perPage(box.h);
-        for (const c of SPRITE_CREDITS.slice((page - 1) * n, page * n)) {
+        const k = page - general.length;
+        for (const c of SPRITE_CREDITS.slice(k * n, (k + 1) * n)) {
           drawText(ctx, c.name, box.x + 8, y, '#ffffff');
           y += 8;
           drawText(ctx, c.url, box.x + 8, y, '#7de8e8');

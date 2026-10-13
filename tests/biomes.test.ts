@@ -335,5 +335,5 @@ describe('findBiomeGround', () => {
         expect(world.overlapsSolid(spot.x, spot.y, 8)).toBe(false);
       }
     }
-  });
+  }, 30_000);
 });

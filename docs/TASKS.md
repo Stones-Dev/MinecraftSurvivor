@@ -164,3 +164,37 @@ Deferred
 - [ ] P6-29 — Hot-path allocation pooling (`Fx` objects, `collide()` results)
 - [ ] P6-30 — Generated or hand-drawn art for the new heroes (needs walk/attack/hurt/death frames and a pixel-art cleanup; the single generated still was not shipped)
 - [ ] P6-31 — Refresh `docs/BALANCE.md` and re-tune toward the 10:00 Wither target (the last simulator run reaches few bosses) and the newbie median (2:51, below the 4-6 minute target)
+
+## Phase 7 — v1.4 (structures, the End, manual aim; details in `docs/DECISIONS.md`, evidence in Checkpoint 7)
+
+Input
+- [x] P7-01 — Optional manual aim: `settings.aim` (auto / manual), mouse, right stick and touch aim stick, reticle, 1.5 s fall-back to auto-aim (`core/aim.ts`, no save version bump)
+
+World structures
+- [x] P7-02 — Structure framework: stamps, deterministic placement, walls as collision, pathing around walls, overlay painting, `poiMarkers`, `?struct=` debug start
+- [x] P7-03 — Village (services, crops, chest, Iron Golem) and Desert Temple (TNT plate trap, four chests)
+- [x] P7-04 — Jungle Temple (tripwires, lever puzzle, ranged-weapon chest), Trial Chamber (sealed wave, key, Vault), Pillager Outpost (Captain, cage, Bad Omen), Witch Hut (cauldron, Black Cat)
+- [x] P7-05 — Village raid (three waves) and the Hero of the Village effect with its legendary chest; HUD tags Bad Omen / Hero / Regen
+- [x] P7-06 — Structure stats, 4 achievements (Jungle Raider, Trial Passed, Village Defender, Witch's Brew) and the daily mission "Open 3 structure chests"
+- [x] P7-07 — Minimap icons for explored structures (shaped, colour-blind-safe), the End portal marker; the raid achievement renamed to Village Defender (unique achievement names are tested)
+
+The End
+- [x] P7-08 — Warden opens a permanent End portal (the win is unchanged); the End dimension, void rule and Totem exception
+- [x] P7-09 — Ender Dragon (three phases), End Crystals, Dragon Egg, exit portal, final victory scroll and `THE END` Results; `?end`, `?endportal`, `?dragon=` debug starts
+- [x] P7-10 — Dragon Slayer and The End? achievements, weekly mission "Defeat the Ender Dragon", `end` music theme, procedural (code-drawn) art for the End
+
+Docs
+- [x] P7-11 — README, GDD, CHECKPOINTS (Checkpoint 7), TASKS, CREDITS (code-drawn End and structure art, nothing AI-generated), About screen "Art" entry and pagination
+- [ ] P7-12 — Per-biome FPS table for v1.4 (lead's measurement, Checkpoint 7)
+- [ ] P7-13 — ⛔ Owner sign-off of v1.4, version bump (`GAME_VERSION`), merge to `main`
+
+Not verified yet (carried from Checkpoint 7)
+- [ ] P7-14 — Listen to the End theme and the new sound cues; play the dragon fight and the Trial Chamber wave as a human; play a full 15-minute run into the End and the final victory
+- [ ] P7-15 — Real gamepad and touch with manual aim and the structure interactions
+- [ ] P7-16 — Fix or accept the known risks: damage over time bypassing the dragon's immunity, the untuned 2.5x HP multiplier, the Trial wave for humans, the Witch Hut not visibly on stilts
+
+Deferred
+- [ ] P7-17 — Online co-op (still the next milestone, not started)
+- [ ] P7-18 — Baby Dragon pet (needs atlas art; the egg pays 1000 Emeralds meanwhile)
+- [ ] P7-19 — Firebase App Check and a Content-Security-Policy (carried from P6-27 / P6-28)
+- [ ] P7-20 — Hand-drawn art to replace the provisional code-drawn End and structure art

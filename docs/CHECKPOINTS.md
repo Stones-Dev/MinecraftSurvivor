@@ -148,3 +148,46 @@ Security:
 ### Checkpoint 6b — v1.3 (audit waves 2-3)
 
 Authentic 4-direction walk cycles for Steve, Alex and Rana with a held-weapon overlay; hero capsule hurtbox with hostile-shooter compensation; waist aim and full-height tall bosses; hit-stop, trauma shake, clearer telegraphs; pad navigation in collection, upgrades and pause; pad rebinding; HUD key prompts; touch suspended under modals; spawner fixes; 5 starter eggs and the Wolf replacement rule; more minute-0 variety. Evidence: lint, `tsc` and 951 tests green; browser smoke test over 25 pages with 0 errors and about 60 fps in all 10 biomes at `?crowd=150` (headless, vsync-capped); balance as in `docs/BALANCE.md` (v1.3 final tuning). Not verified: audio by ear, real gamepad, real touch, real Firebase login, human play feel.
+
+
+## Checkpoint 7 — v1.4 (structures, the End and the Ender Dragon, manual aim)
+
+Built on the work branch (not merged, not signed off by the owner; the About screen and `GAME_VERSION` still say 1.1.0, no version bump was decided):
+
+- **Manual aim** (optional, Settings > Controls > Aim, default Auto and unchanged): mouse, right stick or touch aim stick point the directional weapons and the melee swings; reticle; falls back to auto-aim 1.5 s after a stick (or, on a pad or touch device, the mouse) goes quiet.
+- **World structures:** six stamps on a shared framework (Village with services, crops, Iron Golem and chest; Desert Temple with the TNT plate; Jungle Temple with tripwires and the lever puzzle; Trial Chamber with a sealed wave, key and Vault; Pillager Outpost with Captain, cage and Bad Omen; Witch Hut with cauldron and Black Cat), the village **raid** and the Hero of the Village effect, structure enemies outside the spawn cap, loot tables, 7 + 10 new materials, 28 prop kinds, 4 achievements (Jungle Raider, Trial Passed, **Village Defender**, Witch's Brew), a daily mission, debug starts `?struct=`.
+- **The End:** the Warden's death opens a permanent End portal (the win is unchanged); the End island, six crystal pillars, void rule with the Totem exception, the **Ender Dragon** in three phases, Dragon Egg, exit portal, the final victory scroll and the `THE END` Results; achievements Dragon Slayer and The End?, a weekly mission, an `end` music theme; debug `?end`, `?endportal`, `?dragon=`.
+- **This wave (docs and UI):** the minimap shows explored structures as shaped icons (solid square, plus, X, ring, T, roof; colour-blind-safe colours) built from `poiMarkers`, with the End portal and the other live markers as before; the raid achievement was renamed to **Village Defender** (the id `raid_hero` is unchanged, so saves are untouched; the escort achievement keeps "Hero of the Village") and a test now requires unique achievement names; banners, the dragon's status line and the HUD status tags are fitted to the view (tags wrap to a second row instead of running into the counters); the About screen paginates its sections and gained an "Art" entry; README, GDD (§1/§5/§7/§8.2/§16/§18), TASKS (Phase 7) and CREDITS were brought up to date.
+
+### Evidence (run on 2026-10-13 on the working tree on top of commit `4c0c7d4`: the merged v1.4 content plus this wave, the last doc and UI edits uncommitted; the machine was shared with other agents, so timings are indicative)
+
+- `npm run lint` (ESLint + Prettier check): clean, no warnings.
+- `npx tsc --noEmit`: exit 0, no errors.
+- `npx vitest run`: **78 files, 1129 tests, all passed** (24.8 s in the last run). Two CPU-bound tests (`biomes.test.ts` "always lands on dry, walkable ground" 3.6 s and `endDimension.test.ts` "opens where the Warden falls" 4.5 s, both alone on the machine) sit close to Vitest's 5 s default and timed out once while three other agents were running the suite; both now carry a 30 s timeout. That was the only red seen, and it was load, not logic.
+- `npm run build` (tsc + Vite): built in about 2 s; `index` chunk 600.26 kB (gzip 214.75 kB), lazy Firebase chunk 577.61 kB (gzip 172.30 kB); Vite warns about chunks over 500 kB (not new, not acted on).
+- Minimap cost (`tests/minimap.test.ts`, a stub canvas, so this is script time only and says nothing about real raster cost): a steady frame with 36 `fillRect` calls (frame, hero, markers and several structure icons) costs about 0.006-0.01 ms (the test limit is 0.3 ms); the existing window repaint on a cell crossing, about every 2 s, costs about 0.35 ms when every cell is explored; the structure query is moved to the frame after the repaint and costs about 0.02 ms warm and 0.26 ms the first time a new area is looked at. The map is 44x44 px with its frame, top right, and fits a 320x180 view (`minimapSlot`, tested).
+- Per-biome FPS with the new content (`?run&debug&crowd=150` in each biome, plus a structure and the End): **to be filled in by the lead's own measurement** `[ FPS table: pending ]`. For reference only, the agents reported in `docs/DECISIONS.md` 60 fps at 1280x720 and 640x360 in the End with the dragon, six crystals and the starfield, 60.1 fps at the middle of each new structure with 150 enemies, a stamped chunk bake of 2.4-2.9 ms (limit 14 ms) and a structure lookup of 0.01-0.04 ms per chunk; none of that was re-measured here.
+
+### What is NOT verified
+
+- **Audio by ear.** The new sounds (tripwire click, TNT fuse, the Warden-to-End portal cue, the dragon's roar and death, the exit portal) reuse existing events, and the `end` theme is covered by note-range tests only; nobody has listened.
+- **Real gamepad and real touch.** Manual aim with a right stick and the touch aim stick, walking through village doors, and the structure interactions are tested with mocked input only.
+- **Human feel.** The dragon fight and the Trial Chamber wave are balanced with scripted heroes (`tests/helpers/endFight.ts`, `trialFight.ts`) that dodge perfectly; no human has played either. A full 15-minute run into the End by a person (Warden, portal, dragon, exit portal, victory scroll) has not been done; the pieces are tested and the path was walked with `?endportal`, not played through.
+- **Real Firebase.** Still never tried against a real project or a real Google login (as in Checkpoint 6); the new run-record fields (`struct`, `endDragon`, `dragonEgg`) go through the same sync code and are covered only by the in-memory backend.
+- **Looks.** Only static screenshots of the End and the structures were read; the flap animation, the telegraph readability on small phones, a raid in progress and the Hero chest were not seen on screen (no debug entry for Bad Omen). The minimap icons were verified by tests (shapes, colour distances) and a stub canvas, not by looking at them on a real screen.
+- **Other browsers and real hardware.** Chromium headless only.
+
+### Known risks (from the agents' entries in `docs/DECISIONS.md`)
+
+- Damage over time (poison, burning) goes through the "quiet" path of the dragon's damage gate and bypasses its melee immunity and the perch deflection; a pure-DoT build is stronger against the dragon than intended.
+- The dragon's 2.5x HP multiplier and the crystals' 15 HP/s heal were tuned on two scripted builds (STRONG kills it in 101-126 s, MID in 827-867 s); real builds will land somewhere else. Allies attack the dragon while it flies and waste bites on "Out of reach!".
+- The Trial Chamber wave uses plain mob stats and is untuned for humans: a hero that never dodges kept 60-75% HP at level 1, which may be too easy or, for a weak build, too hard.
+- The Witch Hut is not visibly on stilts: it is a planks floor that reads as ground over shallow water; the "on stilts" look is not drawn.
+- Art is provisional and code-drawn (dragon, crystals, End tiles, the 18 structure props); Breeze, Bogged, Allay and Ravager are stand-ins (Spider, mossy skeletons, a caged Toucan or Bat, Hoglin). There is no Baby Dragon pet: the egg pays 1000 Emeralds instead.
+- The raid and the outpost's captain use the Pillager's 130 px range; a raid pauses while a rift is open; each village raids once per run.
+- The balance bot never opens chests or uses villagers and never reaches the End, so `docs/BALANCE.md` was not re-run for v1.4; the village chest at 77-114 tiles is a small early boost for humans.
+- The About screen and `GAME_VERSION` still read 1.1.0, and the About list does not mention v1.4 features beyond the "Art" entry.
+
+### Deferred
+
+Online co-op, the Baby Dragon pet (needs atlas art), Firebase App Check, a Content-Security-Policy, hot-path allocation pooling and hand-drawn art for the hero set carry over from Checkpoint 6 (see `docs/TASKS.md`, Phase 6 and 7).

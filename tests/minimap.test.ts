@@ -242,6 +242,9 @@ describe('structure icons on the minimap', () => {
         for (let cy = cellOf(v.cy) - 12; cy <= cellOf(v.cy) + 12; cy += 4)
           map.explored.reveal(cx, cy, 4);
       map.draw(fakeCtx as unknown as CanvasRenderingContext2D, run, 320, 56, 180, false, 0);
+      rects = 0;
+      // The first frame paints the window; the structure list follows on the next one.
+      map.draw(fakeCtx as unknown as CanvasRenderingContext2D, run, 320, 56, 180, false, 0);
       // Frame (2) + hero (2) + at least one structure icon (1 rim + glyph pixels).
       expect(rects).toBeGreaterThan(4 + 6);
       const t0 = performance.now();
