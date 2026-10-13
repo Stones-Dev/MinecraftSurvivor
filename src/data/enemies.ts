@@ -106,7 +106,7 @@ export interface EnemyDef {
  * beams are unaffected. Measured steps are in docs/BALANCE.md.
  */
 export const HERO_BOX_CD_MULT = 1.2;
-export const HERO_BOX_DMG_MULT = 0.8;
+export const HERO_BOX_DMG_MULT = 0.7;
 
 function compensate(def: EnemyDef): EnemyDef {
   const shot = def.shot;

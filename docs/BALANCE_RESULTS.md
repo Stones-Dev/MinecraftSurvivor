@@ -8,118 +8,92 @@ The median column shows ±1 standard error of the median over the seeds; differe
 
 | Cell | Median time (±1 se) | Mean time | p10–p90 | Kills | Level | Bosses | Minis | Won |
 |---|---|---|---|---|---|---|---|---|
-| newbie | 3:19 ±0:13 | 3:22 | 1:49–5:08 | 73 | 3 | 0.0 | 0.0 | 0% |
-| smart | 5:41 ±0:23 | 5:58 | 4:03–8:56 | 118 | 5 | 0.1 | 0.2 | 0% |
+| newbie | 2:58 ±0:13 | 3:22 | 2:03–5:05 | 133 | 5 | 0.0 | 0.0 | 0% |
+| smart | 5:26 ±0:28 | 5:50 | 3:07–9:22 | 199 | 6 | 0.0 | 0.1 | 0% |
 
 ## Smart bot: how runs ended
 
-- seed 1000: 4:54 died, lvl 2, kills 50, bosses 0, weapons sword1
-- seed 1001: 2:52 died, lvl 2, kills 19, bosses 0, weapons sword1
-- seed 1002: 8:56 died, lvl 9, kills 219, bosses 0, weapons sword2 blaze_rods2 crossbow1 lightning_rod1
-- seed 1003: 5:57 died, lvl 6, kills 242, bosses 0, weapons sword1 lightning_rod1 tnt1 axe1
-- seed 1004: 4:18 died, lvl 3, kills 67, bosses 0, weapons sword1 tnt1
-- seed 1005: 5:12 died, lvl 4, kills 89, bosses 0, weapons sword1 fishing_rod1 tnt1 snowball1
-- seed 1006: 4:28 died, lvl 3, kills 42, bosses 0, weapons sword1
-- seed 1007: 4:35 died, lvl 4, kills 81, bosses 0, weapons sword1 lava_bucket1
-- seed 1008: 9:15 died, lvl 8, kills 171, bosses 0, weapons sword2 shield1 snowball1 trident1
-- seed 1009: 0:54 died, lvl 1, kills 16, bosses 0, weapons sword1
-- seed 1010: 6:31 died, lvl 4, kills 100, bosses 0, weapons sword2 axe1
-- seed 1011: 9:45 died, lvl 15, kills 599, bosses 1, weapons sword2 harming1 lightning_rod5 fishing_rod1
-- seed 1012: 4:43 died, lvl 3, kills 111, bosses 0, weapons sword1 shield1 poison1
-- seed 1013: 4:50 died, lvl 3, kills 67, bosses 0, weapons sword1 bow1 blaze_rods1
-- seed 1014: 6:06 died, lvl 4, kills 112, bosses 0, weapons sword1 harming1 blaze_rods1
-- seed 1015: 6:28 died, lvl 5, kills 141, bosses 0, weapons sword1 axe1 poison1
-- seed 1016: 7:11 died, lvl 12, kills 453, bosses 0, weapons sword3 poison3 harming1 snowball2
-- seed 1017: 6:11 died, lvl 10, kills 416, bosses 1, weapons sword1 crossbow2 harming1 tnt1
-- seed 1018: 7:00 died, lvl 4, kills 99, bosses 0, weapons sword1
-- seed 1019: 5:31 died, lvl 11, kills 487, bosses 0, weapons sword2 lava_bucket1 crossbow2 poison2
-- seed 1020: 4:03 died, lvl 5, kills 201, bosses 0, weapons sword1 harming1 bow1 fishing_rod1
-- seed 1021: 5:06 died, lvl 4, kills 181, bosses 0, weapons sword1 poison1 lava_bucket1 trident1
-- seed 1022: 5:13 died, lvl 3, kills 70, bosses 0, weapons sword2
-- seed 1023: 5:41 died, lvl 5, kills 135, bosses 0, weapons sword1 shield1 crossbow1
-- seed 1024: 5:22 died, lvl 4, kills 103, bosses 0, weapons sword1 lightning_rod1 blaze_rods1
-- seed 1025: 5:44 died, lvl 2, kills 57, bosses 0, weapons sword1
-- seed 1026: 7:40 died, lvl 11, kills 257, bosses 0, weapons sword1 lightning_rod3 lava_bucket1 fishing_rod1
-- seed 1027: 3:21 died, lvl 3, kills 94, bosses 0, weapons sword1 trident1 lightning_rod1
-- seed 1028: 4:43 died, lvl 3, kills 80, bosses 0, weapons sword1 tnt1 trident1
-- seed 1029: 6:24 died, lvl 5, kills 118, bosses 0, weapons sword2 fishing_rod1 lava_bucket1
-- seed 1030: 4:27 died, lvl 4, kills 69, bosses 0, weapons sword1 lava_bucket1 crossbow1
-- seed 1031: 5:11 died, lvl 6, kills 120, bosses 0, weapons sword1 blaze_rods1 lava_bucket1 tnt1
-- seed 1032: 2:21 died, lvl 2, kills 30, bosses 0, weapons sword1 tnt1
-- seed 1033: 6:06 died, lvl 2, kills 44, bosses 0, weapons sword1
-- seed 1034: 8:45 died, lvl 8, kills 204, bosses 0, weapons sword1 fishing_rod1 snowball1 lava_bucket1
-- seed 1035: 10:37 died, lvl 26, kills 1282, bosses 1, weapons sword5 crossbow5 trident3 lava_bucket4
-- seed 1036: 6:03 died, lvl 6, kills 179, bosses 0, weapons sword1 trident1 poison1
-- seed 1037: 5:01 died, lvl 6, kills 125, bosses 0, weapons sword1 trident1 axe1
-- seed 1038: 8:06 died, lvl 5, kills 102, bosses 0, weapons sword1 blaze_rods1 axe1 bow1
-- seed 1039: 8:49 died, lvl 9, kills 308, bosses 0, weapons sword1 lava_bucket1 snowball2 axe1
-- seed 1040: 8:32 died, lvl 9, kills 183, bosses 0, weapons sword1 shield1 axe1 bow2
-- seed 1041: 4:17 died, lvl 2, kills 47, bosses 0, weapons sword1 lightning_rod1
-- seed 1042: 12:02 died, lvl 9, kills 272, bosses 0, weapons sword2 tnt2 snowball1 axe1
-- seed 1043: 6:54 died, lvl 7, kills 136, bosses 0, weapons sword2 blaze_rods1 bow1 axe1
-- seed 1044: 4:18 died, lvl 5, kills 108, bosses 0, weapons sword1 fishing_rod1 shield1 tnt1
-- seed 1045: 4:03 died, lvl 3, kills 53, bosses 0, weapons sword1 fishing_rod1 trident1
-- seed 1046: 4:46 died, lvl 4, kills 187, bosses 0, weapons sword2 lightning_rod1 harming1
-- seed 1047: 6:57 died, lvl 5, kills 136, bosses 0, weapons sword1 lava_bucket2 axe1 bow1
+- seed 1000: 5:51 died, lvl 6, kills 207, bosses 0, weapons sword1 tnt3 fishing_rod1
+- seed 1001: 10:16 died, lvl 7, kills 227, bosses 0, weapons sword2 bow2 blaze_rods1 axe1
+- seed 1002: 6:31 died, lvl 9, kills 282, bosses 0, weapons sword1 lightning_rod2 crossbow1 fishing_rod3
+- seed 1003: 7:25 died, lvl 7, kills 225, bosses 0, weapons sword1 lightning_rod2 axe2
+- seed 1004: 4:54 died, lvl 3, kills 82, bosses 0, weapons sword1 tnt1
+- seed 1005: 5:11 died, lvl 8, kills 442, bosses 0, weapons sword1 poison1 fishing_rod1 trident1
+- seed 1006: 4:51 died, lvl 4, kills 94, bosses 0, weapons sword1 tnt1
+- seed 1007: 5:19 died, lvl 4, kills 129, bosses 0, weapons sword1 crossbow1
+- seed 1008: 6:22 died, lvl 5, kills 167, bosses 0, weapons sword2 tnt1 snowball1
+- seed 1009: 3:07 died, lvl 4, kills 100, bosses 0, weapons sword1 axe1 lava_bucket1
+- seed 1010: 8:58 died, lvl 6, kills 163, bosses 0, weapons sword3 axe1 tnt1
+- seed 1011: 4:58 died, lvl 11, kills 567, bosses 0, weapons sword1 harming1 trident1 fishing_rod3
+- seed 1012: 4:37 died, lvl 6, kills 249, bosses 0, weapons sword1 shield1 poison2 harming1
+- seed 1013: 5:42 died, lvl 4, kills 130, bosses 0, weapons sword1 bow1 blaze_rods1 shield1
+- seed 1014: 3:45 died, lvl 3, kills 113, bosses 0, weapons sword1 harming1
+- seed 1015: 5:29 died, lvl 5, kills 180, bosses 0, weapons sword1 blaze_rods1 poison1
+- seed 1016: 6:50 died, lvl 21, kills 887, bosses 1, weapons sword3 poison4 harming3 snowball5
+- seed 1017: 3:50 died, lvl 6, kills 201, bosses 0, weapons sword1 tnt2 lightning_rod1
+- seed 1018: 4:21 died, lvl 4, kills 75, bosses 0, weapons sword1
+- seed 1019: 3:26 died, lvl 4, kills 103, bosses 0, weapons sword1 lava_bucket1 crossbow1 poison1
+- seed 1020: 5:14 died, lvl 8, kills 270, bosses 0, weapons sword1 trident1 bow2 lightning_rod2
+- seed 1021: 3:29 died, lvl 5, kills 199, bosses 0, weapons sword1 poison1 snowball1 trident1
+- seed 1022: 8:34 died, lvl 8, kills 245, bosses 0, weapons sword3 lightning_rod1 harming1
+- seed 1023: 2:36 died, lvl 3, kills 50, bosses 0, weapons sword1 shield1
+- seed 1024: 1:44 died, lvl 3, kills 39, bosses 0, weapons sword1 lightning_rod1
+- seed 1025: 4:49 died, lvl 4, kills 94, bosses 0, weapons sword1 snowball1
+- seed 1026: 5:41 died, lvl 5, kills 233, bosses 0, weapons sword1 lightning_rod2 lava_bucket1 fishing_rod1
+- seed 1027: 7:44 died, lvl 14, kills 428, bosses 1, weapons sword1 trident4 lava_bucket1 snowball2
+- seed 1028: 5:52 died, lvl 9, kills 283, bosses 0, weapons sword2 tnt1 trident2 lightning_rod1
+- seed 1029: 6:35 died, lvl 7, kills 226, bosses 0, weapons sword2 fishing_rod1 lava_bucket1
+- seed 1030: 6:26 died, lvl 5, kills 238, bosses 0, weapons sword1 harming1 tnt1
+- seed 1031: 10:06 died, lvl 7, kills 185, bosses 0, weapons sword1 blaze_rods1 lava_bucket1 tnt1
+- seed 1032: 4:35 died, lvl 4, kills 104, bosses 0, weapons sword1 tnt1 lava_bucket1
+- seed 1033: 5:45 died, lvl 4, kills 112, bosses 0, weapons sword1 snowball1 lightning_rod1
+- seed 1034: 11:56 died, lvl 12, kills 345, bosses 0, weapons sword3 shield2 snowball1 lava_bucket1
+- seed 1035: 5:26 died, lvl 6, kills 216, bosses 0, weapons sword1 lightning_rod1 trident2 axe1
+- seed 1036: 4:18 died, lvl 4, kills 106, bosses 0, weapons sword1 tnt1
+- seed 1037: 4:25 died, lvl 5, kills 158, bosses 0, weapons sword1 trident1 lava_bucket1
+- seed 1038: 3:32 died, lvl 4, kills 68, bosses 0, weapons sword1 blaze_rods1 axe1
+- seed 1039: 9:22 died, lvl 9, kills 296, bosses 0, weapons sword1 axe2 snowball2
+- seed 1040: 9:15 died, lvl 10, kills 308, bosses 0, weapons sword1 shield2 snowball1 bow2
+- seed 1041: 4:10 died, lvl 7, kills 296, bosses 0, weapons sword1 lightning_rod1 crossbow1 tnt1
+- seed 1042: 15:47 died, lvl 9, kills 294, bosses 0, weapons sword2 tnt2 snowball1 axe1
+- seed 1043: 4:37 died, lvl 4, kills 80, bosses 0, weapons sword2 blaze_rods1
+- seed 1044: 5:43 died, lvl 6, kills 162, bosses 0, weapons sword1 fishing_rod1 shield1 poison1
+- seed 1045: 2:35 died, lvl 2, kills 54, bosses 0, weapons sword1 fishing_rod1
+- seed 1046: 1:40 died, lvl 3, kills 57, bosses 0, weapons sword1 axe1 crossbow1
+- seed 1047: 6:18 died, lvl 7, kills 263, bosses 0, weapons sword1 lava_bucket2 axe1 bow2
 
 ## Most picked cards (smart + newbie)
 
-- weapon:lava_bucket: 6.2%
-- weapon:lightning_rod: 5.3%
-- weapon:sword: 5.3%
-- weapon:axe: 4.5%
-- armor:chainmail: 3.9%
-- sword:stone: 3.9%
-- weapon:blaze_rods: 3.7%
-- weapon:crossbow: 3.7%
-- passive:infinity: 3.7%
-- weapon:tnt: 3.4%
-- passive:speed: 3.1%
-- passive:regeneration: 3.1%
-- weapon:trident: 3.1%
-- weapon:fishing_rod: 2.8%
-- weapon:snowball: 2.8%
-- passive:mending: 2.8%
-- weapon:poison: 2.8%
-- weapon:shield: 2.5%
-- weapon:harming: 2.5%
-- passive:absorption: 2.2%
-- weapon:bow: 2.2%
-- passive:power: 2.2%
-- passive:luck: 2.0%
-- passive:night_vision: 1.7%
-- passive:looting: 1.7%
+- weapon:tnt: 5.3%
+- weapon:axe: 5.3%
+- weapon:snowball: 4.2%
+- weapon:sword: 4.0%
+- weapon:lightning_rod: 3.8%
+- weapon:trident: 3.8%
+- weapon:lava_bucket: 3.8%
+- weapon:poison: 3.6%
+- weapon:fishing_rod: 3.4%
+- passive:strength: 3.4%
+- passive:multishot: 3.4%
+- sword:stone: 3.2%
+- weapon:shield: 3.2%
+- armor:chainmail: 3.0%
+- passive:knockback: 2.7%
+- weapon:harming: 2.7%
+- weapon:bow: 2.5%
+- weapon:blaze_rods: 2.5%
+- passive:regeneration: 2.5%
+- passive:piercing: 2.3%
+- passive:depth_strider: 2.3%
+- passive:looting: 2.1%
+- passive:frost_walker: 2.1%
+- passive:thorns: 2.1%
+- passive:resistance: 1.9%
 
 ## Per starting weapon (smart bot)
 
 | Cell | Median time (±1 se) | Mean time | p10–p90 | Kills | Level | Bosses | Minis | Won |
 |---|---|---|---|---|---|---|---|---|
-| sword | 5:27 ±0:30 | 6:00 | 2:41–9:24 | 125 | 5 | 0.1 | 0.2 | 0% |
-| bow | 10:03 ±0:26 | 9:19 | 5:56–11:53 | 300 | 10 | 0.3 | 0.8 | 0% |
-| crossbow | 8:16 ±0:35 | 8:10 | 4:17–12:03 | 671 | 16 | 0.5 | 0.9 | 0% |
-| trident | 4:40 ±0:28 | 5:36 | 2:49–10:04 | 172 | 5 | 0.1 | 0.3 | 0% |
-| harming | 8:14 ±0:39 | 9:00 | 5:28–12:19 | 777 | 18 | 0.6 | 0.9 | 2% |
-| poison | 7:17 ±0:30 | 7:30 | 3:18–11:34 | 500 | 10 | 0.2 | 0.5 | 0% |
-| tnt | 9:00 ±0:37 | 8:47 | 4:24–11:47 | 431 | 12 | 0.3 | 0.7 | 0% |
-| snowball | 7:01 ±0:38 | 7:17 | 3:31–10:54 | 237 | 8 | 0.1 | 0.4 | 0% |
-| fishing_rod | 6:02 ±0:29 | 6:19 | 2:56–10:28 | 312 | 9 | 0.2 | 0.5 | 0% |
-| lava_bucket | 8:23 ±0:43 | 8:49 | 4:10–13:44 | 425 | 12 | 0.5 | 0.8 | 2% |
-| blaze_rods | 8:40 ±0:27 | 8:11 | 5:13–11:14 | 148 | 6 | 0.1 | 0.3 | 0% |
-| axe | 5:05 ±0:23 | 5:03 | 2:23–7:40 | 61 | 3 | 0.0 | 0.1 | 0% |
-| shield | 5:57 ±0:27 | 5:57 | 2:42–10:07 | 19 | 1 | 0.0 | 0.0 | 0% |
-| lightning_rod | 10:10 ±0:32 | 9:18 | 4:08–11:49 | 567 | 15 | 0.3 | 0.8 | 0% |
-
-## Per start biome (smart bot, sword)
-
-| Cell | Median time (±1 se) | Mean time | p10–p90 | Kills | Level | Bosses | Minis | Won |
-|---|---|---|---|---|---|---|---|---|
-| plains | 5:09 ±0:23 | 5:46 | 3:12–9:59 | 121 | 5 | 0.0 | 0.1 | 0% |
-| forest | 5:20 ±0:31 | 5:55 | 2:05–10:16 | 108 | 5 | 0.0 | 0.1 | 0% |
-| dark_forest | 5:24 ±0:29 | 5:57 | 2:23–9:18 | 117 | 5 | 0.0 | 0.1 | 0% |
-| snowy_taiga | 5:00 ±0:25 | 5:43 | 3:04–10:17 | 123 | 5 | 0.0 | 0.1 | 0% |
-| desert | 5:07 ±0:28 | 5:19 | 2:00–9:02 | 98 | 4 | 0.0 | 0.1 | 0% |
-| swamp | 5:23 ±0:28 | 5:53 | 2:35–10:16 | 105 | 4 | 0.0 | 0.2 | 0% |
-| jungle | 5:11 ±0:28 | 5:58 | 3:36–10:05 | 132 | 5 | 0.1 | 0.1 | 0% |
-| badlands | 5:07 ±0:25 | 5:46 | 3:16–8:38 | 123 | 4 | 0.0 | 0.0 | 0% |
-| cherry_grove | 5:08 ±0:25 | 5:43 | 3:18–8:39 | 142 | 5 | 0.0 | 0.2 | 0% |
-| mushroom_fields | 5:54 ±0:30 | 6:10 | 2:59–10:44 | 145 | 6 | 0.0 | 0.2 | 0% |
+| sword | 5:43 ±0:26 | 5:58 | 2:35–10:10 | 231 | 6 | 0.0 | 0.3 | 0% |
+| bow | 7:46 ±0:28 | 7:39 | 4:08–10:28 | 323 | 10 | 0.2 | 0.7 | 0% |
+| crossbow | 7:34 ±0:27 | 7:51 | 4:41–10:34 | 837 | 19 | 0.6 | 1.0 | 0% |
