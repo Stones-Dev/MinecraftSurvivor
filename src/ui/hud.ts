@@ -7,10 +7,11 @@ import { WEAPONS } from '../weapons';
 import type { RunState } from '../game';
 import { xpToNext } from '../systems/economy';
 import { getMarkers } from '../systems/npcs';
+import { structureStatusTags } from '../systems/structureInteract';
 import { END_ISLAND_PX, dragonStatus } from '../systems/endDimension';
 import { actionPrompt } from './inputLabels';
 import { drawIcon } from './icons';
-import { drawText, drawTextPlate } from './panel';
+import { drawText, drawTextPlate, textWidth } from './panel';
 import { HUD_TEXT, LOW_HP_FRACTION, lowHpVignetteAlpha } from './hudModel';
 
 function clock(sec: number): string {
@@ -98,6 +99,13 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
   if (p.hungerT > 0) drawTextPlate(ctx, 'Hunger', statusX, 28, HUD_TEXT.hunger);
   if (p.slowT > 0)
     drawTextPlate(ctx, 'Slow', statusX + (p.hungerT > 0 ? 40 : 0), 28, HUD_TEXT.slow);
+  // Structure effects after them: Bad Omen, Hero of the Village, a cauldron's Regeneration (with seconds left).
+  let tagX = statusX + (p.hungerT > 0 ? 40 : 0) + (p.slowT > 0 ? 32 : 0);
+  for (const t of structureStatusTags(run)) {
+    const label = `${t.text} ${clock(t.left)}`;
+    drawTextPlate(ctx, label, tagX, 28, t.color);
+    tagX += textWidth(label) + 6;
+  }
 
   // Accessibility text scale 2: the timer and the counters are drawn double size (menus stay 1x).
   const big = textScale() === 2;

@@ -503,7 +503,6 @@ function shingleTones(seed: number): Uint8Array {
   return t;
 }
 
-
 // Structure materials, part 2: palettes.
 const MOSSY_BRICK_PAL: readonly RGB[] = [
   [104, 108, 100],
@@ -1380,11 +1379,11 @@ const RECIPES: readonly Recipe[] = [
         const x = Math.floor(rnd() * TEX);
         const y0 = Math.floor(rnd() * 6);
         const len = 5 + Math.floor(rnd() * 8);
-        for (let j = 0; j < len; j++) put(t, x + (j % 5 === 3 ? 1 : 0), y0 + j, 8);
-        put(t, x + 1, y0 + 2, 9);
-        put(t, x - 1, y0 + len - 3, 9);
+        for (let j = 0; j < len; j++) put(t, x + (j % 5 === 3 ? 1 : 0), y0 + j, 7);
+        put(t, x + 1, y0 + 2, 7);
+        put(t, x - 1, y0 + len - 3, 7);
       }
-      const pal: RGB[] = [...COBBLE_PAL, [62, 84, 40], [88, 114, 54], [36, 84, 34], [76, 150, 52]];
+      const pal: RGB[] = [...COBBLE_PAL, [62, 84, 40], [48, 118, 44]];
       return { tones: t, palette: pal.map(opaque) };
     },
   },

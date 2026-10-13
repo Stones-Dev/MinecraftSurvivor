@@ -1,5 +1,5 @@
 /**
- * Witch Hut (v1.4 part 2): a 7x7 hut on stilts in the swamp. Dark oak walls around a spruce plank floor, a
+ * Witch Hut (v1.4 part 2): a 7x7 hut on stilts in the swamp. Dark oak walls around an oak plank floor, a
  * doorway on the south side, a cauldron, two shelves and a black cat inside; the Witch lives here.
  *
  *      x: 0123456
@@ -22,8 +22,8 @@ export function buildWitchHut(): ReturnType<Stamp['build']> {
   const n = HUT_SIZE;
   const s = new Stamp(n, n);
   s.wall(0, 0, n, n, MAT.DARK_OAK_PLANKS);
-  s.floor(1, 1, 5, 5, MAT.SPRUCE_PLANKS);
-  s.set(3, 6, MAT.SPRUCE_PLANKS); // doorway
+  s.floor(1, 1, 5, 5, MAT.OAK_PLANKS);
+  s.set(3, 6, MAT.OAK_PLANKS); // doorway
   s.prop('bookshelf', 1, 1).prop('bookshelf', 5, 1);
   s.prop('cauldron', 3, 2);
   s.prop('cauldron_empty', 3, 2);

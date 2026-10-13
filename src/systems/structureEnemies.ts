@@ -46,10 +46,10 @@ export function isStructureEnemy(e: Enemy): boolean {
   return FOES.has(e);
 }
 
-/** Living and dying structure enemies in the run. */
-export function structureEnemyCount(run: RunState): number {
+/** Structure enemies in the run (dying ones included unless `aliveOnly`). */
+export function structureEnemyCount(run: RunState, aliveOnly = false): number {
   let n = 0;
-  for (const e of run.enemies) if (FOES.has(e)) n++;
+  for (const e of run.enemies) if (FOES.has(e) && !(aliveOnly && e.dying)) n++;
   return n;
 }
 
@@ -81,7 +81,7 @@ export function spawnStructureEnemy(
   role: string,
   opts: SpawnOpts = {},
 ): Enemy | null {
-  if (structureEnemyCount(run) >= MAX_STRUCTURE_ENEMIES) return null;
+  if (structureEnemyCount(run, true) >= MAX_STRUCTURE_ENEMIES) return null;
   const d = typeof def === 'string' ? ENEMIES[def] : def;
   if (!d) return null;
   const minute = run.time / 60;

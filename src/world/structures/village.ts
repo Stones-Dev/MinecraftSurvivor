@@ -124,6 +124,9 @@ export function buildVillage(ctx: BuildContext): ReturnType<Stamp['build']> {
   // Lanterns at the road ends and the plaza, and the golem's post.
   s.prop('lantern', 1, 6).prop('lantern', 12, 6).prop('lantern', 5, 12);
   s.actor('golem', 5, 7);
+  // The legendary chest of Hero of the Village: stamped here but hidden until a raid is repelled
+  // (systems/pillagerOutpost.ts), on the north-south road just below the plaza.
+  s.prop('chest_legendary', 7, 8);
   s.enter(6, 13).within(3, 4);
   if (ctx.rand() < 0.5) s.mirrorX();
   return s.build();

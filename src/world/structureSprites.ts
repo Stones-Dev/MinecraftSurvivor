@@ -394,7 +394,8 @@ function outpostBanner(): Pix {
   fill(buf, 2, 6, 13, 24, cloth);
   fill(buf, 13, 6, 13, 24, clothD);
   fill(buf, 2, 6, 13, 6, [92, 196, 206]);
-  for (let i = 0; i < 4; i++) fill(buf, 2 + i * 3, 25 + (i % 2 === 0 ? 0 : 3), 4 + i * 3, 27, clothD);
+  for (let i = 0; i < 4; i++)
+    fill(buf, 2 + i * 3, 25 + (i % 2 === 0 ? 0 : 3), 4 + i * 3, 27, clothD);
   fill(buf, 2, 24, 13, 25, cloth);
   // Pattern: a pale rhombus with a dark core, like the raid banner.
   fill(buf, 5, 10, 10, 10, [236, 244, 244]);

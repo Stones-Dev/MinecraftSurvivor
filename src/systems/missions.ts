@@ -290,6 +290,7 @@ export function runSample(rec: RunRecord): Record<string, number> {
     s[`kills.${group}`] = ids.reduce((a, id) => a + (rec.killsByType[id] ?? 0), 0);
   }
   for (const [b, sec] of Object.entries(rec.timeByBiome)) s[`sec.${b}`] = Math.floor(sec);
+  for (const [k, n] of Object.entries(rec.struct ?? {})) s[`struct.${k}`] = n;
   return s;
 }
 

@@ -145,6 +145,10 @@ export const DAILY_MISSIONS: readonly MissionDef[] = [
   D('d_rift', 'rifts', 'sum', 1, 'Enter the Nether rift', 'portal', { emeralds: 70 }),
   D('d_creepers', 'kills.creeper', 'sum', 15, 'Defeat 15 Creepers', 'tnt', { emeralds: 50 }),
   D('d_damage', 'damageDealt', 'sum', 15000, 'Deal 15,000 damage', 'blaze_rod', { emeralds: 60 }),
+  D('d_struct_chests', 'struct.chests', 'sum', 3, 'Open 3 structure chests', 'chest', {
+    emeralds: 70,
+    spawnEggs: 1,
+  }),
 ];
 
 export const WEEKLY_MISSIONS: readonly MissionDef[] = [

@@ -12,17 +12,15 @@
  * Per-run state lives in a WeakMap keyed by the RunState, so nothing leaks between runs and RunState needs no
  * new fields. To add behaviour for a new structure prop, add a case in `updateStructureInteract`.
  */
-import {
-  chestIndexFromId,
-  chestRng,
-  chestTable,
-  rollLoot,
-  type StructureChestKind,
-} from '../data/lootTables';
 import { makeFx } from '../entities/fx';
 import type { RunState, Telegraph } from '../game';
 import { MAX_WEAPON_LEVEL, WEAPONS } from '../weapons';
-import { applyLoot, say } from './structureLoot';
+import { updateJungleTemple } from './jungleTemple';
+import { outpostStatusTags, servicePriceFactor, updatePillagerOutpost } from './pillagerOutpost';
+import { updateGuards } from './structureEnemies';
+import { applyLoot, openChest, say } from './structureLoot';
+import { updateTrialChamber } from './trialChamber';
+import { updateWitchHut, witchStatusTags } from './witchHut';
 
 export { applyLoot };
 import type { Prop } from '../world/props';
@@ -137,17 +135,6 @@ function rt(run: RunState): Runtime {
   return r;
 }
 
-function openChest(run: RunState, prop: Prop): void {
-  const table = chestTable(prop.kind as StructureChestKind, chestIndexFromId(prop.id));
-  const drops = rollLoot(table, chestRng(run.seed, prop.id));
-  run.world.removeProp(prop);
-  run.propState.delete(`${prop.id}|${prop.kind}`);
-  applyLoot(run, drops, prop.x, prop.y);
-  run.fx.push(makeFx('ring', prop.x, prop.y - 4, 0.35, { r: 14, color: '#ffe27a' }));
-  run.emit('chest');
-  run.shake = Math.max(run.shake, 1);
-}
-
 // ---------------------------------------------------------------------------------------------------
 // Props: chests, crops, the temple plate
 
@@ -160,6 +147,8 @@ export function updateStructureInteract(run: RunState, dt: number, near: readonl
     switch (prop.kind) {
       case 'chest_village':
       case 'chest_pyramid':
+      case 'chest_jungle':
+      case 'chest_legendary':
         if (
           !p.dead &&
           Math.hypot(prop.x - p.x, prop.y - p.y) < prop.radius + p.radius + CHEST_REACH
@@ -203,6 +192,24 @@ export function updateStructureInteract(run: RunState, dt: number, near: readonl
     }
   }
   if (r.traps.size > 0) updateTraps(run, r, dt);
+  // Structures, part 2: the jungle temple's wires and levers, the trial, the outpost and raids, the witch hut.
+  updateJungleTemple(run, dt);
+  updateTrialChamber(run, dt);
+  updatePillagerOutpost(run, dt);
+  updateWitchHut(run, dt);
+  updateGuards(run);
+}
+
+/** HUD tags of the effects structures give the hero (Bad Omen, Hero of the Village, a cauldron's Regeneration). */
+export function structureStatusTags(
+  run: RunState,
+): { text: string; color: string; left: number }[] {
+  return [...outpostStatusTags(run), ...witchStatusTags(run)];
+}
+
+/** Price of a village service for this hero right now (halved under Hero of the Village). */
+export function serviceCost(run: RunState, base: number): number {
+  return Math.ceil(base * servicePriceFactor(run));
 }
 
 function plateHit(run: RunState, plate: Prop): boolean {
@@ -370,19 +377,19 @@ function serviceCheck(
       if (used.smith >= SMITH_USES) return { ok: false, why: 'Nothing more to forge' };
       if (smithTarget(run.weapons, MAX_WEAPON_LEVEL) < 0)
         return { ok: false, why: 'Weapons are maxed' };
-      return run.emeraldsPicked >= SERVICE_COST.smith
+      return run.emeraldsPicked >= serviceCost(run, SERVICE_COST.smith)
         ? { ok: true }
-        : { ok: false, why: `Need ${SERVICE_COST.smith} emeralds (weapon +1)` };
+        : { ok: false, why: `Need ${serviceCost(run, SERVICE_COST.smith)} emeralds (weapon +1)` };
     case 'librarian':
       if (used.librarian >= LIBRARIAN_USES) return { ok: false, why: 'Sold out' };
-      return run.emeraldsPicked >= SERVICE_COST.librarian
+      return run.emeraldsPicked >= serviceCost(run, SERVICE_COST.librarian)
         ? { ok: true }
-        : { ok: false, why: `Need ${SERVICE_COST.librarian} emeralds (reroll)` };
+        : { ok: false, why: `Need ${serviceCost(run, SERVICE_COST.librarian)} emeralds (reroll)` };
     case 'cleric':
       if (p.hp >= p.maxHp * CLERIC_BELOW) return { ok: false, why: 'You look healthy' };
-      return run.emeraldsPicked >= SERVICE_COST.cleric
+      return run.emeraldsPicked >= serviceCost(run, SERVICE_COST.cleric)
         ? { ok: true }
-        : { ok: false, why: `Need ${SERVICE_COST.cleric} emeralds (heal)` };
+        : { ok: false, why: `Need ${serviceCost(run, SERVICE_COST.cleric)} emeralds (heal)` };
     default:
       return { ok: false, why: '' };
   }
@@ -400,7 +407,7 @@ function perform(
       const i = smithTarget(run.weapons, MAX_WEAPON_LEVEL);
       const w = run.weapons[i];
       if (!w) return;
-      run.emeraldsPicked -= SERVICE_COST.smith;
+      run.emeraldsPicked -= serviceCost(run, SERVICE_COST.smith);
       w.level = Math.min(MAX_WEAPON_LEVEL, w.level + 1);
       used.smith++;
       run.recomputeStats();
@@ -408,13 +415,13 @@ function perform(
       break;
     }
     case 'librarian':
-      run.emeraldsPicked -= SERVICE_COST.librarian;
+      run.emeraldsPicked -= serviceCost(run, SERVICE_COST.librarian);
       run.rerolls++;
       used.librarian++;
       say(run, n.x, n.y - 10, '+1 reroll', '#d9a6ff', 1.6);
       break;
     case 'cleric':
-      run.emeraldsPicked -= SERVICE_COST.cleric;
+      run.emeraldsPicked -= serviceCost(run, SERVICE_COST.cleric);
       p.heal(p.maxHp * CLERIC_HEAL);
       say(run, n.x, n.y - 10, 'Healed!', '#ff8a8a', 1.6);
       break;

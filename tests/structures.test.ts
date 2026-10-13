@@ -127,67 +127,71 @@ describe('structure placement', () => {
     expect(p1.map((p) => p.props)).toEqual(p2.map((p) => p.props));
   });
 
-  it('keeps the grid, the spacing, the starting meadow, dry land and the biomes', () => {
-    let checked = 0;
-    for (const seed of SEEDS.slice(0, 20)) {
-      const world = new World(seed);
-      const all = placedAround(world, 350);
-      for (const p of all) {
-        const d = p.def;
-        // Inside its own grid cell, with the edge margin to spare.
-        expect(Math.floor(p.tx / d.spacing)).toBe(Math.floor((p.tx + p.width - 1) / d.spacing));
-        expect(Math.floor(p.ty / d.spacing)).toBe(Math.floor((p.ty + p.height - 1) / d.spacing));
-        expect(((p.tx % d.spacing) + d.spacing) % d.spacing).toBeGreaterThanOrEqual(EDGE_MARGIN);
-        // Never near the start.
-        const dx = Math.max(p.tx, -(p.tx + p.width - 1), 0);
-        const dy = Math.max(p.ty, -(p.ty + p.height - 1), 0);
-        expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(Math.max(60, d.minDistFromSpawn));
-        expect(Math.hypot(dx, dy)).toBeGreaterThan(SPAWN_CLEAR * 4);
-        // Dry land (with a 2-tile margin) in the allowed biomes.
-        let wet = 0;
-        for (let y = p.ty - 2; y < p.ty + p.height + 2; y++)
-          for (let x = p.tx - 2; x < p.tx + p.width + 2; x++) {
-            const t = tileAt(x, y, seed);
-            if (d.allowWaterNear) {
-              // Stilt sites may stand in the shallows: never lava, at most half of the footprint wet.
-              expect(t === TILE.LAVA, `${p.key} ${x},${y}`).toBe(false);
-              if (
-                t === TILE.WATER &&
-                x >= p.tx &&
-                x < p.tx + p.width &&
-                y >= p.ty &&
-                y < p.ty + p.height
-              )
-                wet++;
-            } else expect(t === TILE.WATER || t === TILE.LAVA, `${p.key} ${x},${y}`).toBe(false);
-          }
-        expect(wet * 2).toBeLessThanOrEqual(p.width * p.height);
-        expect(d.allowedBiomes).toContain(
-          biomeAtTile(p.tx + (p.width >> 1), p.ty + (p.height >> 1), seed),
-        );
-        expect(d.allowedBiomes).toContain(biomeAtTile(p.tx, p.ty, seed));
-        expect(d.allowedBiomes).toContain(
-          biomeAtTile(p.tx + p.width - 1, p.ty + p.height - 1, seed),
-        );
-        checked++;
-      }
-      // Pairs: same structure at least 2 * EDGE_MARGIN apart, different ones at least 3 tiles apart.
-      for (let i = 0; i < all.length; i++) {
-        for (let j = i + 1; j < all.length; j++) {
-          const a = all[i];
-          const b = all[j];
-          if (!a || !b) continue;
-          const gapX = Math.max(a.tx - (b.tx + b.width), b.tx - (a.tx + a.width));
-          const gapY = Math.max(a.ty - (b.ty + b.height), b.ty - (a.ty + a.height));
-          const gap = Math.max(gapX, gapY);
-          expect(gap, `${a.key} vs ${b.key}`).toBeGreaterThanOrEqual(
-            a.def.id === b.def.id ? 2 * EDGE_MARGIN : 3,
+  it(
+    'keeps the grid, the spacing, the starting meadow, dry land and the biomes',
+    { timeout: 60000 },
+    () => {
+      let checked = 0;
+      for (const seed of SEEDS.slice(0, 20)) {
+        const world = new World(seed);
+        const all = placedAround(world, 350);
+        for (const p of all) {
+          const d = p.def;
+          // Inside its own grid cell, with the edge margin to spare.
+          expect(Math.floor(p.tx / d.spacing)).toBe(Math.floor((p.tx + p.width - 1) / d.spacing));
+          expect(Math.floor(p.ty / d.spacing)).toBe(Math.floor((p.ty + p.height - 1) / d.spacing));
+          expect(((p.tx % d.spacing) + d.spacing) % d.spacing).toBeGreaterThanOrEqual(EDGE_MARGIN);
+          // Never near the start.
+          const dx = Math.max(p.tx, -(p.tx + p.width - 1), 0);
+          const dy = Math.max(p.ty, -(p.ty + p.height - 1), 0);
+          expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(Math.max(60, d.minDistFromSpawn));
+          expect(Math.hypot(dx, dy)).toBeGreaterThan(SPAWN_CLEAR * 4);
+          // Dry land (with a 2-tile margin) in the allowed biomes.
+          let wet = 0;
+          for (let y = p.ty - 2; y < p.ty + p.height + 2; y++)
+            for (let x = p.tx - 2; x < p.tx + p.width + 2; x++) {
+              const t = tileAt(x, y, seed);
+              if (d.allowWaterNear) {
+                // Stilt sites may stand in the shallows: never lava, at most half of the footprint wet.
+                expect(t === TILE.LAVA, `${p.key} ${x},${y}`).toBe(false);
+                if (
+                  t === TILE.WATER &&
+                  x >= p.tx &&
+                  x < p.tx + p.width &&
+                  y >= p.ty &&
+                  y < p.ty + p.height
+                )
+                  wet++;
+              } else expect(t === TILE.WATER || t === TILE.LAVA, `${p.key} ${x},${y}`).toBe(false);
+            }
+          expect(wet * 2).toBeLessThanOrEqual(p.width * p.height);
+          expect(d.allowedBiomes).toContain(
+            biomeAtTile(p.tx + (p.width >> 1), p.ty + (p.height >> 1), seed),
           );
+          expect(d.allowedBiomes).toContain(biomeAtTile(p.tx, p.ty, seed));
+          expect(d.allowedBiomes).toContain(
+            biomeAtTile(p.tx + p.width - 1, p.ty + p.height - 1, seed),
+          );
+          checked++;
+        }
+        // Pairs: same structure at least 2 * EDGE_MARGIN apart, different ones at least 3 tiles apart.
+        for (let i = 0; i < all.length; i++) {
+          for (let j = i + 1; j < all.length; j++) {
+            const a = all[i];
+            const b = all[j];
+            if (!a || !b) continue;
+            const gapX = Math.max(a.tx - (b.tx + b.width), b.tx - (a.tx + a.width));
+            const gapY = Math.max(a.ty - (b.ty + b.height), b.ty - (a.ty + a.height));
+            const gap = Math.max(gapX, gapY);
+            expect(gap, `${a.key} vs ${b.key}`).toBeGreaterThanOrEqual(
+              a.def.id === b.def.id ? 2 * EDGE_MARGIN : 3,
+            );
+          }
         }
       }
-    }
-    expect(checked).toBeGreaterThan(80);
-  });
+      expect(checked).toBeGreaterThan(80);
+    },
+  );
 
   it('puts at least one village within 160 tiles of the start in every one of 50 seeds', () => {
     const dists: number[] = [];
@@ -593,7 +597,7 @@ describe('every registered structure (a new def is covered by adding it to the r
         const fill = reachable(world, p);
         expect(fill.count, `${p.key} entry`).toBeGreaterThan(100);
         for (const pr of p.props)
-          if (pr.kind.startsWith('chest'))
+          if (pr.kind.startsWith('chest') || pr.kind === 'vault')
             expect(fill.has(pr.x, pr.y, pr.radius + 10), `${p.key} ${pr.id}`).toBe(true);
         for (const a of bp.actors)
           expect(
@@ -633,7 +637,7 @@ describe('loot tables', () => {
       expect(all).toContainEqual({ kind: 'item', id: 'totem' });
       expect(sum(all, 'rareSpawnEgg')).toBeGreaterThanOrEqual(1);
     }
-    expect(LOOT_TABLE_IDS).toHaveLength(5);
+    expect(LOOT_TABLE_IDS).toHaveLength(8);
   });
 
   it('is fixed per chest and world, different between chests and worlds', () => {

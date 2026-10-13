@@ -168,8 +168,7 @@ export function updateSpawner(run: RunState, dt: number): void {
   s.acc += rate * dt;
   while (s.acc >= 1) {
     s.acc -= 1;
-    if (spawnCount(run) < ENEMY_CAP)
-      spawnOne(run, run.rng.spawn.range(0, Math.PI * 2), ENEMY_CAP);
+    if (spawnCount(run) < ENEMY_CAP) spawnOne(run, run.rng.spawn.range(0, Math.PI * 2), ENEMY_CAP);
   }
   s.tideT -= dt * run.spawnMult;
   if (s.tideT <= 0) {

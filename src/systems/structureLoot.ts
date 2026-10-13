@@ -3,21 +3,33 @@
  * them into emeralds, items, weapons, XP orbs... and prints one floating line per drop.
  */
 import {
+  chestIndexFromId,
+  chestRng,
+  chestTable,
   type IronResult,
   type LootDrop,
   resolveIronUpgrade,
   resolveRangedWeapon,
+  rollLoot,
+  type StructureChestKind,
 } from '../data/lootTables';
 import { ITEMS } from '../data/items';
 import { makeFx } from '../entities/fx';
 import { Pickup } from '../entities/pickup';
 import type { RunState } from '../game';
+import type { Prop } from '../world/props';
 import { MAX_WEAPON_LEVEL, newWeapon, WEAPONS } from '../weapons';
 import { MAX_WEAPONS } from '../data/upgrades';
-import { chestRng } from '../data/lootTables';
 import { giveItem } from './items';
 
-export function say(run: RunState, x: number, y: number, s: string, color: string, life = 1.3): void {
+export function say(
+  run: RunState,
+  x: number,
+  y: number,
+  s: string,
+  color: string,
+  life = 1.3,
+): void {
   run.fx.push(makeFx('text', x, y - 14, life, { text: s, vy: -14, color }));
 }
 
@@ -63,22 +75,22 @@ export function applyLoot(run: RunState, drops: readonly LootDrop[], x: number, 
         out('Enchanted Book!', '#d9a6ff');
         break;
       case 'rangedWeapon':
-      out(applyRangedWeapon(run, x, y), '#ffd84a');
-      break;
-    case 'xpBurst': {
-      // Orbs worth `levels` level-ups, flung around (x, y) and pulled to the hero at once.
-      const total = run.xpNeeded() * d.levels;
-      const n = 8;
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2;
-        const orb = new Pickup('xp', x + Math.cos(a) * 9, y - 4 + Math.sin(a) * 6, total / n);
-        orb.magnet = true;
-        run.pickups.push(orb);
+        out(applyRangedWeapon(run, x, y), '#ffd84a');
+        break;
+      case 'xpBurst': {
+        // Orbs worth `levels` level-ups, flung around (x, y) and pulled to the hero at once.
+        const total = run.xpNeeded() * d.levels;
+        const n = 8;
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const orb = new Pickup('xp', x + Math.cos(a) * 9, y - 4 + Math.sin(a) * 6, total / n);
+          orb.magnet = true;
+          run.pickups.push(orb);
+        }
+        out('XP burst!', '#7ddc4a');
+        break;
       }
-      out('XP burst!', '#7ddc4a');
-      break;
-    }
-    case 'ironUpgrade':
+      case 'ironUpgrade':
         out(
           applyIronUpgrade(
             run,
@@ -125,7 +137,6 @@ function applyIronUpgrade(run: RunState, r: IronResult): string {
   return label;
 }
 
-
 function applyRangedWeapon(run: RunState, x: number, y: number): string {
   const r = resolveRangedWeapon(
     { weapons: run.weapons, maxWeapons: MAX_WEAPONS, maxWeaponLevel: MAX_WEAPON_LEVEL },
@@ -146,4 +157,25 @@ function applyRangedWeapon(run: RunState, x: number, y: number): string {
       run.emeraldsPicked += r.n;
       return `+${r.n} emeralds`;
   }
+}
+
+/** Stats event (`RunStats.struct`) a chest kind adds on top of the generic `chests` count. */
+const CHEST_EVENT: Partial<Record<Prop['kind'], string>> = {
+  chest_jungle: 'jungle',
+  vault: 'trial',
+};
+
+/** Open a structure chest: roll its table (seeded by world seed and prop id), apply it, remove the prop. */
+export function openChest(run: RunState, prop: Prop): void {
+  const table = chestTable(prop.kind as StructureChestKind, chestIndexFromId(prop.id));
+  const drops = rollLoot(table, chestRng(run.seed, prop.id));
+  run.world.removeProp(prop);
+  run.propState.delete(`${prop.id}|${prop.kind}`);
+  applyLoot(run, drops, prop.x, prop.y);
+  run.fx.push(makeFx('ring', prop.x, prop.y - 4, 0.35, { r: 14, color: '#ffe27a' }));
+  run.emit('chest');
+  run.shake = Math.max(run.shake, 1);
+  run.stats.structure('chests');
+  const extra = CHEST_EVENT[prop.kind];
+  if (extra) run.stats.structure(extra);
 }

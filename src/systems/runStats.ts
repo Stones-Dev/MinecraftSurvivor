@@ -63,6 +63,11 @@ export interface RunRecord {
   killsByType: Record<string, number>;
   killsByBiome: Record<string, number>;
   timeByBiome: Record<string, number>;
+  /**
+   * World-structure events of the run (`chests`, `jungle`, `trial`, `hero`, `brew`; see
+   * systems/structureLoot.ts `structureEvent`). Absent in records of older runs and tests.
+   */
+  struct?: Record<string, number>;
   /** Wall-clock ms when the run ended (secrets such as the night owl read the local hour). */
   endedAt: number;
 }
@@ -78,6 +83,8 @@ export class RunStats {
   killsByType: Record<string, number> = {};
   killsByBiome: Record<string, number> = {};
   timeByBiome: Record<string, number> = {};
+  /** World-structure events (chests opened, trials passed...), see RunRecord.struct. */
+  struct: Record<string, number> = {};
   private lastItem: string | null = null;
   private riftWas = false;
 
@@ -85,6 +92,11 @@ export class RunStats {
   kill(id: string, biome: string): void {
     this.killsByType[id] = (this.killsByType[id] ?? 0) + 1;
     this.killsByBiome[biome] = (this.killsByBiome[biome] ?? 0) + 1;
+  }
+
+  /** One world-structure event (`n` more of `key`). */
+  structure(key: string, n = 1): void {
+    this.struct[key] = (this.struct[key] ?? 0) + n;
   }
 
   /** Once per simulation step: time per biome, rifts entered and items picked up. */
@@ -125,6 +137,7 @@ export class RunStats {
       killsByType: { ...this.killsByType },
       killsByBiome: { ...this.killsByBiome },
       timeByBiome: { ...this.timeByBiome },
+      ...(Object.keys(this.struct).length > 0 ? { struct: { ...this.struct } } : {}),
       endedAt,
     };
   }
@@ -196,6 +209,7 @@ export function mergeRunIntoSave(save: SaveData, rec: RunRecord): MergeResult {
 
   for (const [id, n] of Object.entries(rec.killsByType)) bumpCounter(save, `kills.${id}`, n);
   for (const [b, sec] of Object.entries(rec.timeByBiome)) bumpCounter(save, `sec.${b}`, sec);
+  for (const [k, n] of Object.entries(rec.struct ?? {})) bumpCounter(save, `struct.${k}`, n);
   bumpCounter(save, 'damageDealt', rec.damageDealt);
   bumpCounter(save, 'damageTaken', rec.damageTaken);
   bumpCounter(save, 'abilityCasts', rec.abilityCasts);

@@ -69,7 +69,7 @@ export function buildTrialChamber(): ReturnType<Stamp['build']> {
   ] as const)
     s.actor('trial_bogged', x, y);
   s.actor('trial_breeze', 6, 14).actor('trial_breeze', 11, 14);
-  s.enter(8, 0).within(8, 4);
+  s.enter(8, 0).within(8, 2);
   return s.build();
 }
 
@@ -81,8 +81,8 @@ export const TRIAL_CHAMBER: StructureDef = {
   allowedBiomes: ['plains', 'dark_forest', 'forest'],
   minDistFromSpawn: 90,
   spacing: 48,
-  chance: 0.9,
-  nearChance: 0.95,
+  chance: 0.95,
+  nearChance: 1,
   priority: 3,
   clearance: 2,
   color: '#4fd6c0',

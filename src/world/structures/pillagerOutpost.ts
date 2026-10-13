@@ -5,7 +5,7 @@
  *
  *      x: 0123456789
  *   y0    ..........
- *   y1    .CWWWC....   C cobble corner, W dark oak wall (solid)
+ *   y1    .CWWWC....   W cobble wall, C dark oak post (solid)
  *   y2    .WffbW....   f tower floor; the Captain stands at (4,2), the banner at (2,2)
  *   y3    .WfffW....
  *   y4    .CWDWC....   D doorway (3,4)
@@ -32,16 +32,19 @@ export function buildPillagerOutpost(ctx: BuildContext): ReturnType<Stamp['build
   const n = OUTPOST_SIZE;
   const s = new Stamp(n, n);
   // Tower ring and floor.
-  s.wall(1, 1, 5, 4, MAT.DARK_OAK_PLANKS);
-  s.floor(2, 2, 3, 2, MAT.SPRUCE_PLANKS);
+  s.wall(1, 1, 5, 4, MAT.COBBLE);
+  s.floor(2, 2, 3, 2, MAT.OAK_PLANKS);
+  // Dark oak posts in the corners and beside the doorway.
   for (const [x, y] of [
     [1, 1],
     [5, 1],
     [1, 4],
     [5, 4],
+    [2, 4],
+    [4, 4],
   ] as const)
-    s.set(x, y, MAT.COBBLE, true);
-  s.set(3, 4, MAT.SPRUCE_PLANKS); // the doorway
+    s.set(x, y, MAT.DARK_OAK_PLANKS, true);
+  s.set(3, 4, MAT.OAK_PLANKS); // the doorway
   // Yard: a dirt path from the door and a cobble pad for the cage.
   for (let y = 5; y < n; y++) s.set(3, y, MAT.DIRT_PATH);
   s.floor(7, 6, 2, 2, MAT.COBBLE);
