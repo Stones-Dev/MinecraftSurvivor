@@ -152,3 +152,7 @@ tree now contains other agents' movement/combat changes made in this audit pass;
 simulator has no companions, so the starter Wolf, the lesser Warden (minute 9+, strong starters only) and the Badlands
 Big Magma Cube (BAL_BIOMES start only) are outside what it measures; the Warden's numbers (420 base HP, 24 damage, one
 alive, 150 s apart) were set to the other mini-bosses (Piglin Brute 300 / 26).
+
+## Minute-0 variety (BUG-20, 2026-10-13)
+
+Plains minute 0 was 84% zombies. The roster now opens at 66% zombies with 5 types (jungle zombie and three slime skins), the swamp rabbit at 0:30, the quick biters at 1:00, see `data/rosters.ts` and DECISIONS. Sword-only A/B on one working tree, 24 seeds (`BAL_WEAPONS=sword BAL_RUNS=24`): old roster newbie 3:08 +-0:19, smart 5:13 +-0:28, sword 4:51 +-0:31; new roster newbie 3:23 +-0:14, smart 5:03 +-0:31, sword 5:07 +-0:28. A rejected variant (frozen zombie, whose touch slows the hero, plus the quick biters at 0:30) produced three smart-bot deaths before 1:40, so those two stay later. The simulator has no companions, so the starter Wolf and the 5 starter eggs are not measured.
