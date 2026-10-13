@@ -21,6 +21,17 @@ import {
   drawAlly,
   drawPet,
   drawPortal,
+  drawEndPortal,
+  drawExitPortal,
+  drawDragonEgg,
+  drawEndPillar,
+  drawFountain,
+  drawEndCrystal,
+  drawEndBeams,
+  drawDragon,
+  drawDragonShadow,
+  drawDragonDeath,
+  drawEndMotes,
   drawPropExtra,
   drawRescueFlag,
   drawMine,
@@ -40,6 +51,8 @@ import { gainXp } from '../systems/levelup';
 import { BIOMES, type BiomeId } from '../world/biomes';
 import type { Enemy } from '../entities/enemy';
 import { WorldRenderer, type PropItem } from '../world/renderer';
+import { isGrounded } from '../entities/bossDragon';
+import { DEATH_ANIM, debugEnterEnd, spawnEndPortal, type EndPillar } from '../systems/endDimension';
 import { AmbientField } from '../render/ambient';
 import { drawDebug, FrameStats } from './debug';
 import { drawHud } from './hud';
@@ -52,8 +65,11 @@ import {
   pauseScreen,
   resultsScreen,
   victoryScreen,
+  finalVictoryScreen,
 } from './overlays';
 import type { Screen } from './router';
+import { type StructAt, startAtStructure } from '../systems/structureDebug';
+import type { StructureId } from '../world/structures';
 
 export interface RunOptions {
   seed: number;
@@ -75,6 +91,14 @@ export interface RunOptions {
   loadout?: RunLoadout;
   /** Debug: start at the nearest spot inside this biome instead of the spawn meadow. */
   biome?: BiomeId;
+  /** Debug (`?end`): start inside the End; `dragonPct` is the dragon's starting HP in percent. */
+  end?: boolean;
+  dragonPct?: number;
+  /** Debug (`?endportal`): the overworld End portal is open next to the hero. */
+  endPortal?: boolean;
+  /** Debug: start next to the nearest instance of this world structure (`?struct=`, `structAt`). */
+  struct?: StructureId;
+  structAt?: StructAt;
 }
 
 type Drawable =
@@ -83,6 +107,7 @@ type Drawable =
   | { y: number; kind: 'npc'; npc: Npc }
   | { y: number; kind: 'ally'; ally: Ally }
   | { y: number; kind: 'pet'; pet: PetState }
+  | { y: number; kind: 'pillar'; pillar: EndPillar }
   | { y: number; kind: 'hero' };
 
 const RAIN_DROPS = [20, 50, 90] as const;
@@ -200,6 +225,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
   const { atlas, input, router } = app;
   const run = new RunState(opts.seed, opts.startTime, opts.loadout);
   if (opts.biome) run.startInBiome(opts.biome);
+  if (opts.struct) startAtStructure(run, opts.struct, opts.structAt);
   if (opts.weapons) run.weapons = opts.weapons.map((id) => newWeapon(id));
   if (opts.startXp) gainXp(run, opts.startXp);
   if (opts.hp) {
@@ -231,10 +257,14 @@ export function runScreen(app: App, opts: RunOptions): Screen {
     }
   }
   if (opts.portal) run.rift.portal = { x: 50, y: -20, left: 45 };
+  // Debug `?end`: straight into the End (`dragonPct` = the dragon's starting HP in percent, to test the phases).
+  if (opts.endPortal) spawnEndPortal(run, 60, -10);
+  if (opts.end) debugEnterEnd(run, opts.dragonPct ?? 100);
   if (opts.trader) spawnTrader(run);
   if (opts.villager) spawnVillager(run);
   const overRenderer = new WorldRenderer(run.overworld);
   const arenaRenderer = new WorldRenderer(run.arenaWorld);
+  const endRenderer = new WorldRenderer(run.endWorld);
   let renderer = overRenderer;
   const camera = new Camera();
   const stats = new FrameStats();
@@ -345,6 +375,13 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         router.push(levelupScreen(app, run));
         return;
       }
+      if (run.end.victory && !run.end.victoryShown) {
+        // The exit portal of the End: the final victory (credits-style) and then the results.
+        run.end.victoryShown = true;
+        run.victoryShown = true;
+        router.push(finalVictoryScreen(app, run, !opts.debug));
+        return;
+      }
       if (run.won && !run.victoryShown) {
         run.victoryShown = true;
         router.push(victoryScreen(app, run, !opts.debug));
@@ -385,6 +422,7 @@ export function runScreen(app: App, opts: RunOptions): Screen {
           : musicDir.update(dt, {
               boss: run.enemies.some((e) => e.boss === 'boss' && !e.dying),
               rift: run.rift.active,
+              end: run.end.active,
               night: nightFactor(run.time),
               biome: run.biome(),
             }),
@@ -407,7 +445,11 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       updateQuality();
       const state = run.biomeState();
       const p = run.player;
-      const nextRenderer = run.rift.active ? arenaRenderer : overRenderer;
+      const nextRenderer = run.end.active
+        ? endRenderer
+        : run.rift.active
+          ? arenaRenderer
+          : overRenderer;
       if (nextRenderer !== renderer) {
         renderer = nextRenderer;
         prebaked = false;
@@ -437,6 +479,14 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       for (const z of run.zones) drawZone(ctx, z, camX, camY, run.time);
       if (run.rescue) drawRescueFlag(ctx, run.rescue, camX, camY, run.time);
       if (run.rift.portal) drawPortal(ctx, run.rift.portal, camX, camY, run.time);
+      if (run.end.portal && !run.end.active)
+        drawEndPortal(ctx, run.end.portal, camX, camY, run.time);
+      if (run.end.active) {
+        drawFountain(ctx, camX, camY, run.time);
+        if (run.end.exit) drawExitPortal(ctx, run.end.exit, camX, camY, run.time);
+        if (run.end.egg && !run.end.egg.taken)
+          drawDragonEgg(ctx, run.end.egg, camX, camY, run.time);
+      }
       for (const t of run.telegraphs) drawTelegraph(ctx, t, camX, camY);
       for (const pk of run.pickups) {
         if (
@@ -458,7 +508,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         }
       }
       for (const e of run.enemies) {
-        if (!e.dying && run.quality > 0)
+        // The End draws its own shadows (the dragon's follows its height, crystals float).
+        if (e.def.id === 'ender_dragon') {
+          if (run.quality > 0) drawDragonShadow(ctx, e, run.end.brain, camX, camY);
+        } else if (!e.dying && run.quality > 0 && e.def.id !== 'end_crystal')
           renderer.drawShadow(ctx, e.rx, e.ry, e.radius / 6, camX, camY);
       }
       if (run.quality > 0) renderer.drawShadow(ctx, p.rx, p.ry, 0.9, camX, camY);
@@ -469,6 +522,10 @@ export function runScreen(app: App, opts: RunOptions): Screen {
       for (const ally of run.allies) drawables.push({ y: ally.ry, kind: 'ally', ally });
       if (run.pet) drawables.push({ y: run.pet.ry, kind: 'pet', pet: run.pet });
       drawables.push({ y: p.ry, kind: 'hero' });
+      if (run.end.active) {
+        for (const pillar of run.end.pillars)
+          drawables.push({ y: pillar.y, kind: 'pillar', pillar });
+      }
       drawables.sort((a, b) => a.y - b.y);
       for (const d of drawables) {
         if (d.kind === 'prop') {
@@ -477,8 +534,38 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         } else if (d.kind === 'npc') drawNpc(ctx, atlas, d.npc, camX, camY, run.time);
         else if (d.kind === 'ally') drawAlly(ctx, atlas, d.ally, camX, camY, run.time);
         else if (d.kind === 'pet') drawPet(ctx, atlas, d.pet, camX, camY, run.time);
-        else if (d.kind === 'enemy') drawEnemy(ctx, atlas, d.enemy, camX, camY);
+        else if (d.kind === 'enemy') {
+          const e = d.enemy;
+          if (e.def.id === 'ender_dragon') {
+            // A grounded dragon sorts with the rest; a flying one is drawn over everything below.
+            if (isGrounded(run.end.brain.mode))
+              drawDragon(ctx, e, run.end.brain, camX, camY, run.time);
+          } else if (e.def.id === 'end_crystal') {
+            const c = run.end.crystals.find((x) => x.e === e);
+            if (c) drawEndCrystal(ctx, c, camX, camY, run.time);
+          } else drawEnemy(ctx, atlas, e, camX, camY);
+        } else if (d.kind === 'pillar') drawEndPillar(ctx, d.pillar, camX, camY);
         else drawHero(ctx, atlas, run, camX, camY);
+      }
+      if (run.end.active) {
+        const dragon = run.end.dragon;
+        if (dragon && !dragon.dying) {
+          if (!isGrounded(run.end.brain.mode)) {
+            drawDragon(ctx, dragon, run.end.brain, camX, camY, run.time);
+          }
+          drawEndBeams(ctx, run.end.crystals, dragon, camX, camY);
+        }
+        if (run.end.deathT >= 0 && run.end.deathT < DEATH_ANIM)
+          drawDragonDeath(
+            ctx,
+            { x: run.end.deathX, y: run.end.deathY },
+            run.end.deathT,
+            camX,
+            camY,
+            width,
+            height,
+            run.time,
+          );
       }
       for (const m of run.mines) drawMine(ctx, m, camX, camY);
       for (const o of run.orbiters) drawOrbiter(ctx, o, camX, camY, run.time);
@@ -491,20 +578,24 @@ export function runScreen(app: App, opts: RunOptions): Screen {
         ctx,
         width,
         height,
-        nightFactor(run.time) * (1 - Math.min(0.6, run.mods.nightVision)),
+        run.end.active ? 0 : nightFactor(run.time) * (1 - Math.min(0.6, run.mods.nightVision)),
       );
       drawWeather(ctx, run, width, height, false, run.quality);
-      ambient.update(
-        frameDt,
-        state.current,
-        nightFactor(run.time),
-        camX,
-        camY,
-        width,
-        height,
-        run.quality,
-      );
-      ambient.draw(ctx, reduceFlash());
+      if (run.end.active) {
+        drawEndMotes(ctx, camX, camY, width, height, run.time, run.quality);
+      } else {
+        ambient.update(
+          frameDt,
+          state.current,
+          nightFactor(run.time),
+          camX,
+          camY,
+          width,
+          height,
+          run.quality,
+        );
+        ambient.draw(ctx, reduceFlash());
+      }
       if (app.data().settings.damageNumbers) drawFxTexts(ctx, run.fx, camX, camY);
       if (run.rift.active) {
         ctx.fillStyle = 'rgba(120,20,0,0.14)';

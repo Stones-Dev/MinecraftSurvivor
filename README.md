@@ -66,6 +66,7 @@ Survive 15 minutes and defeat the Warden to win, or keep going in Endless. Colle
 Most of these only work together with `debug`, and debug runs never touch the save or the leaderboard.
 
 - Run: `?run&debug&t=<sec>&seed=<n>&weapons=a,b,c&xp=<n>&hp=<n>&hero=alex&pet=cat&ally=wolf,horse&lv=3&kennel=<n>&biome=<biome id>&portal&trader&villager`
+- World structures: `?run&debug&struct=village|desert_temple[&structAt=door|in|mid][&seed=<n>]` starts next to the nearest one (in front of its door by default, just inside, or in its middle; `seed=11` is a desert village, `seed=1` a desert temple)
 - Stress test: `?crowd=<n>` (with `?run&debug`; half of the mobs come from the start biome's own roster)
 - Galleries: `?gallery=<page>` (prop pages per biome, then block-texture pages), `?mobs=<biome|new|all>[:page]` (every mob walking left and right)
 - Screens: `?screen=collection|spawner|upgrades|settings|setup|about|profile|ranking|missions|achievements`, and `results` together with `debug`

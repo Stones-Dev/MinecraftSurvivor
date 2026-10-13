@@ -36,6 +36,7 @@ import { missionsScreen } from './ui/missionsScreen';
 import { drawToasts } from './ui/toast';
 import { demoResults } from './ui/resultsDemo';
 import { WorldRenderer } from './world/renderer';
+import { structAtParam, structParam } from './systems/structureDebug';
 import { type BiomeId, isBiomeId } from './world/biomes';
 import { World } from './world/world';
 
@@ -164,6 +165,10 @@ async function boot(): Promise<void> {
           hp: params.has('debug') ? num('hp', 0) : 0,
           crowd: params.has('debug') ? num('crowd', 0) : 0,
           portal: params.has('debug') && params.has('portal'),
+          // `?end[&dragon=<hp percent>]` (debug): start inside the End to test the dragon's phases.
+          end: params.has('debug') && params.has('end'),
+          endPortal: params.has('debug') && params.has('endportal'),
+          dragonPct: num('dragon', 100),
           trader: params.has('debug') && params.has('trader'),
           villager: params.has('debug') && params.has('villager'),
           // `?biome=` (debug) wins over the start biome picked in the run setup; "Random" (nothing picked) draws
@@ -175,6 +180,9 @@ async function boot(): Promise<void> {
             firstRun: !save.flags.tutorialDone && save.records.runs === 0,
             debug,
           }),
+          // `?struct=village|desert_temple` (debug): start in front of the nearest one; `&structAt=in|mid` just inside / in the middle.
+          struct: debug ? structParam(params.get('struct')) : undefined,
+          structAt: structAtParam(params.get('structAt')),
         }),
       );
     },

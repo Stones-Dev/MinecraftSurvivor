@@ -8,6 +8,7 @@ import type { Enemy } from '../entities/enemy';
 import { boltPoints, makeFx } from '../entities/fx';
 import type { RunState } from '../game';
 import { damageEnemy, hurtPlayer } from './combat';
+import { onDragonKilled, spawnEndPortal } from './endDimension';
 import { giveItem } from './items';
 import { makeEnemy, ringPoint } from './spawner';
 
@@ -90,7 +91,10 @@ export function onEnemyKilled(run: RunState, e: Enemy): void {
       run.won = true;
       run.director.nextEndlessAt = Math.max(ENDLESS_FIRST, run.time + 60);
       run.announce('NIGHT SURVIVED!', '#7dff9a', 6);
+      // The End stays open for the rest of the run, win or endless (optional, no time pressure).
+      spawnEndPortal(run, e.x, e.y);
     }
+    if (e.def.boss === 'dragon') onDragonKilled(run, e);
   } else if (e.boss === 'mini') {
     run.miniKills++;
     run.spawnEggs++;

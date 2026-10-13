@@ -64,6 +64,8 @@ export interface Blueprint {
   actors: StampActor[];
   /** Walkable tile (blueprint coordinates, may lie outside the footprint) in front of the main door. */
   entry: { tx: number; ty: number };
+  /** Optional walkable tile inside (debug `?structAt=in` start, screenshots). */
+  inside?: { tx: number; ty: number };
 }
 
 /** Everything `StructureDef.build` may depend on: the same inputs always give the same blueprint. */
@@ -139,6 +141,8 @@ export class Stamp {
   readonly actors: StampActor[] = [];
   /** See `Blueprint.entry`; set with `enter()`. */
   entry = { tx: 0, ty: 0 };
+  /** See `Blueprint.inside`; set with `within()`. */
+  private innerSpot: { tx: number; ty: number } | undefined;
 
   constructor(
     readonly width: number,
@@ -195,6 +199,12 @@ export class Stamp {
     return this;
   }
 
+  /** A walkable tile inside the structure (debug start). */
+  within(tx: number, ty: number): this {
+    this.innerSpot = { tx, ty };
+    return this;
+  }
+
   /** The walkable tile in front of the main door (flood-fill start for tests, debug teleport target). */
   enter(tx: number, ty: number): this {
     this.entry = { tx, ty };
@@ -238,6 +248,7 @@ export class Stamp {
     }
     for (const a of this.actors) a.tx = w - 1 - a.tx;
     this.entry = { tx: w - 1 - this.entry.tx, ty: this.entry.ty };
+    if (this.innerSpot) this.innerSpot = { tx: w - 1 - this.innerSpot.tx, ty: this.innerSpot.ty };
     return this;
   }
 
@@ -250,6 +261,7 @@ export class Stamp {
       props: this.props,
       actors: this.actors,
       entry: this.entry,
+      inside: this.innerSpot,
     };
   }
 }

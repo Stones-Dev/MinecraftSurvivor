@@ -25,6 +25,9 @@ export interface RunLike {
   item: string | null;
   ability: { castCount: number };
   rift: { active: boolean };
+  /** The End (optional: plain test objects may omit them). */
+  endDragonKilled?: boolean;
+  dragonEgg?: boolean;
   loadout: { hero: string };
   biome(): string;
 }
@@ -52,6 +55,9 @@ export interface RunRecord {
   trades: number;
   rescues: number;
   rifts: number;
+  /** The Ender Dragon was killed this run, and its egg taken (absent in records of older runs and tests). */
+  endDragon?: boolean;
+  dragonEgg?: boolean;
   armorTier: number;
   swordTier: number;
   killsByType: Record<string, number>;
@@ -112,6 +118,8 @@ export class RunStats {
       trades: this.trades,
       rescues: this.rescues,
       rifts: this.rifts,
+      endDragon: run.endDragonKilled === true,
+      dragonEgg: run.dragonEgg === true,
       armorTier: run.armorTier,
       swordTier: run.swordTier,
       killsByType: { ...this.killsByType },
@@ -198,6 +206,8 @@ export function mergeRunIntoSave(save: SaveData, rec: RunRecord): MergeResult {
   bumpCounter(save, 'trades', rec.trades);
   bumpCounter(save, 'rescues', rec.rescues);
   bumpCounter(save, 'rifts', rec.rifts);
+  if (rec.endDragon) bumpCounter(save, 'endDragons', 1);
+  if (rec.dragonEgg) bumpCounter(save, 'dragonEggs', 1);
   bumpCounter(save, 'levelUps', Math.max(0, rec.level - 1));
   if (rec.won) bumpCounter(save, `wins.${rec.hero}`, 1);
   maxCounter(save, 'best.level', rec.level);

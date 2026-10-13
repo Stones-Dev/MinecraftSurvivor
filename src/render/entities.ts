@@ -28,6 +28,24 @@ import type { Npc } from '../systems/npcs';
 import type { Prop } from '../world/props';
 import { drawIcon } from '../ui/icons';
 import { drawText } from '../ui/panel';
+import type { DragonBrain } from '../entities/bossDragon';
+import type { EndCrystal, EndPillar } from '../systems/endDimension';
+import {
+  CRYSTAL_FRAMES,
+  DRAGON_CX,
+  DRAGON_CY,
+  EGG_H,
+  FLAP_FRAMES,
+  FRAME_BLOCK,
+  PILLAR_H,
+  cageCanvas,
+  crystalCanvas,
+  dragonCanvas,
+  eggCanvas,
+  flapOf,
+  frameBlockCanvas,
+  pillarCanvas,
+} from './endSprites';
 
 const animCache = new WeakMap<EnemyDef, Record<string, string>>();
 const animOut = { id: '', t: 0 };
@@ -1057,7 +1075,7 @@ export function drawTelegraph(
   camY: number,
 ): void {
   const k = Math.max(0, Math.min(1, t.t / t.dur));
-  const pulse = telegraphPulse(t.t, reduceFlash());
+  const pulse = t.steady ? 1 : telegraphPulse(t.t, reduceFlash());
   const hex = t.friendly ? '#7dd0ff' : '#ff3b3b';
   const prev = ctx.globalAlpha;
   ctx.fillStyle = cb(hex);
@@ -1068,10 +1086,10 @@ export function drawTelegraph(
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len;
     const uy = dy / len;
-    const half = TELEGRAPH_STRIP / 2;
+    const half = (t.w ?? TELEGRAPH_STRIP) / 2;
     const x0 = t.x - camX;
     const y0 = t.y - camY;
-    const reach = len + 40; // the shot keeps going past the aim point
+    const reach = t.w !== undefined ? len : len + 40; // the shot keeps going past the aim point (a lane does not)
     const nx = -uy * half;
     const ny = ux * half;
     const x1 = x0 + ux * reach;
@@ -1093,6 +1111,26 @@ export function drawTelegraph(
     ctx.moveTo(x0 - nx, y0 - ny);
     ctx.lineTo(x1 - nx, y1 - ny);
     ctx.stroke();
+  } else if (t.kind === 'arc') {
+    // A pie slice (the dragon's tail sweep): translucent fill, the charge grows from the centre, bright rim.
+    const cx = t.x - camX;
+    const cy = t.y - camY;
+    const a0 = t.a0 ?? 0;
+    const a1 = t.a1 ?? Math.PI;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, t.r, a0, a1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = Math.min(0.5, 0.15 + 0.3 * k);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, Math.max(0.5, t.r * k), a0, a1);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = Math.min(0.9, 0.6 + 0.2 * k);
+    pixelRing(ctx, cx, cy, t.r, a0, a1, 1);
   } else {
     const cx = t.x - camX;
     const cy = t.y - camY;
@@ -1120,11 +1158,17 @@ export function drawNpc(
   camY: number,
   time: number,
 ): void {
-  const id = `${n.sprite}.${n.kind === 'llama' && !n.moving ? 'idle' : 'walk'}`;
+  // The village Iron Golem (systems/villageGolem.ts) uses the ally sheet: side view, faces right.
+  const golem = n.kind === 'golem';
+  const id = `${n.sprite}.${(n.kind === 'llama' || golem) && !n.moving ? 'idle' : 'walk'}`;
   if (!atlas.hasAnim(id)) return;
   const anim = atlas.anim(id);
   const x = n.x - camX;
   const y = n.y - camY;
+  if (golem) {
+    atlas.draw(ctx, frameAt(anim, time + n.id), x, y + 4, n.dx < 0);
+    return;
+  }
   if (n.kind === 'llama') {
     atlas.draw(ctx, frameAt(anim, time + n.id), x, y, n.dx < 0);
     return;
@@ -1339,4 +1383,397 @@ export function drawPet(
     companionFlip(p.def.sprite, p.facing),
     p.def.scale ?? 1,
   );
+}
+
+// ---------------------------------------------------------------------------------------------------
+// The End (procedural art, see render/endSprites.ts)
+
+const END_PINK = '#df7cff';
+const SWIRL_COLORS = ['#7ee8ff', '#ffffff', '#d28cff', '#5cc8a0'] as const;
+
+/** Swirling starfield inside a portal opening of half-size (hx, hy) around (cx, cy). */
+function portalSwirl(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  hx: number,
+  hy: number,
+  time: number,
+): void {
+  const t = reduceFlash() ? time * 0.35 : time;
+  ctx.fillStyle = '#05030c';
+  ctx.fillRect(cx - hx, cy - hy, hx * 2, hy * 2);
+  // Three spiral arms of translucent teal and violet.
+  for (let arm = 0; arm < 3; arm++) {
+    ctx.fillStyle = arm === 1 ? 'rgba(106,58,168,0.5)' : 'rgba(42,106,138,0.5)';
+    for (let r = 2; r < Math.max(hx, hy); r += 1.6) {
+      const a = arm * 2.09 + r * 0.34 + t * 0.8;
+      const x = Math.round(cx + Math.cos(a) * r * (hx / Math.max(hx, hy)));
+      const y = Math.round(cy + Math.sin(a) * r * (hy / Math.max(hx, hy)));
+      ctx.fillRect(x, y, 2, 2);
+    }
+  }
+  // Stars drifting inward along spirals.
+  for (let k = 0; k < 24; k++) {
+    const rr = ((k * 5.3 + t * 5) % Math.max(hx, hy)) + 1;
+    const a = t * 0.5 + k * 2.4 + rr * 0.15;
+    const x = Math.round(cx + Math.cos(a) * rr * (hx / Math.max(hx, hy)));
+    const y = Math.round(cy + Math.sin(a) * rr * (hy / Math.max(hx, hy)));
+    ctx.fillStyle = SWIRL_COLORS[k % 4] ?? '#ffffff';
+    ctx.fillRect(x, y, k % 7 === 0 ? 2 : 1, k % 7 === 0 ? 2 : 1);
+  }
+}
+
+/** The End portal in the overworld: 12 end-stone-brick frame blocks with eyes of ender around a starfield. */
+export function drawEndPortal(
+  ctx: CanvasRenderingContext2D,
+  portal: { x: number; y: number },
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const B = FRAME_BLOCK;
+  const cx = Math.round(portal.x - camX);
+  const cy = Math.round(portal.y - camY);
+  const half = Math.round(B * 1.5);
+  ctx.fillStyle = 'rgba(120,60,200,0.16)';
+  ctx.fillRect(cx - half - 7, cy - half - 7, half * 2 + 14, half * 2 + 14);
+  portalSwirl(ctx, cx, cy, half, half, time);
+  const frame = frameBlockCanvas(true);
+  for (let j = -2; j <= 2; j++) {
+    for (let i = -2; i <= 2; i++) {
+      if (Math.max(Math.abs(i), Math.abs(j)) !== 2 || (Math.abs(i) === 2 && Math.abs(j) === 2))
+        continue;
+      ctx.drawImage(frame, cx + i * B - B / 2 - 1, cy + j * B - B / 2 - 1);
+    }
+  }
+  // Motes rising out of the opening.
+  ctx.fillStyle = END_PINK;
+  const prev = ctx.globalAlpha;
+  for (let k = 0; k < 6; k++) {
+    const life = (time * 22 + k * 11) % 56;
+    ctx.globalAlpha = Math.max(0, 1 - life / 56) * 0.8;
+    ctx.fillRect(Math.round(cx - 14 + ((k * 7) % 29)), Math.round(cy - half - life), 1, 2);
+  }
+  ctx.globalAlpha = prev;
+}
+
+/** Exit portal after the dragon: a bedrock ring, a starfield and a column of light. */
+export function drawExitPortal(
+  ctx: CanvasRenderingContext2D,
+  at: { x: number; y: number },
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const cx = Math.round(at.x - camX);
+  const cy = Math.round(at.y - camY);
+  const prev = ctx.globalAlpha;
+  const g = ctx.createLinearGradient(0, cy - 110, 0, cy);
+  g.addColorStop(0, 'rgba(230,200,255,0)');
+  g.addColorStop(1, 'rgba(230,200,255,0.5)');
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - 9, cy - 110, 18, 110);
+  ctx.fillStyle = '#2c2c34';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 27, 17, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#585862';
+  pixelRing(ctx, cx, cy - 0.5, 26, 0, Math.PI * 2, 1);
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 23, 14, 0, 0, Math.PI * 2);
+  ctx.clip();
+  portalSwirl(ctx, cx, cy, 24, 15, time);
+  ctx.restore();
+  // Four torches on the rim.
+  for (const [dx, dy] of [
+    [-24, 2],
+    [24, 2],
+    [-9, -15],
+    [9, -15],
+  ] as const) {
+    ctx.fillStyle = '#6b4a2a';
+    ctx.fillRect(cx + dx, cy + dy - 5, 2, 6);
+    ctx.fillStyle = Math.floor(time * 6 + dx) % 2 === 0 ? '#ffd84a' : '#ff9a3a';
+    ctx.fillRect(cx + dx, cy + dy - 8, 2, 3);
+  }
+  ctx.globalAlpha = prev;
+}
+
+/** The Dragon Egg: a black ovoid with a violet aura and a few sparkles. */
+export function drawDragonEgg(
+  ctx: CanvasRenderingContext2D,
+  egg: { x: number; y: number },
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const x = Math.round(egg.x - camX);
+  const y = Math.round(egg.y - camY);
+  const pulse = reduceFlash() ? 1 : 1 + 0.12 * Math.sin(time * 3);
+  const g = ctx.createRadialGradient(x, y - 14, 2, x, y - 14, 30 * pulse);
+  g.addColorStop(0, 'rgba(223,124,255,0.45)');
+  g.addColorStop(1, 'rgba(223,124,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x - 32, y - 46, 64, 64);
+  ctx.drawImage(eggCanvas(), x - 11, y - EGG_H + 1);
+  ctx.fillStyle = '#f0c8ff';
+  for (let k = 0; k < 4; k++) {
+    const a = time * 1.2 + k * 1.57;
+    ctx.fillRect(Math.round(x + Math.cos(a) * 14), Math.round(y - 14 + Math.sin(a) * 12), 1, 1);
+  }
+}
+
+/** One obsidian pillar (the crystal on top is drawn by `drawEndCrystal`). Feet at the pillar's centre. */
+export function drawEndPillar(
+  ctx: CanvasRenderingContext2D,
+  p: EndPillar,
+  camX: number,
+  camY: number,
+): void {
+  ctx.drawImage(
+    pillarCanvas(0),
+    Math.round(p.x - camX) - 15,
+    Math.round(p.y - camY) + 8 - (PILLAR_H + 2),
+  );
+}
+
+/** An End crystal floating above its pillar, spinning and bobbing; iron bars while it is caged. */
+export function drawEndCrystal(
+  ctx: CanvasRenderingContext2D,
+  c: EndCrystal,
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const e = c.e;
+  if (e.dying) {
+    ctx.globalAlpha = Math.max(0, 1 - e.deathT / 0.35);
+  }
+  const x = Math.round(e.x - camX);
+  const bob = Math.round(Math.sin(time * 2 + e.id) * 2);
+  const y = Math.round(e.y - camY) - 30 + bob;
+  const glow = ctx.createRadialGradient(x, y + 14, 1, x, y + 14, 22);
+  glow.addColorStop(0, 'rgba(255,120,230,0.35)');
+  glow.addColorStop(1, 'rgba(255,120,230,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x - 24, y - 8, 48, 44);
+  const frame = reduceFlash() ? 0 : Math.floor(time * 7 + e.id) % CRYSTAL_FRAMES;
+  ctx.drawImage(crystalCanvas(frame), x - 10, y);
+  if (c.caged) ctx.drawImage(cageCanvas(), x - 14, y - 2);
+  if (e.hurtT > 0 && !reduceFlash()) {
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.fillRect(x - 6, y + 4, 12, 16);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Steady purple beams from each standing crystal to the dragon; bright while the dragon is healing. */
+export function drawEndBeams(
+  ctx: CanvasRenderingContext2D,
+  crystals: readonly EndCrystal[],
+  dragon: { x: number; y: number; hp: number; maxHp: number },
+  camX: number,
+  camY: number,
+): void {
+  const healing = dragon.hp < dragon.maxHp;
+  const dx = Math.round(dragon.x - camX);
+  const dy = Math.round(dragon.y - camY) - 28;
+  const prev = ctx.globalAlpha;
+  for (const c of crystals) {
+    if (c.done || c.e.dying) continue;
+    const x0 = Math.round(c.e.x - camX);
+    const y0 = Math.round(c.e.y - camY) - 14;
+    ctx.globalAlpha = healing ? 0.85 : 0.3;
+    ctx.fillStyle = cb('#b04cff');
+    pixelLine(ctx, x0, y0, dx, dy);
+    pixelLine(ctx, x0 + 1, y0, dx + 1, dy);
+    ctx.globalAlpha = healing ? 1 : 0.4;
+    ctx.fillStyle = '#f2d4ff';
+    pixelLine(ctx, x0, y0, dx, dy);
+  }
+  ctx.globalAlpha = prev;
+}
+
+function dragonPoseOf(
+  brain: DragonBrain,
+  time: number,
+): {
+  flap: number;
+  mode: 'fly' | 'dive' | 'perch';
+  mouth: boolean;
+  tail: number;
+} {
+  const m = brain.mode;
+  const mode = m === 'dive' ? 'dive' : m === 'perch' || m === 'stunned' ? 'perch' : 'fly';
+  const rate = m === 'landing' || m === 'takeoff' ? 9 : m === 'roar' ? 4 : 6;
+  const frame = Math.floor(time * rate) % FLAP_FRAMES;
+  return {
+    flap: mode === 'fly' ? flapOf(frame) : 0.5,
+    mode,
+    mouth: brain.mouthT > 0 || m === 'roar',
+    tail: Math.round(Math.sin(time * 1.4) * 2) / 2,
+  };
+}
+
+/** The dragon's shadow on the ground: smaller and sharper when it is perched. */
+export function drawDragonShadow(
+  ctx: CanvasRenderingContext2D,
+  e: Enemy,
+  brain: DragonBrain,
+  camX: number,
+  camY: number,
+): void {
+  if (e.dying) return;
+  const grounded = brain.mode === 'perch' || brain.mode === 'stunned';
+  const x = Math.round(e.rx - camX);
+  const y = Math.round(e.ry - camY);
+  ctx.fillStyle = grounded ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.22)';
+  const sw = grounded ? 44 : 34;
+  ctx.beginPath();
+  ctx.ellipse(x, y + 4, sw, sw * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** The Ender Dragon: the sprite (mirrored by its facing) hovering above its shadow. */
+export function drawDragon(
+  ctx: CanvasRenderingContext2D,
+  e: Enemy,
+  brain: DragonBrain,
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  if (e.dying) return;
+  const pose = dragonPoseOf(brain, time);
+  const grounded = brain.mode === 'perch' || brain.mode === 'stunned';
+  const bob = grounded ? 0 : Math.round(Math.sin(time * 3 + 1) * 2);
+  const x = Math.round(e.rx - camX);
+  const y = Math.round(e.ry - camY);
+  const lift = grounded ? 14 : 30;
+  const flash = e.hurtT > 0 && !reduceFlash();
+  const sprite = dragonCanvas(pose, flash);
+  const top = y - lift - DRAGON_CY + bob;
+  if (e.facing >= 0) {
+    ctx.drawImage(sprite, x - DRAGON_CX, top);
+  } else {
+    ctx.save();
+    ctx.translate(x, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(sprite, -DRAGON_CX, top);
+    ctx.restore();
+  }
+  if (brain.mode === 'stunned') {
+    // Stars circling the head.
+    ctx.fillStyle = '#ffe27a';
+    for (let k = 0; k < 4; k++) {
+      const a = time * 3 + k * 1.57;
+      ctx.fillRect(
+        Math.round(x + (e.facing >= 0 ? 38 : -38) + Math.cos(a) * 12),
+        Math.round(y - lift - 42 + Math.sin(a) * 4),
+        2,
+        2,
+      );
+    }
+  }
+}
+
+/**
+ * The dragon's death: it rises while white beams of light shoot up from it, then fades into the light.
+ * `t` is the seconds since it died (0..DEATH_ANIM); the final whitening is a smooth fade (no strobe).
+ */
+export function drawDragonDeath(
+  ctx: CanvasRenderingContext2D,
+  at: { x: number; y: number },
+  t: number,
+  camX: number,
+  camY: number,
+  viewW: number,
+  viewH: number,
+  time: number,
+): void {
+  const x = Math.round(at.x - camX);
+  const baseY = Math.round(at.y - camY);
+  const rise = Math.min(60, t * 16);
+  const fade = t < 2.4 ? 1 : Math.max(0, 1 - (t - 2.4) / 2.0);
+  const prev = ctx.globalAlpha;
+  const beams = 9;
+  for (let k = 0; k < beams; k++) {
+    const grow = Math.min(1, Math.max(0, (t - 0.1 * k) / 0.8));
+    const w = 2 + ((k * 5) % 5);
+    const bx =
+      x - 40 + ((k * 23) % 80) + Math.round(Math.sin(time * 1.5 + k) * (reduceFlash() ? 0 : 2));
+    const h = grow * (baseY + 40);
+    ctx.globalAlpha =
+      Math.min(0.75, grow * 0.75) * (t > 3.3 ? Math.max(0, 1 - (t - 3.3) / 1.2) : 1);
+    ctx.fillStyle = k % 2 === 0 ? '#ffffff' : '#f0d0ff';
+    ctx.fillRect(bx, baseY - 20 - h, w, h);
+  }
+  ctx.globalAlpha = fade;
+  const pose = { flap: 0.5, mode: 'fly' as const, mouth: true, tail: 0 };
+  const sprite = dragonCanvas(pose, t > 1.2);
+  ctx.drawImage(sprite, x - DRAGON_CX, baseY - 30 - DRAGON_CY - rise);
+  ctx.globalAlpha = prev;
+  if (t > 3.0) {
+    const wash = Math.min(0.5, (t - 3.0) * 0.4) * (t > 4.0 ? Math.max(0, 1 - (t - 4.0) / 0.6) : 1);
+    ctx.fillStyle = `rgba(255,240,255,${wash.toFixed(2)})`;
+    ctx.fillRect(0, 0, viewW, viewH);
+  }
+}
+
+/** Slow purple motes drifting over the End (screen-space, parallaxed with the camera). */
+export function drawEndMotes(
+  ctx: CanvasRenderingContext2D,
+  camX: number,
+  camY: number,
+  w: number,
+  h: number,
+  time: number,
+  quality: 0 | 1 | 2,
+): void {
+  const n = [10, 22, 36][quality] ?? 22;
+  const t = reduceFlash() ? 0 : time;
+  for (let i = 0; i < n; i++) {
+    const sx = (((i * 97 + 13) % 331) / 331) * (w + 40);
+    const sy = (((i * 61 + 7) % 211) / 211) * (h + 40);
+    const x = (((sx - camX * 0.35 + Math.sin(t * 0.4 + i) * 8) % (w + 40)) + (w + 40)) % (w + 40);
+    const y = (((sy - camY * 0.35 - t * (6 + (i % 5) * 2)) % (h + 40)) + (h + 40)) % (h + 40);
+    ctx.globalAlpha = 0.25 + (0.35 * ((i * 13) % 7)) / 7;
+    ctx.fillStyle = i % 3 === 0 ? '#f0a8ff' : '#b06bff';
+    ctx.fillRect(Math.round(x - 20), Math.round(y - 20), i % 4 === 0 ? 2 : 1, i % 4 === 0 ? 2 : 1);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Four torches at the corners of the bedrock fountain in the middle of the island. */
+export function drawFountain(
+  ctx: CanvasRenderingContext2D,
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const flicker = reduceFlash() ? 0 : Math.floor(time * 7);
+  for (const [dx, dy] of [
+    [-30, -22],
+    [30, -22],
+    [-30, 20],
+    [30, 20],
+  ] as const) {
+    const x = Math.round(dx - camX);
+    const y = Math.round(dy - camY);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(x - 2, y, 6, 2);
+    ctx.fillStyle = '#6b4a2a';
+    ctx.fillRect(x, y - 10, 2, 11);
+    ctx.fillStyle = '#4a321c';
+    ctx.fillRect(x + 1, y - 10, 1, 11);
+    const f = (flicker + dx + dy) % 3;
+    ctx.fillStyle = '#ff9a3a';
+    ctx.fillRect(x - 1, y - 14 + (f === 0 ? 1 : 0), 4, 4);
+    ctx.fillStyle = '#ffd84a';
+    ctx.fillRect(x, y - 13 + (f === 1 ? 1 : 0), 2, 3);
+    ctx.fillStyle = '#fff3b0';
+    ctx.fillRect(x, y - 12, 2, 1);
+  }
 }

@@ -12,6 +12,7 @@ import type { RunState } from '../game';
 import { explode } from './combat';
 import { giveItem } from './items';
 import { gainXp, openNextOffer } from './levelup';
+import { updateStructureInteract } from './structureInteract';
 import { applyStatus } from './status';
 
 export interface PropState {
@@ -219,6 +220,8 @@ export function updateInteract(run: RunState, dt: number): void {
         break;
     }
   }
+  // Structure props: chests, crops, the temple's pressure plate (systems/structureInteract.ts).
+  updateStructureInteract(run, dt, props);
   // Traps and ground hazards that also affect enemies.
   run.hazardT -= dt;
   if (run.hazardT <= 0) {

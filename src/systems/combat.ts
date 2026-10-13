@@ -40,6 +40,11 @@ export function damageEnemy(
   heavy = false,
 ): void {
   if (e.dying || dmg <= 0) return;
+  // The End: the dragon is out of melee reach while it flies, perched it deflects arrows, caged crystals soak hits.
+  if (e.def.id === 'ender_dragon' || e.def.id === 'end_crystal') {
+    dmg = run.end.gate(run, e, dmg, fromX, fromY, knock, quiet, heavy);
+    if (dmg <= 0) return;
+  }
   // Pet bonuses: Arctic Fox (chilled targets), Glare (elites and bosses), Bat (night), Ocelot (crits).
   const pm = run.mods;
   if (pm.chillDmg > 0 && (e.slowT > 0 || e.freezeT > 0 || e.stunT > 0)) dmg *= 1 + pm.chillDmg;

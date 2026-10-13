@@ -10,6 +10,7 @@ describe('music themes', () => {
         'cherry',
         'dark_forest',
         'desert',
+        'end',
         'hub',
         'jungle',
         'mushroom',

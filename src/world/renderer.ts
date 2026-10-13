@@ -3,6 +3,8 @@
  * redrawn over them, y-sorted prop drawing.
  */
 import { PixBuffer } from '../core/pixelart';
+import { drawEndBackdrop } from '../render/endSprites';
+import { reduceFlash } from '../core/accessibility';
 import { LIQUID, LIQUID_FRAMES, liquidSet, TEX, TEX_AREA } from './blocks';
 import { BIOMES, type BiomeId, type BiomeState } from './biomes';
 import { propSprite, shadowSprite } from './propSprites';
@@ -160,6 +162,9 @@ export class WorldRenderer {
     const cx1 = Math.floor((camX + w - 1) / CHUNK_PX);
     const cy0 = Math.floor(camY / CHUNK_PX);
     const cy1 = Math.floor((camY + h - 1) / CHUNK_PX);
+    // The End: the void is transparent in the chunk images, so the sky is painted first.
+    const end = this.world.arena?.kind === 'end';
+    if (end) drawEndBackdrop(ctx, camX, camY, w, h, animTime, reduceFlash());
     for (let cy = cy0; cy <= cy1; cy++) {
       for (let cx = cx0; cx <= cx1; cx++) {
         const dx = cx * CHUNK_PX - camX;
@@ -168,7 +173,7 @@ export class WorldRenderer {
         if (img) {
           ctx.drawImage(img, dx, dy);
           this.drawAnimated(ctx, (cx + 32768) * 65536 + (cy + 32768), dx, dy, w, h, animTime);
-        } else {
+        } else if (!end) {
           // Not baked yet (budget spent): flat fill in the colour of the chunk's centre biome.
           const b = this.world.biomeAtTile(
             cx * CHUNK_TILES + (CHUNK_TILES >> 1),

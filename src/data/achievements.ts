@@ -201,6 +201,16 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     (c) => cnt(c.save, 'damageDealt'),
     { emeralds: 200 },
   ),
+  A(
+    'dragon_slayer',
+    'combat',
+    'portal',
+    'Dragon Slayer',
+    'Defeat the Ender Dragon in the End.',
+    1,
+    (c) => cnt(c.save, 'endDragons'),
+    { emeralds: 1000, rareSpawnEggs: 2 },
+  ),
   // Survival
   A(
     'dawn_patrol',
@@ -646,6 +656,17 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     30,
     (c) => Math.max(c.save.dailyReward.streak, cnt(c.save, 'best.streak')),
     { emeralds: 500, rareSpawnEggs: 1 },
+    { hidden: true },
+  ),
+  A(
+    'the_end',
+    'secrets',
+    'egg',
+    'The End?',
+    'Take the Dragon Egg. Is this really the end?',
+    1,
+    (c) => cnt(c.save, 'dragonEggs'),
+    { emeralds: 3000, rareSpawnEggs: 5 },
     { hidden: true },
   ),
   A(

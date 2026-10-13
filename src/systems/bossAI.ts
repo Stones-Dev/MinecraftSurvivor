@@ -7,6 +7,7 @@ import { makeFx } from '../entities/fx';
 import { Projectile, type ProjStyle } from '../entities/projectile';
 import type { RunState } from '../game';
 import { hurtPlayer } from './combat';
+import { updateDragon } from './dragonAI';
 import { makeEnemy } from './spawner';
 
 /** Movement helpers shared with the regular AI (passed in to avoid an import cycle). */
@@ -97,6 +98,9 @@ export function updateBoss(
       break;
     case 'warden':
       warden(run, e, dt, ux, uy, dist, speed, rate, t);
+      break;
+    case 'dragon':
+      updateDragon(run, e, dt);
       break;
     default:
       break;

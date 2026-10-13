@@ -161,6 +161,10 @@ export const WEEKLY_MISSIONS: readonly MissionDef[] = [
     emeralds: 500,
     rareSpawnEggs: 1,
   }),
+  W('w_dragon', 'kills.ender_dragon', 'sum', 1, 'Defeat the Ender Dragon', 'portal', {
+    emeralds: 800,
+    rareSpawnEggs: 1,
+  }),
   W('w_emeralds_1500', 'emeraldsPicked', 'sum', 1500, 'Collect 1,500 emeralds', 'emerald', {
     emeralds: 400,
     spawnEggs: 1,

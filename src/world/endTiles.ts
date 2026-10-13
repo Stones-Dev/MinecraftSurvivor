@@ -18,20 +18,20 @@ export type EndMaterial = 'end_stone' | 'bedrock' | 'obsidian';
 
 const PALETTES: Record<EndMaterial, readonly RGB[]> = {
   end_stone: [
-    [232, 230, 168],
-    [218, 216, 150],
-    [202, 200, 134],
-    [184, 182, 118],
-    [158, 156, 98],
-    [122, 118, 84],
+    [214, 212, 152],
+    [200, 198, 138],
+    [186, 184, 124],
+    [170, 168, 112],
+    [148, 146, 96],
+    [112, 108, 78],
   ],
   bedrock: [
-    [18, 18, 20],
-    [34, 34, 38],
-    [52, 52, 56],
-    [72, 72, 76],
-    [94, 94, 98],
-    [124, 124, 128],
+    [38, 38, 42],
+    [60, 60, 64],
+    [82, 82, 86],
+    [104, 104, 108],
+    [128, 128, 132],
+    [156, 156, 160],
   ],
   obsidian: [
     [8, 4, 16],
@@ -70,13 +70,14 @@ function build(mat: EndMaterial, variant: number): Uint32Array {
       const h = hash2(x, y, seed + 9);
       if (mat === 'end_stone') {
         // Pale porous stone: darker pits and a few bright flecks.
-        n += (h - 0.5) * 0.18;
-        if (h > 0.96) n = 0.02;
-        else if (h < 0.05) n = 0.93;
+        n += (h - 0.5) * 0.09;
+        if (h > 0.985) n = 0.02;
+        else if (h < 0.02) n = 0.93;
       } else if (mat === 'bedrock') {
-        // Dark blotches with scattered lighter chips, like the Minecraft texture.
-        n = n * 0.7 + (h - 0.5) * 0.45;
-        if (h > 0.9) n = 0.95;
+        // Grey blotches with a few lighter chips and darker cracks, like the Minecraft texture.
+        n = 0.2 + n * 0.62 + (h - 0.5) * 0.12;
+        if (h > 0.92) n = 0.97;
+        else if (h < 0.05) n = 0.02;
       } else {
         // Obsidian: near-black glass with violet veins and a rare bright sparkle.
         const vein = Math.abs(tileable(x, y, 3, seed + 21) - 0.5);

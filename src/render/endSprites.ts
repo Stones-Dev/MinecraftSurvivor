@@ -566,11 +566,70 @@ export function flapOf(frame: number): number {
   return 0.5 + 0.5 * Math.cos((frame / FLAP_FRAMES) * Math.PI * 2);
 }
 
-export function dragonCanvas(pose: DragonPose): HTMLCanvasElement {
+/** A copy of a sprite with every colour pulled toward white (the hit flash). */
+export function whitened(src: PixBuffer, amount = 0.62): PixBuffer {
+  const out = new PixBuffer(src.w, src.h);
+  for (let i = 0; i < src.data.length; i++) {
+    const c = src.data[i] ?? 0;
+    if (c === 0) continue;
+    const k = (v: number): number => Math.round(v + (255 - v) * amount);
+    out.data[i] =
+      ((255 << 24) | (k((c >>> 16) & 255) << 16) | (k((c >>> 8) & 255) << 8) | k(c & 255)) >>> 0;
+  }
+  return out;
+}
+
+export function dragonCanvas(pose: DragonPose, flash = false): HTMLCanvasElement {
   const flap = Math.round(pose.flap * (FLAP_FRAMES - 1)) / (FLAP_FRAMES - 1);
   const tail = Math.round(pose.tail * 2) / 2;
-  const key = `dragon:${pose.mode}:${flap.toFixed(2)}:${pose.mouth ? 1 : 0}:${tail}`;
-  return cached(key, () => dragonPixels({ ...pose, flap, tail }));
+  const key = `dragon:${pose.mode}:${flap.toFixed(2)}:${pose.mouth ? 1 : 0}:${tail}${flash ? ':w' : ''}`;
+  return cached(key, () => {
+    const buf = dragonPixels({ ...pose, flap, tail });
+    return flash ? whitened(buf) : buf;
+  });
+}
+
+/**
+ * The sky behind the End island: near-black violet with a few faint nebulae and three star layers that move
+ * at a fraction of the camera (parallax), twinkling slowly (a plain offset of brightness, never a strobe).
+ */
+export function drawEndBackdrop(
+  ctx: CanvasRenderingContext2D,
+  camX: number,
+  camY: number,
+  w: number,
+  h: number,
+  time: number,
+  steady = false,
+): void {
+  ctx.fillStyle = '#0a0612';
+  ctx.fillRect(0, 0, w, h);
+  // Nebulae: big soft blobs fixed in the sky (move at 8% of the camera).
+  const blobs: [number, number, number, string][] = [
+    [0.22, 0.3, 150, 'rgba(90,40,150,0.20)'],
+    [0.78, 0.7, 170, 'rgba(30,90,120,0.16)'],
+    [0.55, 0.12, 120, 'rgba(140,50,150,0.12)'],
+  ];
+  for (const [fx, fy, r, col] of blobs) {
+    const x = fx * w - camX * 0.08;
+    const y = fy * h - camY * 0.08;
+    const g = ctx.createRadialGradient(x, y, 4, x, y, r);
+    g.addColorStop(0, col);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  const prev = ctx.globalAlpha;
+  for (let layer = 0; layer < 3; layer++) {
+    const k = [0.1, 0.22, 0.4][layer] ?? 0.2;
+    const tile = starfieldCanvas(layer);
+    const ox = -(((camX * k) % STAR_TILE) + STAR_TILE) % STAR_TILE;
+    const oy = -(((camY * k) % STAR_TILE) + STAR_TILE) % STAR_TILE;
+    ctx.globalAlpha = steady ? 0.9 : 0.75 + 0.25 * Math.sin(time * (0.5 + layer * 0.3) + layer);
+    for (let y = Math.round(oy) - STAR_TILE; y < h; y += STAR_TILE)
+      for (let x = Math.round(ox) - STAR_TILE; x < w; x += STAR_TILE) ctx.drawImage(tile, x, y);
+  }
+  ctx.globalAlpha = prev;
 }
 
 /** Mix helper re-exported for the draw code (a colour halfway between two). */

@@ -124,7 +124,7 @@ export function buildVillage(ctx: BuildContext): ReturnType<Stamp['build']> {
   // Lanterns at the road ends and the plaza, and the golem's post.
   s.prop('lantern', 1, 6).prop('lantern', 12, 6).prop('lantern', 5, 12);
   s.actor('golem', 5, 7);
-  s.enter(6, 13);
+  s.enter(6, 13).within(3, 4);
   if (ctx.rand() < 0.5) s.mirrorX();
   return s.build();
 }
@@ -135,10 +135,10 @@ export const VILLAGE: StructureDef = {
   width: VILLAGE_SIZE,
   height: VILLAGE_SIZE,
   allowedBiomes: ['plains', 'forest', 'cherry_grove', 'desert', 'snowy_taiga', 'badlands'],
-  minDistFromSpawn: 60,
+  minDistFromSpawn: 70,
   spacing: 48,
   chance: 0.5,
-  nearChance: 0.9,
+  nearChance: 0.75,
   priority: 1,
   clearance: 2,
   color: '#ffd84a',

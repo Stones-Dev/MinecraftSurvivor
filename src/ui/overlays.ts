@@ -281,6 +281,16 @@ export function victoryScreen(app: App, run: RunState, persist = true): Screen {
         '#fff',
         'center',
       );
+      if (run.end.portal) {
+        drawText(
+          ctx,
+          'An End portal has opened where it fell.',
+          view.width / 2,
+          Math.floor(view.height / 2) - 1,
+          '#df7cff',
+          'center',
+        );
+      }
       const [a, b] = btns(view);
       buttons.begin();
       if (a && b) {
@@ -298,6 +308,99 @@ export function victoryScreen(app: App, run: RunState, persist = true): Screen {
     onKey(code) {
       if (code === 'Enter' || code === 'Space' || code === 'NumpadEnter') ok();
       else buttons.handleKey(code);
+    },
+  };
+}
+
+/** Lines of the final victory scroll (pure, so the content is testable): the story, then the run's numbers. */
+export function finalVictoryLines(run: RunState): { text: string; color: string }[] {
+  const out: { text: string; color: string }[] = [
+    { text: 'THE END', color: '#df7cff' },
+    { text: '', color: '#fff' },
+    { text: 'The Ender Dragon is no more.', color: '#fff' },
+    { text: 'The crystals are dust, the void is quiet,', color: '#c9c9d4' },
+    { text: 'and the night is finally over.', color: '#c9c9d4' },
+    { text: '', color: '#fff' },
+    {
+      text: run.dragonEgg
+        ? 'You carry the Dragon Egg out of the End.'
+        : 'The Dragon Egg stays behind.',
+      color: '#df7cff',
+    },
+    { text: '', color: '#fff' },
+    { text: `Time  ${formatClock(run.time)}`, color: '#ffd84a' },
+    { text: `Mobs slain  ${shortNumber(run.kills)}`, color: '#ffd84a' },
+    { text: `Level  ${run.level}`, color: '#ffd84a' },
+    { text: `Bosses  ${run.bossKills}`, color: '#ffd84a' },
+    { text: '', color: '#fff' },
+    { text: 'Thank you for playing MineSurvive.', color: '#7dff9a' },
+    { text: 'A fan project; not affiliated with Mojang or Microsoft.', color: '#9a9aa8' },
+    { text: 'The dragon, crystals and the End are drawn by the game code.', color: '#9a9aa8' },
+  ];
+  return out;
+}
+
+/**
+ * The final victory (exit portal of the End): a credits-style scroll over the dimmed game, with a button to
+ * go to the results. `persist` is false for debug runs (their results are shown but never saved).
+ */
+export function finalVictoryScreen(app: App, run: RunState, persist = true): Screen {
+  app.audio.play('victory');
+  const buttons = new Buttons();
+  const pad = new PadNav();
+  const lines = finalVictoryLines(run);
+  let t = 0;
+  const SPEED = 20;
+  const LINE = 11;
+  const btn = (view: View): Rect => ({
+    x: Math.floor(view.width / 2) - 60,
+    y: view.height - 28,
+    w: 120,
+    h: 18,
+  });
+  const finish = (): void => app.router.replace(resultsScreen(app, run, persist));
+  return {
+    enter() {
+      app.touch.suspend();
+    },
+    exit() {
+      app.touch.resume();
+    },
+    update(dt) {
+      t += dt;
+      for (const ev of pad.poll(dt)) {
+        if (ev === 'ok') return finish();
+        buttons.handleNav(ev);
+      }
+    },
+    render(view) {
+      dim(view, 0.78);
+      const { ctx } = view;
+      // The text scrolls up from below the bottom, then rests when its last line is 70 px above the button.
+      const total = lines.length * LINE;
+      const rest = view.height - 40 - total;
+      const y0 = Math.max(rest, view.height - t * SPEED);
+      lines.forEach((l, i) => {
+        const y = Math.round(y0 + i * LINE);
+        if (y < -LINE || y > view.height) return;
+        drawText(ctx, l.text, view.width / 2, y, l.color, 'center');
+      });
+      buttons.begin();
+      buttons.add(btn(view), 'Results', finish);
+      buttons.draw(view);
+    },
+    onMove(x, y) {
+      buttons.move(x, y);
+    },
+    onClick(x, y) {
+      buttons.click(x, y);
+    },
+    onKey(code) {
+      if (code === 'Enter' || code === 'Space' || code === 'NumpadEnter') {
+        // The first press skips the scroll to its end; the next one goes on.
+        if (t * SPEED < lines.length * LINE + 120) t = (lines.length * LINE + 120) / SPEED;
+        else finish();
+      } else buttons.handleKey(code);
     },
   };
 }

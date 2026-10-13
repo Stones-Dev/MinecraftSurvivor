@@ -199,13 +199,16 @@ export class StructureIndex {
     const key = `${def.id}@${tx},${ty}`;
     const props: Prop[] = bp.props.map((p, n) => {
       const radius = propRadius(p.kind);
+      const x = (tx + p.tx) * TILE_PX + (p.ox ?? TILE_PX / 2);
+      const y = (ty + p.ty) * TILE_PX + (p.oy ?? TILE_PX / 2);
       return {
         id: `s:${key}:${n}`,
         kind: p.kind,
-        biome,
+        // Like natural props: the biome of the cell the prop stands in (palette of its sprite).
+        biome: biomeAtTile(Math.floor((x - 4) / TILE_PX), Math.floor((y - 10) / TILE_PX), seed),
         variant: p.variant ?? 0,
-        x: (tx + p.tx) * TILE_PX + (p.ox ?? TILE_PX / 2),
-        y: (ty + p.ty) * TILE_PX + (p.oy ?? TILE_PX / 2),
+        x,
+        y,
         radius,
         solid: radius > 0,
       };

@@ -3,11 +3,14 @@ import { ITEM_IDS } from '../data/items';
 import { makeFx } from '../entities/fx';
 import type { RunState } from '../game';
 import { ringPoint } from './spawner';
+import { updateVillageLife } from './structureInteract';
+import { updateVillageGolem } from './villageGolem';
 import { giveItem } from './items';
 
 export interface Npc {
   id: number;
-  kind: 'trader' | 'villager' | 'llama';
+  /** trader/villager/llama: events (this file); golem/smith/cleric/librarian/farmer: world structures. */
+  kind: 'trader' | 'villager' | 'llama' | 'golem' | 'smith' | 'cleric' | 'librarian' | 'farmer';
   x: number;
   y: number;
   /** Last movement direction (selects the sprite row) and whether it is moving. */
@@ -100,6 +103,9 @@ export function spawnVillager(run: RunState): void {
 
 export function updateNpcs(run: RunState, dt: number): void {
   if (run.rift.active) return;
+  // Villagers and the Iron Golem of world structures (their own state, see systems/structureInteract.ts).
+  updateVillageLife(run, dt);
+  updateVillageGolem(run, dt);
   const p = run.player;
   const d = run.director;
   if (
@@ -220,5 +226,11 @@ export function getMarkers(run: RunState): Marker[] {
   for (const n of run.npcs)
     if (n.kind === 'trader' && n.state !== 'flee') out.push({ x: n.x, y: n.y, color: '#7de8e8' });
   if (run.rift.portal) out.push({ x: run.rift.portal.x, y: run.rift.portal.y, color: '#b06bff' });
+  // The End: its portal in the overworld, and the exit portal and the egg once the dragon has fallen.
+  if (run.end.portal && !run.end.active)
+    out.push({ x: run.end.portal.x, y: run.end.portal.y, color: '#df7cff' });
+  if (run.end.exit) out.push({ x: run.end.exit.x, y: run.end.exit.y, color: '#df7cff' });
+  if (run.end.egg && !run.end.egg.taken)
+    out.push({ x: run.end.egg.x, y: run.end.egg.y, color: '#df7cff' });
   return out;
 }

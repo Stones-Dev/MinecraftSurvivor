@@ -220,8 +220,8 @@ export function resultsScreen(
       const cw = Math.min(width - 12, 440);
       const x0 = Math.floor((width - cw) / 2);
       const roomy = height >= 220;
-      const title = run.won ? 'NIGHT SURVIVED' : 'YOU DIED';
-      const tcolor = run.won ? UI.green : '#ff6b6b';
+      const title = run.end.victory ? 'THE END' : run.won ? 'NIGHT SURVIVED' : 'YOU DIED';
+      const tcolor = run.end.victory ? '#df7cff' : run.won ? UI.green : '#ff6b6b';
       if (width >= 400) drawTextScaled(ctx, title, width / 2, 20, tcolor, 'center', 2);
       else drawText(ctx, title, width / 2, 14, tcolor, 'center');
       const sub = `${heroById(rec.hero).name} - ${formatClock(rec.timeSec)}`;

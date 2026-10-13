@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DRAGON_DEF } from '../src/entities/bossDragon';
 import { defaultSave, type SaveData } from '../src/core/save';
 import { HEROES } from '../src/data/companions';
 import {
@@ -72,7 +73,7 @@ const NOON = at(2026, 10, 12);
 describe('mission data', () => {
   it('has ~24 daily and ~12 weekly templates with unique ids', () => {
     expect(DAILY_MISSIONS.length).toBeGreaterThanOrEqual(24);
-    expect(WEEKLY_MISSIONS.length).toBe(12);
+    expect(WEEKLY_MISSIONS.length).toBe(13);
     expect(new Set(ALL_MISSIONS.map((m) => m.id)).size).toBe(ALL_MISSIONS.length);
     for (const m of ALL_MISSIONS) {
       expect(m.target).toBeGreaterThan(0);
@@ -99,7 +100,9 @@ describe('mission data', () => {
     for (const h of [...HERO_CLASSES.ranged, ...HERO_CLASSES.melee]) expect(heroIds).toContain(h);
     for (const m of ALL_MISSIONS) {
       if (m.metric.startsWith('kills.') && !(m.metric.slice(6) in ENEMY_GROUPS)) {
-        expect(ENEMIES[m.metric.slice(6)]).toBeDefined();
+        // The Ender Dragon is drawn by code and lives in entities/bossDragon.ts, not in the atlas-backed table.
+        const id = m.metric.slice(6);
+        expect(ENEMIES[id] ?? (id === DRAGON_DEF.id ? DRAGON_DEF : undefined)).toBeDefined();
       }
       for (const h of m.heroes ?? []) expect(heroIds).toContain(h);
     }

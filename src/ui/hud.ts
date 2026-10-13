@@ -7,6 +7,7 @@ import { WEAPONS } from '../weapons';
 import type { RunState } from '../game';
 import { xpToNext } from '../systems/economy';
 import { getMarkers } from '../systems/npcs';
+import { END_ISLAND_PX, dragonStatus } from '../systems/endDimension';
 import { actionPrompt } from './inputLabels';
 import { drawIcon } from './icons';
 import { drawText, drawTextPlate } from './panel';
@@ -147,6 +148,12 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
     ctx.fillRect(x, by + 1, Math.max(0, Math.floor((w * boss.hp) / boss.maxHp)), 5);
     drawTextPlate(ctx, boss.def.name, width / 2, by + 16, cb(HUD_TEXT.boss), 'center');
     by += 20;
+    if (boss.def.boss === 'dragon') {
+      // Crystals left and what hurts it right now (melee only when it is down, ranged only in the air).
+      const st = dragonStatus(run.end);
+      drawTextPlate(ctx, st.text, width / 2, by + 6, cb(st.color), 'center');
+      by += 11;
+    }
   }
   for (const b of run.banners) {
     ctx.globalAlpha = Math.min(1, (b.dur - b.t) * 2, b.t * 4 + 0.2);
@@ -164,6 +171,11 @@ export function drawHud(view: View, run: RunState, camX = 0, camY = 0): void {
       sy + 9,
       HUD_TEXT.golden,
     );
+  }
+
+  // The End: the island's rim is deadly, so warn before the hero gets there.
+  if (run.end.active && !p.dead && Math.hypot(p.x, p.y) > END_ISLAND_PX - 64) {
+    drawTextPlate(ctx, 'THE VOID: turn back!', width / 2, height - 40, cb('#ff6b6b'), 'center');
   }
 
   const ab = abilityById(run.abilityId);

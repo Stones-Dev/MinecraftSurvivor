@@ -10,6 +10,12 @@ import type { Enemy } from './enemy';
 export const DRAGON_BASE_HP = 2500;
 /** Base contact/attack damage (the Warden's is 40); every dragon attack is a multiple of the scaled value. */
 export const DRAGON_BASE_DMG = 36;
+/**
+ * Extra HP multiplier on top of the Warden's `hpScale(minute)` curve (the base stays 2500). Tuned with the
+ * scripted fights of tests/endFight.test.ts: at 1.0 a strong build killed the dragon in about 55 s, below the
+ * 90-240 s target; at 2.5 it takes about 100 s and a mid build needs well over ten minutes.
+ */
+export const DRAGON_HP_MULT = 2.5;
 export const CRYSTAL_BASE_HP = 60;
 
 const base = { fromMinute: 0, weight: 0, walkAnim: false } as const;
@@ -58,17 +64,30 @@ export const PHASE3_AT = 0.4;
  * The phase for an HP fraction and the number of crystals still standing. Phases never go back: `prev` is the
  * highest phase reached so far (crystal healing can lift the HP back above a threshold).
  */
-export function phaseFor(hpFrac: number, crystalsAlive: number, prev: DragonPhase = 1): DragonPhase {
+export function phaseFor(
+  hpFrac: number,
+  crystalsAlive: number,
+  prev: DragonPhase = 1,
+): DragonPhase {
   let p: DragonPhase = 1;
   if (hpFrac <= PHASE2_AT) p = 2;
   if (hpFrac <= PHASE3_AT || crystalsAlive <= 0) p = 3;
   return p > prev ? p : prev;
 }
 
-/** HP per second each standing crystal gives the dragon (while it is below full HP), scaled with its HP. */
+/**
+ * How far the run's difficulty curve has scaled the dragon (1 at a 2500-HP dragon): its max HP over its base,
+ * without the End's own multiplier. Crystal healing and the overload blast scale with it, so they stay
+ * the same share of the Warden-like curve whatever the minute.
+ */
+export function dragonScale(maxHp: number): number {
+  return maxHp / (DRAGON_BASE_HP * DRAGON_HP_MULT);
+}
+
+/** HP per second each standing crystal gives the dragon (while it is below full HP), scaled with the curve. */
 export const CRYSTAL_HEAL_PER_SEC = 15;
 export function crystalHealRate(maxHp: number): number {
-  return CRYSTAL_HEAL_PER_SEC * (maxHp / DRAGON_BASE_HP);
+  return CRYSTAL_HEAL_PER_SEC * dragonScale(maxHp);
 }
 
 /** Damage to the dragon when a crystal that is healing it is destroyed (scaled like the dragon's HP). */
@@ -77,15 +96,7 @@ export const CRYSTAL_BLAST_RADIUS = 60;
 export const CRYSTAL_STUN = 3;
 
 export type DragonMode =
-  | 'orbit'
-  | 'roar'
-  | 'telegraph'
-  | 'dive'
-  | 'stunned'
-  | 'landing'
-  | 'perch'
-  | 'takeoff'
-  | 'dying';
+  'orbit' | 'roar' | 'telegraph' | 'dive' | 'stunned' | 'landing' | 'perch' | 'takeoff' | 'dying';
 
 /** Modes in which the dragon is low enough for melee to reach it. */
 export function isGrounded(mode: DragonMode): boolean {
@@ -170,6 +181,12 @@ export class DragonBrain {
   halfT = 0;
   /** Facing of the perched dragon (radians; the head points that way, the tail sweep goes behind). */
   face = 0;
+  /** Where a timed glide (dive lane, landing) started and how long it takes. */
+  fromX = 0;
+  fromY = 0;
+  total = 1;
+  /** The dive lane's ground warning (kept until the dive is over; ended early if the dive is aborted). */
+  lane: { t: number; dur: number } | null = null;
   /** Dive line being flown. */
   dive = { sx: 0, sy: 0, ux: 1, uy: 0, ex: 0, ey: 0, hit: false };
   /** Frames the renderer reads. */

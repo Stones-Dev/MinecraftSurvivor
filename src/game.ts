@@ -25,6 +25,7 @@ import { allyById, heroById } from './data/companions';
 import { kitOf, type HeroKit } from './data/heroKits';
 import { type Decoy, updateDecoys } from './abilities/decoys';
 import { RiftState, updateRift } from './systems/rift';
+import { EndState, updateEnd } from './systems/endDimension';
 import { updateInteract, type PropState } from './systems/interact';
 import { updateItems } from './systems/items';
 import { xpToNext } from './systems/economy';
@@ -54,7 +55,8 @@ export interface Mine {
 
 /** Ground warning drawn before a dangerous attack lands (>= 0.6 s, BRIEF section 9). */
 export interface Telegraph {
-  kind: 'line' | 'circle';
+  /** `arc`: a pie slice of radius `r` around (x, y) from angle `a0` to `a1` (the dragon's tail sweep). */
+  kind: 'line' | 'circle' | 'arc';
   x: number;
   y: number;
   x2: number;
@@ -62,6 +64,12 @@ export interface Telegraph {
   r: number;
   t: number;
   dur: number;
+  /** Line width in px (default: the standard strip) and the arc's angles. */
+  w?: number;
+  a0?: number;
+  a1?: number;
+  /** No pulse: drawn at a constant alpha (the dragon's dive lane; always steady with reduced flashing). */
+  steady?: boolean;
   /** Drawn in blue: an ally's attack about to land (enemy telegraphs are red). */
   friendly?: boolean;
 }
@@ -126,7 +134,13 @@ export class RunState {
   world: World;
   readonly overworld: World;
   readonly arenaWorld: World;
+  /** The End: a floating island world swapped in while `end.active` (systems/endDimension.ts). */
+  readonly endWorld: World;
   readonly rift = new RiftState();
+  readonly end = new EndState();
+  /** The Ender Dragon has been killed this run, and the hero took its egg. */
+  endDragonKilled = false;
+  dragonEgg = false;
   /** Per-run statistics for results, missions and achievements (systems/runStats.ts). */
   readonly stats = new RunStats();
   npcs: Npc[] = [];
@@ -278,6 +292,7 @@ export class RunState {
     };
     this.overworld = new World(seed);
     this.arenaWorld = new World(seed ^ 0x51ed27, { r: 22 });
+    this.endWorld = new World(seed ^ 0x3d1e6e, { r: 44, kind: 'end' });
     this.world = this.overworld;
     this.time = startTime;
     this.baseMaxHp = heroBaseHp(loadout.hero);
@@ -340,7 +355,9 @@ export class RunState {
 
   /** The biome under the hero (spatial biome map; Nether while the rift is active). */
   biome(): BiomeId {
-    return this.rift.active ? 'nether' : this.world.biomeAtPx(this.player.x, this.player.y);
+    return this.rift.active || this.end.active
+      ? 'nether'
+      : this.world.biomeAtPx(this.player.x, this.player.y);
   }
 
   /** The hero's biome as a render state (no crossfade any more: chunks bake their own biomes). */
@@ -378,7 +395,7 @@ export class RunState {
 
   /** "Entering <biome>" banner, with hysteresis so walking along a border does not spam it. */
   private updateBiomeBanner(dt: number): void {
-    if (this.rift.active) return;
+    if (this.rift.active || this.end.active) return;
     const b = this.biome();
     if (b === this.shownBiome) {
       this.biomeCandT = 0;
@@ -478,7 +495,9 @@ export class RunState {
     for (const b of this.banners) b.t += dt;
     this.banners = this.banners.filter((b) => b.t < b.dur);
     const p = this.player;
-    updateRift(this, dt);
+    // The End: portal entry, the void, crystals and the dragon's death. The overworld is frozen meanwhile.
+    updateEnd(this, dt);
+    if (!this.end.active) updateRift(this, dt);
     updateItems(this, dt);
     this.petHooks();
     p.update(dt, input, this.world, this.biome(), this.mods.waterImmune);
@@ -492,7 +511,7 @@ export class RunState {
     this.pathing.update(dt, p.x, p.y, this.world);
     this.updateBiomeBanner(dt);
     if (!p.dead) this.stats.tick(this, dt);
-    if (!p.dead) updateSpawner(this, dt);
+    if (!p.dead && !this.end.active) updateSpawner(this, dt);
 
     this.hash.clear();
     for (const e of this.enemies) if (!e.dying) this.hash.insert(e);
@@ -505,8 +524,8 @@ export class RunState {
     updateZones(this, dt);
     updateOrbiters(this, dt);
     updateInteract(this, dt);
-    updateDirector(this, dt);
-    updateNpcs(this, dt);
+    if (!this.end.active) updateDirector(this, dt);
+    if (!this.end.active) updateNpcs(this, dt);
     updateAllies(this, dt);
     updatePet(this, dt);
     updateDecoys(this, dt);

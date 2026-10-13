@@ -16,14 +16,14 @@
  *   y3 .STSSSSSSSSSSTS.   3 cut sandstone ring
  *   y4 .STS........STS.   4..11 chamber (8x8): chests at (5,5) (10,5) (5,10) (10,10),
  *   ...                       plate on the vertex of (7,7)-(8,8)
- *   y12 BBBS.......   towers at x0-3 / x12-15, y12-15; tunnel x7-8, y12-15
+ *   y12..15  towers at x0-3 / x12-15 (blue terracotta caps); tunnel x7-8 through the south face
  */
 import { MAT } from '../blocks';
-import { type BuildContext, type StructureDef, Stamp } from './stamp';
+import { type StructureDef, Stamp } from './stamp';
 
 export const TEMPLE_SIZE = 16;
 
-export function buildDesertTemple(_ctx: BuildContext): ReturnType<Stamp['build']> {
+export function buildDesertTemple(): ReturnType<Stamp['build']> {
   const n = TEMPLE_SIZE;
   const s = new Stamp(n, n);
   for (let y = 0; y < n; y++) {
@@ -66,7 +66,7 @@ export function buildDesertTemple(_ctx: BuildContext): ReturnType<Stamp['build']
     [11, 11],
   ] as const)
     s.prop('lantern', x, y);
-  s.enter(7, 15);
+  s.enter(7, 15).within(7, 11);
   return s.build();
 }
 

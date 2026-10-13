@@ -1,6 +1,7 @@
 /** Pets and allies in a run (BRIEF section 11). Allies fight, get hurt by contact, go downed and respawn. */
 import { allyById, petById, type AllyDef } from '../data/companions';
 import { Ally, PetState } from '../entities/ally';
+import { isGrounded } from '../entities/bossDragon';
 import type { Enemy } from '../entities/enemy';
 import { boltPoints, makeFx } from '../entities/fx';
 import { Projectile } from '../entities/projectile';
@@ -183,6 +184,8 @@ function takeContact(run: RunState, a: Ally, dt: number): void {
   run.hash.query(a.x, a.y, 14, near);
   for (const e of near) {
     if (e.dying || Math.hypot(e.x - a.x, e.y - a.y) > e.radius + ALLY_RADIUS + 1) continue;
+    // The End: a dragon in the air passes over companions (only a grounded one can hit them).
+    if (e.def.boss === 'dragon' && !isGrounded(run.end.brain.mode)) continue;
     a.hp -= e.dmg * 0.5 * contactArmor(a.def);
     a.hurtT = 0.15;
     a.contactCd = 0.7;

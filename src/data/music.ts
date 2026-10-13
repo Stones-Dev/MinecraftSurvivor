@@ -14,6 +14,7 @@ export type ThemeId =
   | 'mushroom'
   | 'badlands'
   | 'nether'
+  | 'end'
   | 'boss';
 
 export type Voice = 'bass' | 'arp' | 'lead' | 'kick' | 'snare' | 'hat';
@@ -49,6 +50,7 @@ const PHRYG_DOM = [0, 1, 4, 5, 7, 8, 10] as const;
 const DORIAN = [0, 2, 3, 5, 7, 9, 10] as const;
 const LYDIAN = [0, 2, 4, 6, 7, 9, 11] as const;
 const WHOLE_TONE = [0, 2, 4, 6, 8, 10] as const;
+const LOCRIAN = [0, 1, 3, 5, 6, 8, 10] as const;
 
 const R = 0;
 
@@ -540,6 +542,92 @@ export const THEMES: Record<ThemeId, Theme> = {
     wave: { bass: 'sawtooth', arp: 'square', lead: 'sawtooth' },
     mix: { bass: 0.45, arp: 0.15, lead: 0.2, drums: 0.45 },
   },
+  // The End (Ender Dragon): slow and sparse. A low drone on the root and its minor second, a lone bell-like
+  // arp that dwells on the tritone, no drums but a distant, soft kick every other bar. Locrian is the scale
+  // with a diminished fifth: every chord sounds unresolved.
+  end: {
+    id: 'end',
+    bpm: 66,
+    root: 52,
+    scale: LOCRIAN,
+    chords: [
+      [0, 2, 4],
+      [1, 3, 5],
+      [0, 2, 4],
+      [4, 6, 1],
+    ],
+    bass: [1, R, R, R, R, R, R, R, R, R, R, R, 2, R, R, R],
+    arp: [R, R, R, R, 3, R, R, R, R, R, R, 2, R, R, R, R],
+    lead: [
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      5,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      4,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      6,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      2,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+      R,
+    ],
+    kick: [1, R, R, R, R, R, R, R, R, R, R, R, R, R, R, R],
+    wave: { bass: 'triangle', arp: 'sine', lead: 'sine' },
+    mix: { bass: 0.5, arp: 0.2, lead: 0.16, drums: 0.18 },
+  },
   boss: {
     id: 'boss',
     bpm: 140,
@@ -664,6 +752,8 @@ export const NIGHT_OFF = 0.4;
 export interface MusicSituation {
   boss: boolean;
   rift: boolean;
+  /** Inside the End (its own theme, also during the dragon fight). */
+  end?: boolean;
   /** 0..1 night factor. */
   night: number;
   biome: BiomeId;
@@ -687,9 +777,9 @@ export class MusicDirector {
     this.sinceSwitch += dt;
     this.night = s.night > (this.night ? NIGHT_OFF : NIGHT_ON);
     const want = biomeTheme(s.biome);
-    if (s.boss || s.rift || this.night) {
+    if (s.end || s.boss || s.rift || this.night) {
       this.overridden = true;
-      return s.boss ? 'boss' : s.rift ? 'nether' : 'night';
+      return s.end ? 'end' : s.boss ? 'boss' : s.rift ? 'nether' : 'night';
     }
     if (this.current === null || this.overridden) {
       // First call, or an override just ended: follow the biome straight away.
